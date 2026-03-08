@@ -4,6 +4,8 @@ Bats is a programming language that compiles to ATS2. The pipeline is: `.bats` �
 
 ## Key Repos
 
+All bats repos live under github.com/bats-lang/
+
 - **`bats/`** — The Bats compiler, self-hosting (written in Bats). Built with: `dist/debug/bats build --repository ../repository-prototype`.
 - **`repository-prototype/`** — Package repository containing published `.bats` package archives.
 
