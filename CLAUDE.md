@@ -74,6 +74,7 @@ To publish an updated library package to repository-prototype:
 
 - Never work around bugs. Fix them properly. If the version resolver picks the wrong version, fix the resolver — don't manually edit the lock file.
 - Nothing is someone else's problem. If I see a problem in a dependency, I fix it there — not work around it.
+- Quire is a forcing function for Bats. Whenever quire reveals missing functionality in a library package (widget, css, dom, etc.), stop and fix the library first. Then use the fix in quire.
 
 ## Package Discipline
 
