@@ -64,6 +64,7 @@ To publish an updated library package to repository-prototype:
 - **No bounds checking**: Prove that bounds are satisfied at compile time
 - **No runtime assertions**: Prove that assertions are satisfied
 - **No unsafe constructs**: `$UNSAFE`, `$extfcall`, and `castfn` are all unsafe (unchecked type assertions). Never use them. Prove properties at compile time via dependent types and the constraint solver instead. If a package does only data manipulation, it must be `unsafe = false`.
+- **Unsafety is NEVER acceptable unless ALL ELSE FAILED**: Clever tricks to use unsafe APIs (e.g. `borrow_to_string` from bridge) are DISALLOWED if there's a safe, correct solution. Do not use unsafe library functions as shortcuts — find the safe path first.
 
 ## Local Verification
 
