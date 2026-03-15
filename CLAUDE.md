@@ -66,6 +66,35 @@ To publish an updated library package to repository-prototype:
 - **No unsafe constructs**: `$UNSAFE`, `$extfcall`, and `castfn` are all unsafe (unchecked type assertions). Never use them. Prove properties at compile time via dependent types and the constraint solver instead. If a package does only data manipulation, it must be `unsafe = false`.
 - **Unsafety is NEVER acceptable unless ALL ELSE FAILED**: Clever tricks to use unsafe APIs (e.g. `borrow_to_string` from bridge) are DISALLOWED if there's a safe, correct solution. Do not use unsafe library functions as shortcuts — find the safe path first.
 
+## Conditional Compilation
+
+When shared module code references WASM-only APIs (bridge, dom, IDB, etc.) and won't link for native targets, wrap those sections with `#target wasm begin/end`. Do NOT restructure the build, move files to separate packages, or change CI workflows. This is how bridge itself works — every sub-module (idb.bats, dom.bats, event.bats, etc.) wraps its entire body in `#target wasm begin/end`. The pwa/example/ pattern shows sister binaries: `#target native` for build-pwa.bats, `#target wasm binary` for pwa-web.bats, sharing the same package.
+
+## arith castfn — UNSAFE, DO NOT USE
+
+`$AR.checked_idx`, `$AR.checked_byte`, `$AR.checked_nat`, `$AR.checked_pos`, `$AR.checked_arr_size`, `$AR.checked_text_size`, and `$AR.g0_of_g1` are ALL `castfn` — unsafe casts that assert a property without proving it. They erase at compile time and the constraint solver just trusts them. **Do not use these.** Thread constraints through the types properly instead. When the constraint solver rejects something, add the right constraint to the function signature (`{n:pos | n < 65536}`, `{l:agz}`, `{k:int | k == 1}`, etc.) and thread it through the call chain. `$AR.byte_of_char` is safe (`fn` not `castfn`) but should not use `checked_byte` internally. The dependent-typed `$AR.band_g1 {a,b:nat}(int(a), int(b)): [r:nat | r <= b] int(r)` can prove `< 256` bounds directly.
+
+## Array split/join for sub-array work
+
+The array library provides `$A.split`/`$A.join` (and `$A.borrow_split`/`$A.borrow_join` for borrows). When you need to read or write specific byte ranges in an array, split the array at the offset, work on the sub-array (where proving `0 < 4` is trivial), then join back. This eliminates manual index arithmetic and the need to prove `off + k < n` chains. Note: `borrow_split` increments refcount on frozen, `borrow_join` decrements it.
+
+## Byte array construction from character literals
+
+To construct a byte array from character literals:
+```
+var key = @[char][4]('b', 'o', 'o', 'k')
+val key_arr = $S.from_char_array(key, 4)
+```
+For text values: `$S.text_of_chars(chars, n)`. Never use `int2byte0` with ASCII codes for string construction. Never use `$A.alloc` + multiple `$A.set<byte>` calls for string-like keys.
+
+## Typed write operations for serialization
+
+The array library has `write_byte`, `write_u16le`, `write_i32`, `write_borrow`, and `write_text` — all with proper dependent-type constraints (e.g., `write_i32` requires `{i:nat | i + 4 <= n}`). Use these instead of manual `$A.set<byte>` calls for multi-byte values.
+
+## General principle: use language/library facilities before restructuring builds
+
+When something won't compile or link for a specific target, check whether the language has conditional compilation, the library has a helper function, or the type system has a way to express the constraint. Restructuring the build (moving files, splitting packages, changing CI) is a last resort. Always `grep` the library and dependency source before concluding something is impossible or requires a workaround.
+
 ## Local Verification
 
 - Always run `bats check` locally before pushing. Do not depend on CI to catch errors.
