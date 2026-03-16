@@ -71,7 +71,7 @@ All safety is compile-time. The constraint solver proves properties; you never a
 
 * **No runtime bounds checks or assertions.** Prove bounds and invariants via dependent types. When the constraint solver rejects something, add the right constraint to the function signature (`{n:pos | n < 65536}`, `{l:agz}`, `{k:int | k == 1}`, etc.) and thread it through the call chain. If you can't prove it, make it provable. You don't know anything you can't prove.
 
-* **Never use unsafe library functions as shortcuts.** If there's a safe, correct solution (even if it's more work), use it. Clever tricks to reach for unsafe APIs (e.g. `borrow_to_string` from bridge) are not acceptable.
+* **Never use unsafe library functions as shortcuts.** If there's a safe, correct solution (even if it's more work), use it. Clever tricks to reach for unsafe APIs are not acceptable.
 
 * **Packages must never be made `unsafe = true`** without explicit user authorization. If a package is currently safe, keep it safe.
 
