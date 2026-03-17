@@ -42,5 +42,6 @@ jq -n --arg reason "ENFORCEMENT CHECK: Before you stop, verify your work complie
 2. Read $DIFF_FILE (the git diff of your changes).
 3. Check EVERY rule in CLAUDE.md against the diff. Be thorough.
 4. If all rules are satisfied, say ENFORCEMENT PASSED and you may stop.
-5. If any rule is violated, list the violations and fix them." \
+5. If any rule is violated, list the violations and fix them.
+6. Read success.txt (in the working directory). Check whether the success criteria have been achieved. If not, list what remains and keep working." \
   '{"decision": "block", "reason": $reason}'
