@@ -1,0 +1,45 @@
+name: verify
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install ATS2
+        run: |
+          curl -sL "https://raw.githubusercontent.com/ats-lang/ats-lang.github.io/master/FROZEN000/ATS-Postiats/ATS2-Postiats-int-0.4.2.tgz" -o /tmp/ats2.tgz
+          mkdir -p ~/.ats2
+          tar -xzf /tmp/ats2.tgz -C ~/.ats2
+          cd ~/.ats2/ATS2-Postiats-int-0.4.2
+          make -j$(nproc) -C src/CBOOT patsopt
+          mkdir -p bin
+          cp src/CBOOT/patsopt bin/patsopt
+          mkdir -p ~/.bats
+          ln -sf ~/.ats2/ATS2-Postiats-int-0.4.2 ~/.bats/ats2
+
+      - name: Checkout bats compiler
+        uses: actions/checkout@v4
+        with:
+          repository: bats-lang/bats
+          ref: main
+          path: bats-src
+
+      - name: Build bats from checked-in bootstrap C
+        run: |
+          cp -R bats-src/bootstrap/c ~/bats-c
+          make -j$(nproc) -C ~/bats-c PATSHOME=$HOME/.ats2/ATS2-Postiats-int-0.4.2 debug/bats
+          mkdir -p ~/bats-bin
+          cp ~/bats-c/debug/bats ~/bats-bin/bats
+          rm -rf bats-src
+
+      - name: Verify added archives
+        run: |
+          export PATH=~/bats-bin:$PATH
+          scripts/verify-archives.sh ${{ github.event.pull_request.base.sha }}
