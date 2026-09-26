@@ -4,8 +4,12 @@
 #   or removed (a published version never changes);
 # - every added archive has its .sha256 sidecar, and the sidecar matches;
 # - every added package passes bats lock + bats check against this
-#   repository as the change leaves it (so a package published without
-#   its updated dependents, or against a missing dependency, fails here).
+#   repository as the change leaves it;
+# - no package regresses: the latest published version of every package
+#   that passed bats check against the repository before the change
+#   still passes after it (so publishing an API change without its
+#   updated dependents fails here). Packages already failing before the
+#   change (superseded ones, say) do not block it.
 #
 # usage: scripts/verify-archives.sh <base-commit>   (bats must be on PATH)
 set -eu
@@ -38,4 +42,29 @@ for arc in $(awk '$1 == "A" && $2 ~ /\.bats$/ { print $2 }' "$TMP/changes"); do
   fi
 done
 [ "$n" -gt 0 ] || echo "no archives added"
+
+# The latest non-dev archive in directory $2 of the repository at $1
+latest() { ls "$1/$2"/*.bats 2>/dev/null | grep -v 'dev1\.bats$' | sort -V | tail -1; }
+# Whether the archive $2 passes bats lock + bats check against repository $1
+passes() {
+  w=$(mktemp -d "$TMP/chk.XXXXXX")
+  (cd "$w" && unzip -q "$2" && bats lock --repository "$1" && bats check --repository "$1") > "$w.log" 2>&1
+}
+
+if [ "$n" -gt 0 ]; then
+  git worktree add -q --detach "$TMP/base" "$BASE"
+  for dir in $(git ls-files '*.bats' | grep / | xargs -n1 dirname | sort -u); do
+    head_arc=$(latest "$ROOT" "$dir")
+    [ -n "$head_arc" ] || continue
+    grep -qx "A	${head_arc#$ROOT/}" "$TMP/changes" && continue
+    passes "$ROOT" "$head_arc" && continue
+    head_log="$w.log"
+    base_arc=$(latest "$TMP/base" "$dir")
+    if [ -n "$base_arc" ] && passes "$TMP/base" "$base_arc"; then
+      echo "FAIL: ${head_arc#$ROOT/} passed bats check before this change and fails after it"
+      grep -E 'error' "$head_log" | head -3; fail=1
+    fi
+  done
+  git worktree remove --force "$TMP/base"
+fi
 exit $fail
