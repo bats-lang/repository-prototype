@@ -5,6 +5,7 @@
 #   on:
 #     push:
 #       branches: [main]
+#       paths: ['src/**', 'bats.toml']
 #   jobs:
 #     publish:
 #       uses: bats-lang/repository-prototype/.github/workflows/publish.yml@main
@@ -27,6 +28,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # checkout leaves a detached HEAD, which bats upload versions as dev1
+      # (as the Rust bats does); put it back on the pushed branch.
+      - name: Check out the pushed branch
+        run: git checkout -B "$GITHUB_REF_NAME"
 
       - name: Install ATS2
         run: |
@@ -73,11 +79,12 @@ jobs:
           git push origin "$branch"
           gh pr create --repo "$R" --head "$branch" --base main \
             --title "Publish $name" --body "Published by CI from $SOURCE."
-          # verify runs on the pull request; wait for it to be reported,
-          # then for it to finish, and merge only if it passed.
+          # main requires verify, so auto-merge merges the pull request only
+          # once verify passes. Wait for verify too, so that this run fails
+          # when verify does and the open pull request gets looked at.
+          gh pr merge "$branch" --repo "$R" --merge --auto
           for i in $(seq 1 30); do
             [ -n "$(gh pr checks "$branch" --repo "$R" 2>/dev/null || true)" ] && break
             sleep 10
           done
           gh pr checks "$branch" --repo "$R" --watch --fail-fast
-          gh pr merge "$branch" --repo "$R" --merge
