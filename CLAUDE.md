@@ -89,6 +89,8 @@ When shared module code references WASM-only APIs (bridge, dom, IDB, etc.) and w
 
 * **ATS2 reserved words**: `prefix`, `postfix`, `infixl`, `infixr` are ATS2 keywords. Never use them as variable or parameter names — patsopt silently corrupts its parser state.
 
+* **Char literals for `{`, `(`, `[`**: patsopt lexes `'{`, `'(` and `'[` as the record/tuple/list openers, so `'{'`, `'('` and `'['` fail with "the char constant is unclosed". Write `'\{'`, `'\('` and `'\['`. (`'"'` is fine.)
+
 ## Array and String Library Patterns
 
 **Byte array construction from character literals** — use `$S.from_char_array`:
