@@ -129,20 +129,17 @@ val t = $S.text_of_chars(chars, 7)
 
 **Typed write operations** — the array library has `write_byte`, `write_u16le`, `write_i32`, `write_borrow`, and `write_text`, all with dependent-type constraints (e.g., `write_i32` requires `{i:nat | i + 4 <= n}`). Use these instead of manual `$A.set<byte>` calls for multi-byte values.
 
-**Split/join for sub-array work** — when you need to work with a specific byte range in an array, use `$A.split`/`$A.join` to decompose it. Example: to write 4 bytes at offset `off` in a size-`n` array:
+**Byte ranges** — to read part of an array, freeze it and split the borrow; borrow pieces can only be dropped, never freed:
 
 ```
-val @(left, right) = $A.split<byte>(arr, off)       (* left: arr(byte, l, off), right: arr(byte, l+off, n-off) *)
-val @(target, rest) = $A.split<byte>(right, 4)       (* target: arr(byte, l+off, 4) *)
-val () = $A.set<byte>(target, 0, b0)                  (* 0 < 4: trivially proved *)
-val () = $A.set<byte>(target, 1, b1)
-val () = $A.set<byte>(target, 2, b2)
-val () = $A.set<byte>(target, 3, b3)
-val right = $A.join<byte>(target, rest)
-val arr = $A.join<byte>(left, right)
+val @(fz, bv) = $A.freeze<byte>(buf)
+val @(left, right) = $A.borrow_split<byte>(fz, bv, k)   (* left: borrow(byte, l, k) *)
+... read left ...
+val () = $A.drop<byte>(fz, $A.borrow_join<byte>(fz, left, right))
+val () = $A.free<byte>($A.thaw<byte>(fz))
 ```
 
-This eliminates manual index arithmetic and the need to prove `off + k < n` chains. For borrows, `$A.borrow_split`/`$A.borrow_join` work similarly but adjust the frozen refcount.
+To write at an offset, use `write_byte`, `write_u16le`, `write_i32` or `write_borrow`: their offsets are proven in range by their types. (The array library has no `split` for `arr`: a piece of an `arr` could be passed to `free`.)
 
 ## Problem Resolution
 
