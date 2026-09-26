@@ -82,14 +82,15 @@ before.
 
 ## 4. Each package calls the publish workflow
 
-A package publishes on every push to its `main` once its repository has
-`.github/workflows/publish.yml`:
+A package publishes on every push to its `main` that changes `src/` or
+`bats.toml`, once its repository has `.github/workflows/publish.yml`:
 
 ```yaml
 name: publish
 on:
   push:
     branches: [main]
+    paths: ['src/**', 'bats.toml']
 jobs:
   publish:
     uses: bats-lang/repository-prototype/.github/workflows/publish.yml@main
