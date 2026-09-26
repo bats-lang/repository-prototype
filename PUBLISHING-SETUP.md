@@ -79,3 +79,25 @@ In this repository (`bats-lang/repository-prototype`):
 Pull requests into `main` then merge only when `verify` is green: for
 publish pull requests that happens by itself, for everything else as
 before.
+
+## 4. Each package calls the publish workflow
+
+A package publishes on every push to its `main` once its repository has
+`.github/workflows/publish.yml`:
+
+```yaml
+name: publish
+on:
+  push:
+    branches: [main]
+jobs:
+  publish:
+    uses: bats-lang/repository-prototype/.github/workflows/publish.yml@main
+    secrets: inherit
+```
+
+The job opens a `Publish <archive>` pull request here and merges it only
+when `verify` passes; if `verify` fails, the package's publish run fails
+and the pull request stays open for a person to look at. With step 3's
+auto-merge and branch protection in place, the same pull request also
+cannot be merged by hand before `verify` passes.
