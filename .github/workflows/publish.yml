@@ -1,0 +1,83 @@
+# Publishes the calling package to this repository. Package repositories
+# call it on every push to main:
+#
+#   name: publish
+#   on:
+#     push:
+#       branches: [main]
+#   jobs:
+#     publish:
+#       uses: bats-lang/repository-prototype/.github/workflows/publish.yml@main
+#       secrets: inherit
+#
+# It uploads the package with a compiler built from bats main, pushes the
+# archive to a publish/<archive> branch here, opens a pull request, waits
+# for verify, and merges only when verify passes. See PUBLISHING-SETUP.md
+# for the REPO_PUBLISH_TOKEN secret it needs.
+name: publish
+
+on:
+  workflow_call:
+    secrets:
+      REPO_PUBLISH_TOKEN:
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ATS2
+        run: |
+          curl -sL "https://raw.githubusercontent.com/ats-lang/ats-lang.github.io/master/FROZEN000/ATS-Postiats/ATS2-Postiats-int-0.4.2.tgz" -o /tmp/ats2.tgz
+          mkdir -p ~/.ats2
+          tar -xzf /tmp/ats2.tgz -C ~/.ats2
+          cd ~/.ats2/ATS2-Postiats-int-0.4.2
+          make -j$(nproc) -C src/CBOOT patsopt
+          mkdir -p bin
+          cp src/CBOOT/patsopt bin/patsopt
+          mkdir -p ~/.bats
+          ln -sf ~/.ats2/ATS2-Postiats-int-0.4.2 ~/.bats/ats2
+
+      - name: Build bats from checked-in bootstrap C
+        run: |
+          git clone --depth 1 https://github.com/bats-lang/bats.git ~/bats-src
+          cp -R ~/bats-src/bootstrap/c ~/bats-c
+          make -j$(nproc) -C ~/bats-c PATSHOME=$HOME/.ats2/ATS2-Postiats-int-0.4.2 debug/bats
+          mkdir -p ~/bats-bin
+          cp ~/bats-c/debug/bats ~/bats-bin/bats
+
+      - name: Upload, open the pull request, merge when verify passes
+        env:
+          GH_TOKEN: ${{ secrets.REPO_PUBLISH_TOKEN }}
+          SOURCE: ${{ github.repository }}@${{ github.sha }}
+        run: |
+          set -eu
+          export PATH=~/bats-bin:$PATH
+          R=bats-lang/repository-prototype
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/$R.git" ~/repository
+          bats upload --repository ~/repository
+          cd ~/repository
+          # A version already published is never replaced: an upload of it
+          # only shows up as modified files, which verify would reject.
+          new=$(git status --porcelain --untracked-files=all | awk '$1 == "??" && $2 ~ /\.bats$/ { print $2 }')
+          if [ -z "$new" ]; then echo "already published"; exit 0; fi
+          git checkout -- .
+          name=$(basename "$new" .bats)
+          branch="publish/$name"
+          git checkout -b "$branch"
+          git add "$new" "$new.sha256"
+          git -c user.name="bats-lang publish" -c user.email="publish@users.noreply.github.com" \
+            commit -m "Publish $name" -m "From $SOURCE"
+          git push origin "$branch"
+          gh pr create --repo "$R" --head "$branch" --base main \
+            --title "Publish $name" --body "Published by CI from $SOURCE."
+          # verify runs on the pull request; wait for it to be reported,
+          # then for it to finish, and merge only if it passed.
+          for i in $(seq 1 30); do
+            [ -n "$(gh pr checks "$branch" --repo "$R" 2>/dev/null || true)" ] && break
+            sleep 10
+          done
+          gh pr checks "$branch" --repo "$R" --watch --fail-fast
+          gh pr merge "$branch" --repo "$R" --merge
