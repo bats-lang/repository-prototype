@@ -53,15 +53,31 @@ All library packages use the same CI pattern: download the `bats-c` artifact (pr
 
 **Packages that need dependencies** use `--repository` pointing to `repository-prototype`. Packages without dependencies just run `bats check` directly.
 
+## Branches
+
+After a PR merges, restart the same branch from main. PRs merge with `--merge`, so main contains the branch and the push is a fast-forward: never force-push.
+
+```
+git fetch origin main && git checkout -B <branch> origin/main && git push -u origin <branch>
+```
+
 ## Publishing Packages
 
 To publish an updated library package to repository-prototype:
 
-1. Merge the change to main
+1. Merge the change to main.
 
-2. Run `bats upload --repository ../repository-prototype` from the package directory
+2. Check out main itself: `git fetch origin main && git checkout -B main origin/main`. `bats upload` names the version after the checked-out branch; anything but `main` uploads a `dev1` version.
 
-3. Commit and push the new archive in repository-prototype
+3. Run `bats upload --repository ../repository-prototype` from the package directory, with a compiler built from bats main.
+
+4. Check each sidecar (`sha256sum -c <archive>.sha256`), then commit the archive and sidecar in repository-prototype and open a PR.
+
+**A package whose API changed is published together with its dependents.** Before publishing, update every package that uses it (grep all repos' `src/`), verify each against a scratch copy of repository-prototype that holds the new archives, and put all of them in one repository-prototype PR. Publishing one alone breaks anyone who locks the latest versions.
+
+**`bats lock` does not refresh `bats_modules/`** (as in the Rust bats). After relocking, rebuild `bats_modules/` from `bats.lock` before trusting `bats check` or `bats build`; stale modules hide API mismatches.
+
+**Generated directories** (`build/`, `dist/`, `docs/`, `bats_modules/`) are in every package's `.gitignore`; `bats clean` removes the first three. Never delete them by hand.
 
 ## Safety Rules
 
