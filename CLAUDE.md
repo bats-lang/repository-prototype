@@ -16,7 +16,7 @@ Each is its own git repo with a `bats.toml` (`kind = "lib"`). Some are `unsafe =
 
 **Core/native:** argparse, arith, array, builder, dict, env, json, list, path, process, promise, result, sha256, sort, str, toml, xml-tree, zip
 
-**Browser/WASM** (namespaced `wasm.bats-packages.dev/`): bridge, decompress, dom, file-input, html
+**Browser/WASM** (namespaced `wasm.bats-packages.dev/`): bridge, dom, html
 
 **For browser apps, published without the namespace:** css, gestures, pwa, widget
 
