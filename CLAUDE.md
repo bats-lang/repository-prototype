@@ -14,13 +14,15 @@ All bats repos live under github.com/bats-lang/
 
 Each is its own git repo with a `bats.toml` (`kind = "lib"`). Some are `unsafe = true` (contain C FFI code), others are safe wrappers.
 
-**Core/native:** argparse, arith, array, builder, dict, env, path, process, promise, result, sha256, sort, str, toml, zip, decompress
+**Core/native:** argparse, arith, array, builder, dict, env, json, list, path, process, promise, result, sha256, sort, str, toml, xml-tree, zip
 
-**Browser/WASM** (namespaced `wasm.bats-packages.dev/`): bridge, css, dom, file-input, html, widget, xml-tree
+**Browser/WASM** (namespaced `wasm.bats-packages.dev/`): bridge, decompress, dom, file-input, html
 
-**Superseded by bridge (archived):** callback, clipboard, dom-read, event, fetch, idb, nav, notify, timer, window, xml. Their published archives stay here for old lockfiles; new code uses bridge.
+**For browser apps, published without the namespace:** css, gestures, pwa, widget
 
 **Both targets:** file
+
+**Superseded by bridge (archived):** callback, clipboard, dom-read, event, fetch, idb, nav, notify, timer, window, xml. Their published archives stay here for old lockfiles; new code uses bridge.
 
 ## Project Structure (per package)
 
