@@ -16,7 +16,9 @@ Each is its own git repo with a `bats.toml` (`kind = "lib"`). Some are `unsafe =
 
 **Core/native:** argparse, arith, array, builder, dict, env, path, process, promise, result, sha256, sort, str, toml, zip, decompress
 
-**Browser/WASM** (namespaced `wasm.bats-packages.dev/`): bridge, callback, clipboard, css, dom, dom-read, event, fetch, file-input, html, idb, nav, notify, timer, widget, window, xml, xml-tree
+**Browser/WASM** (namespaced `wasm.bats-packages.dev/`): bridge, css, dom, file-input, html, widget, xml-tree
+
+**Superseded by bridge (archived):** callback, clipboard, dom-read, event, fetch, idb, nav, notify, timer, window, xml. Their published archives stay here for old lockfiles; new code uses bridge.
 
 **Both targets:** file
 
