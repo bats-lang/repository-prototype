@@ -50,9 +50,10 @@
 #
 # Opening the pull request with GITHUB_TOKEN needs the setting "Allow
 # GitHub Actions to create and approve pull requests" (the organization's,
-# then the repository's). When it is off, the run still pushes the branch
-# and dispatches the check, opens a "human only" issue with the steps that
-# turn it on, and fails.
+# then the repository's). While it is off, a run still pushes the branch
+# (deleting older relock branches) and dispatches the check, and keeps one
+# "human only" issue that names the newest branch and says how to turn
+# the setting on; the first run that opens its pull request closes it.
 name: relock-pins
 
 on:
@@ -261,6 +262,9 @@ jobs:
             gh workflow run "$CHECK_WORKFLOW" --repo "$repo" --ref "$branch"
           fi
 
+          issue_title='Allow GitHub Actions to create pull requests, for the daily relock'
+          issue=$(gh issue list --repo "$repo" --state open --search "\"$issue_title\" in:title" --json number --jq '.[0].number // empty')
+
           if [ "$opened" = yes ]; then
             # An older relock is superseded by this one
             gh pr list --repo "$repo" --state open --json number,headRefName \
@@ -268,28 +272,46 @@ jobs:
             while read -r older; do
               gh pr close "$older" --repo "$repo" --delete-branch --comment "Superseded by #$number."
             done
+            # The setting is on now: the issue that asked for it is done
+            if [ -n "$issue" ]; then
+              gh issue close "$issue" --repo "$repo" --comment "The relock opened #$number: GitHub Actions may create pull requests now."
+            fi
             echo "Relock pull request: #$number" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          if grep -qi "not permitted to create or approve pull requests" ~/relock/pr.err; then
-            issue_title='Allow GitHub Actions to create pull requests, for the daily relock'
-            if [ -z "$(gh issue list --repo "$repo" --state open --search "\"$issue_title\" in:title" --json number --jq '.[0].number // empty')" ]; then
-              cat > ~/relock/issue.md <<ISSUE
-          The daily relock (\`.github/workflows/relock.yml\`, bats-lang/repository-prototype#269) pushed \`$branch\` and started \`$CHECK_WORKFLOW\` on it, but could not open its pull request: the repository does not allow GitHub Actions to create pull requests. Only a repository administrator can change that.
-
-          1. Open https://github.com/$repo/settings/actions (the repository's **Settings**, then **Actions** → **General** in the left sidebar).
-          2. Scroll to **Workflow permissions**.
-          3. Tick **Allow GitHub Actions to create and approve pull requests**, then click **Save**.
-             If the box cannot be ticked, the organization turned it off: an organization owner opens https://github.com/organizations/${repo%%/*}/settings/actions, ticks the same box under **Workflow permissions**, clicks **Save**, and then does step 3 here.
-          4. Run the relock again: https://github.com/$repo/actions/workflows/relock.yml → **Run workflow**. It opens the pull request for \`$branch\`.
-
-          The run that failed: $GITHUB_SERVER_URL/$repo/actions/runs/$GITHUB_RUN_ID
-          ISSUE
-              gh issue create --repo "$repo" --title "$issue_title" --label "human only" --body-file ~/relock/issue.md
-            fi
-            echo "::error::Could not open the relock pull request: the repository setting \"Allow GitHub Actions to create and approve pull requests\" (Settings → Actions → General → Workflow permissions) is off. $branch is pushed and $CHECK_WORKFLOW dispatched on it; a \"human only\" issue says how to turn the setting on."
-          else
+          if ! grep -qi "not permitted to create or approve pull requests" ~/relock/pr.err; then
             echo "::error::Could not open the relock pull request for $branch (see the output above)."
+            exit 1
           fi
-          exit 1
+
+          # Without a pull request, only the newest relock branch is kept: an
+          # older one is superseded, as its pull request would be (unless
+          # someone opened a pull request from it by hand)
+          git ls-remote --heads origin 'relock/*' | sed 's|.*refs/heads/||' | while read -r older; do
+            [ "$older" != "$branch" ] || continue
+            if [ -z "$(gh pr list --repo "$repo" --head "$older" --state open --json number --jq '.[0].number // empty')" ]; then
+              git push -q origin --delete "$older" || true
+            fi
+          done
+
+          # One "human only" issue says how to turn the setting on, and
+          # always names the newest branch; it is closed by the first run
+          # that opens its pull request once the setting is on
+          cat > ~/relock/issue.md <<ISSUE
+          The daily relock (\`.github/workflows/relock.yml\`, bats-lang/repository-prototype#269) pushes its branch and starts \`$CHECK_WORKFLOW\` on it, but cannot open the pull request: GitHub Actions may not create pull requests here. Only an administrator can change that.
+
+          **The newest relock:** branch [\`$branch\`]($GITHUB_SERVER_URL/$repo/compare/$BASE...$branch) (a pull request can be opened from it by hand meanwhile), its [\`$CHECK_WORKFLOW\` runs]($GITHUB_SERVER_URL/$repo/actions/workflows/$CHECK_WORKFLOW?query=branch%3A$branch), and the [relock run]($GITHUB_SERVER_URL/$repo/actions/runs/$GITHUB_RUN_ID).
+
+          To turn the setting on:
+          1. An organization owner opens https://github.com/organizations/${repo%%/*}/settings/actions, scrolls to **Workflow permissions**, ticks **Allow GitHub Actions to create and approve pull requests** and clicks **Save**. That lets every repository of the organization turn it on.
+          2. Open https://github.com/$repo/settings/actions (**Settings**, then **Actions** → **General**), tick the same box under **Workflow permissions**, and click **Save**.
+          3. Run the relock again: https://github.com/$repo/actions/workflows/relock.yml → **Run workflow**. It opens the pull request and closes this issue.
+          ISSUE
+          if [ -n "$issue" ]; then
+            gh issue edit "$issue" --repo "$repo" --body-file ~/relock/issue.md
+          else
+            gh label create "human only" --repo "$repo" --color B60205 --description "Needs a person: a setting, a secret or a decision" 2>/dev/null || true
+            gh issue create --repo "$repo" --title "$issue_title" --label "human only" --body-file ~/relock/issue.md
+          fi
+          echo "::warning::Could not open the relock pull request: GitHub Actions may not create pull requests here. $branch is pushed and $CHECK_WORKFLOW dispatched on it; a \"human only\" issue names the branch and says how to turn the setting on."
