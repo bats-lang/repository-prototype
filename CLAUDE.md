@@ -39,23 +39,35 @@ dist/              # Output binaries
 
 All changes in ANY repo go through: feature branch → PR → CI green → merge. Never commit directly to main. Use `gh pr merge --merge` (no squash).
 
-## CI Pattern
+## CI Pattern: every input is pinned (#269)
 
-All library packages use the same CI pattern: download the `bats-c` artifact (pre-compiled C files) from the bats repo's latest successful main build, compile with `make`, and use the resulting binary.
+A package's CI depends only on its own source, so a commit that passes
+keeps passing; pins move only through a reviewed pull request that runs
+the same CI.
 
-**Library packages** (`.github/workflows/check.yml`):
+* **The lock:** `bats.lock` is committed (a package with no dependencies
+  has none). CI never runs `bats lock` for the package: `bats check` and
+  `bats build` fetch exactly the locked versions, and fail when the lock
+  is missing or does not match `bats.toml`. A library's lock pins only
+  its own CI and tests; its dependents still resolve their own.
+* **The compiler:** its commit is in `.github/bats-version`, read by
+  every workflow that builds bats (and by `publish.yml` here).
+* **The package repository:** CI fetches this repository at the commit in
+  `.github/repository-version`, so what test packages lock (`bats lock
+  --dev` in `tests/`) is pinned too.
+* **Called workflows:** `publish.yml` and `relock-pins.yml` here (and
+  pwa's `android.yml` for an app) are called by commit, never `@main`.
+* **The daily relock:** each repository's `relock.yml` calls
+  `relock-pins.yml` here by commit. It relocks, moves the compiler, the
+  repository and the workflow pins to their newest, pushes
+  `relock/<date>`, opens a pull request listing what moved, and dispatches
+  `check.yml` on it (`workflow_dispatch`). A breaking publish shows as a
+  red relock pull request, and no main goes red. GITHUB_TOKEN cannot edit
+  `.github/workflows`, so without a `RELOCK_TOKEN` secret a workflow pin
+  that would move is listed in the pull request, to move by hand.
 
-1. Install ATS2 from source (patsopt for type-checking)
-
-2. Symlink ATS2 to `~/.bats/ats2` (where the bats compiler expects it)
-
-3. Download `bats-c` artifact from `bats-lang/bats` latest main build via `gh run download`
-
-4. `make PATSHOME=...` to compile the C files into a bats binary
-
-5. Run `bats lock` and `bats check` (with `bats` in PATH)
-
-**Packages that need dependencies** use `--repository` pointing to `repository-prototype`. Packages without dependencies just run `bats check` directly.
+This repository's own `verify` is the exception: it checks a new archive
+against every package's newest version, which is the point of it.
 
 ## Branches
 
