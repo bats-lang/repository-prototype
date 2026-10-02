@@ -8,10 +8,12 @@
 #       paths: ['src/**', 'bats.toml']
 #   jobs:
 #     publish:
-#       uses: bats-lang/repository-prototype/.github/workflows/publish.yml@main
+#       uses: bats-lang/repository-prototype/.github/workflows/publish.yml@<commit>
 #       secrets: inherit
 #
-# It uploads the package with a compiler built from bats main, pushes the
+# (called by commit, which the package's daily relock moves, #269). It
+# uploads the package with the compiler the package pins in
+# .github/bats-version (bats main when it pins none), pushes the
 # archive to a publish/<archive> branch here, opens a pull request, waits
 # for verify, and merges only when verify passes. See PUBLISHING-SETUP.md
 # for the REPO_PUBLISH_TOKEN secret it needs.
@@ -46,9 +48,12 @@ jobs:
           mkdir -p ~/.bats
           ln -sf ~/.ats2/ATS2-Postiats-int-0.4.2 ~/.bats/ats2
 
+      # The compiler the package pins (.github/bats-version, #269), the one
+      # its own CI ran; bats main for a package that pins none
       - name: Build bats from checked-in bootstrap C
         run: |
-          git clone --depth 1 https://github.com/bats-lang/bats.git ~/bats-src
+          git clone -q https://github.com/bats-lang/bats.git ~/bats-src
+          if [ -f .github/bats-version ]; then git -C ~/bats-src checkout -q "$(tr -d '[:space:]' < .github/bats-version)"; fi
           cp -R ~/bats-src/bootstrap/c ~/bats-c
           make -j$(nproc) -C ~/bats-c PATSHOME=$HOME/.ats2/ATS2-Postiats-int-0.4.2 debug/bats
           mkdir -p ~/bats-bin
