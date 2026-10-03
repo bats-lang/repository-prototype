@@ -173,9 +173,19 @@ To write at an offset, use `write_byte`, `write_u16le`, `write_i32` or `write_bo
 
 ## Local Verification
 
-* Always run `bats check` locally before pushing. Do not depend on CI to catch errors.
+* Before pushing, confirm locally what your change needs: `bats check`,
+  plus the targeted tests that exercise what you changed (the e2e
+  specs, static fixtures or dynamic tests that cover it, and `bats
+  build` when the change could break the C or wasm compile). Do not
+  run the whole suite locally: the machine is shared by many agents,
+  and full local runs overload it.
 
-* Do not use CI to build things speculatively. CI is for confirming what you already know works locally. Run `bats check`, `bats build`, patsopt, and e2e tests locally first.
+* Then trust CI to run everything and to say if something unexpected
+  broke. A red CI is still yours to root-cause and fix; it is never
+  "a flake" and never re-run hoping for green.
+
+* Do not use CI to build things speculatively: push only what the
+  targeted local checks have confirmed.
 
 * To get the bats binary: `gh run download --repo bats-lang/bats --name bats-c --dir /tmp/bats-c && cd /tmp/bats-c && PATSHOME=~/.bats/ats2 make && cp release/bats <target>`
 
