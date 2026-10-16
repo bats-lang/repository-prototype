@@ -34,6 +34,12 @@
 #   .github/workflows as <owner>/<repo>/<path>@<commit>, moved to its
 #   repository's newest main commit.
 #
+# Every input of this file is pinned (#332): actions/checkout by commit, and
+# the compiler, ATS2 and the package repository by bats's setup action
+# (bats-lang/bats .github/actions/setup, by commit; its `bats ats2 install`
+# checks the ATS2 tarball's SHA-256). Move that commit in a pull request of
+# its own, with the commit of the newest bats that has the action.
+#
 # A run builds the compiler at its newest main, moves the pins, and when
 # anything changed pushes relock/<date>, opens a pull request listing each
 # old and new version (closing older relock pull requests), and dispatches
@@ -95,46 +101,68 @@ jobs:
       HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
       GH_TOKEN: ${{ secrets.RELOCK_TOKEN || github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.base }}
           token: ${{ secrets.RELOCK_TOKEN || github.token }}
 
-      - name: Install ATS2
-        run: |
-          curl -sL "https://raw.githubusercontent.com/ats-lang/ats-lang.github.io/master/FROZEN000/ATS-Postiats/ATS2-Postiats-int-0.4.2.tgz" -o /tmp/ats2.tgz
-          mkdir -p ~/.ats2
-          tar -xzf /tmp/ats2.tgz -C ~/.ats2
-          cd ~/.ats2/ATS2-Postiats-int-0.4.2
-          make -j$(nproc) -C src/CBOOT patsopt
-          mkdir -p bin
-          cp src/CBOOT/patsopt bin/patsopt
-          mkdir -p ~/.bats
-          ln -sf ~/.ats2/ATS2-Postiats-int-0.4.2 ~/.bats/ats2
-
-      - name: Build the newest compiler
+      # The compiler and the package repository are relocked against their
+      # newest main, so their commits are looked up here and handed to
+      # bats's setup action as its pins. The setup action builds
+      # bats-lang/bats and clones bats-lang/repository-prototype only: say
+      # so rather than build another compiler than the one named.
+      - name: Find the newest compiler and package repository
+        id: newest
         run: |
           set -eu
-          git clone -q "https://github.com/$COMPILER_REPOSITORY.git" ~/bats-src
-          git -C ~/bats-src rev-parse HEAD > ~/compiler-newest
-          cp -R ~/bats-src/bootstrap/c ~/bats-c
-          make -j$(nproc) -C ~/bats-c PATSHOME=$HOME/.ats2/ATS2-Postiats-int-0.4.2 debug/bats
-          sudo cp ~/bats-c/debug/bats /usr/local/bin/bats
+          [ "$COMPILER_REPOSITORY" = bats-lang/bats ] \
+            || { echo "::error::compiler-repository is $COMPILER_REPOSITORY: bats's setup action builds bats-lang/bats only"; exit 1; }
+          [ "$PACKAGE_REPOSITORY" = bats-lang/repository-prototype ] \
+            || { echo "::error::package-repository is $PACKAGE_REPOSITORY: bats's setup action clones bats-lang/repository-prototype only"; exit 1; }
+          compiler=$(git ls-remote "https://github.com/$COMPILER_REPOSITORY.git" HEAD | cut -f1)
+          repository=$(git ls-remote "https://github.com/$PACKAGE_REPOSITORY.git" HEAD | cut -f1)
+          for sha in "$compiler" "$repository"; do
+            case $sha in
+              *[!0-9a-f]*|'') echo "::error::no commit found for a newest HEAD (got '$sha')"; exit 1 ;;
+            esac
+            [ ${#sha} -eq 40 ] || { echo "::error::not a full commit SHA: '$sha'"; exit 1; }
+          done
+          {
+            echo "compiler=$compiler"
+            echo "repository=$repository"
+            echo "head=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      # What every bats job does first (bats-lang/bats .github/actions/setup,
+      # called by commit): the compiler built from the checked-in bootstrap C
+      # of the commit named, ATS2 installed by bats itself (`bats ats2
+      # install`, its tarball from a fixed commit, its SHA-256 checked before
+      # it is unpacked), the package repository cloned at its commit into
+      # ~/repository (BATS_REPOSITORY). The caller's own pin files are not
+      # read: the newest commits are given. The caller may have no bats.lock.
+      - name: Set up bats at its newest
+        uses: bats-lang/bats/.github/actions/setup@67ebbf0c4744edce26584eef60ea26438945bab7 # bats main
+        with:
+          bats-version: ${{ steps.newest.outputs.compiler }}
+          repository-version: ${{ steps.newest.outputs.repository }}
+          commit: ${{ steps.newest.outputs.head }}
+          require-lock: 'false'
 
       - name: Relock and move the pins
+        env:
+          COMPILER_NEWEST: ${{ steps.newest.outputs.compiler }}
+          REPOSITORY_NEWEST: ${{ steps.newest.outputs.repository }}
         run: |
           set -eu
           mkdir -p ~/relock
           # What was pinned, for the pull request's lists
           if [ -f bats.lock ]; then cp bats.lock ~/relock/old.lock; else : > ~/relock/old.lock; fi
           compiler_old=$(tr -d '[:space:]' < .github/bats-version 2>/dev/null || true)
-          compiler_new=$(cat ~/compiler-newest)
-
-          git clone -q --depth 1 "https://github.com/$PACKAGE_REPOSITORY.git" ~/repository
-          repository_new=$(git -C ~/repository rev-parse HEAD)
+          compiler_new=$COMPILER_NEWEST
+          repository_new=$REPOSITORY_NEWEST
           repository_old=$(tr -d '[:space:]' < .github/repository-version 2>/dev/null || true)
           # A package with no dependencies has no lock, and gets none
-          if [ -f bats.lock ]; then bats lock --repository ~/repository; fi
+          if [ -f bats.lock ]; then bats lock --repository "$BATS_REPOSITORY"; fi
           if [ -f .github/bats-version ]; then printf '%s\n' "$compiler_new" > .github/bats-version; fi
           if [ -f .github/repository-version ]; then printf '%s\n' "$repository_new" > .github/repository-version; fi
 
