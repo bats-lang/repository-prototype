@@ -22,6 +22,13 @@
 #           bats-lang/repository-prototype/.github/workflows/publish.yml
 #           bats-lang/repository-prototype/.github/workflows/relock-pins.yml
 #
+# A caller that commits something derived from its lock or pins (bats's
+# bootstrap/c, the C of the compiler it compiles from its locked packages,
+# bats-lang/bats#299) gives `regenerate`, a shell command run in its checkout
+# after the pins moved and only when something did, with the newest bats on
+# PATH and BATS_REPOSITORY set, and `regenerate-paths`, the paths it writes,
+# which are committed with the pins. Both default to off.
+#
 # The caller's pins, each moved only when the caller has it:
 #
 # - bats.lock: the packages, relocked against the newest package
@@ -81,6 +88,19 @@ on:
         description: The bats compiler's repository, whose main .github/bats-version moves to
         type: string
         default: bats-lang/bats
+      regenerate:
+        description: >-
+          Shell command run in the caller's checkout after the pins moved, when
+          anything changed (the newest bats on PATH, BATS_REPOSITORY set), to
+          regenerate files derived from the lock; empty runs nothing
+        type: string
+        default: ''
+      regenerate-paths:
+        description: >-
+          Paths the regenerate command writes, one per line, committed with the
+          pins (deletions included); required when regenerate is given
+        type: string
+        default: ''
       base:
         description: The branch relocked and the pull request's base
         type: string
@@ -98,6 +118,8 @@ jobs:
       PACKAGE_REPOSITORY: ${{ inputs.package-repository }}
       COMPILER_REPOSITORY: ${{ inputs.compiler-repository }}
       BASE: ${{ inputs.base }}
+      REGENERATE: ${{ inputs.regenerate }}
+      REGENERATE_PATHS: ${{ inputs.regenerate-paths }}
       HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
       GH_TOKEN: ${{ secrets.RELOCK_TOKEN || github.token }}
     steps:
@@ -255,6 +277,18 @@ jobs:
           } > ~/relock/body.md
           cat ~/relock/body.md >> "$GITHUB_STEP_SUMMARY"
 
+      # Files derived from what moved (bats-lang/bats#299): the caller's own
+      # command, run only when the relock changed something. Its command and
+      # paths reach the shell as environment variables, never spliced in.
+      - name: Regenerate what the caller derives from the lock
+        if: inputs.regenerate != ''
+        run: |
+          set -eu
+          grep -q '^changed=yes$' ~/relock/state || exit 0
+          [ -n "$REGENERATE_PATHS" ] \
+            || { echo "::error::regenerate is given without regenerate-paths: nothing would be committed"; exit 1; }
+          sh -eu -c "$REGENERATE"
+
       - name: Push the branch, open the pull request and dispatch the check
         run: |
           set -eu
@@ -264,6 +298,7 @@ jobs:
           git checkout -q -B "$branch"
           git add -A .github
           if [ -f bats.lock ]; then git add bats.lock; fi
+          for path in $REGENERATE_PATHS; do git add -A -- "$path"; done
           title="Relock packages and CI pins ($(date -u +%Y-%m-%d))"
           { echo "$title"; echo; cat ~/relock/body.md; } > ~/relock/message
           git -c user.name="github-actions[bot]" \
