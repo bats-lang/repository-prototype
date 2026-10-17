@@ -19,7 +19,7 @@ jobs:
       # package repository's clone: the checkout above is the one verified.
       # This repository has no pin files, so both commits are given here.
       - name: Set up bats
-        uses: bats-lang/bats/.github/actions/setup@67ebbf0c4744edce26584eef60ea26438945bab7 # bats main
+        uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
         with:
           bats-version: 67ebbf0c4744edce26584eef60ea26438945bab7
           repository-version: 63cb39e57c56eb97bf8420b431efb3cd885401c6
