@@ -1,8 +1,14 @@
 # Tests the check-aggregate action (#328) through a caller that has the
-# shape of a `check` job: a job that passes, one skipped, and aggregators
-# over them. The aggregators that must pass are green; the ones that must
-# fail are continue-on-error and an expect job checks their results, so
-# this workflow is green only when each behaves as it should.
+# shape of a `check` job: jobs that pass and one that is skipped, then the
+# aggregator over them. The aggregator that must pass is green. The two that
+# must fail run as a step with continue-on-error, and a step after it checks
+# that its outcome was failure: needs.<job>.result is `success` for a job
+# whose continue-on-error step failed (found by this test), so that is
+# what the step outcome is for.
+#
+# The local action is read from this checkout; a caller of another
+# repository names it by commit (`bats-lang/repository-prototype/.github/
+# actions/check-aggregate@<commit>`) and needs no checkout.
 name: check-aggregate test
 
 on:
@@ -25,6 +31,7 @@ jobs:
     steps:
       - run: echo "b passed"
 
+  # Skipped by its condition, as a matrix group with nothing in it would be
   skip-c:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -37,45 +44,44 @@ jobs:
     needs: [pass-a, pass-b]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: ./.github/actions/check-aggregate
         with:
           jobs: pass-a pass-b
           results: ${{ toJSON(needs) }}
 
-  # A needed job skipped: must fail
+  # A needed job skipped: the aggregator must fail
   aggregate-skipped:
     if: always()
     needs: [pass-a, skip-c]
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
-      - uses: ./.github/actions/check-aggregate
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - id: aggregate
+        continue-on-error: true
+        uses: ./.github/actions/check-aggregate
         with:
           jobs: pass-a skip-c
           results: ${{ toJSON(needs) }}
+      - name: The aggregator failed
+        env:
+          OUTCOME: ${{ steps.aggregate.outcome }}
+        run: test "$OUTCOME" = failure
 
-  # A job named but not needed: must fail
+  # A job named but not needed: the aggregator must fail
   aggregate-missing:
     if: always()
     needs: [pass-a]
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
-      - uses: ./.github/actions/check-aggregate
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - id: aggregate
+        continue-on-error: true
+        uses: ./.github/actions/check-aggregate
         with:
           jobs: pass-a pass-b
           results: ${{ toJSON(needs) }}
-
-  # Expects both negative aggregators to have failed
-  expect-failures:
-    if: always()
-    needs: [aggregate-skipped, aggregate-missing]
-    runs-on: ubuntu-latest
-    steps:
-      - name: The negative cases failed
+      - name: The aggregator failed
         env:
-          SKIPPED: ${{ needs.aggregate-skipped.result }}
-          MISSING: ${{ needs.aggregate-missing.result }}
-        run: |
-          echo "aggregate-skipped: $SKIPPED, aggregate-missing: $MISSING"
-          [ "$SKIPPED" = failure ] && [ "$MISSING" = failure ]
+          OUTCOME: ${{ steps.aggregate.outcome }}
+        run: test "$OUTCOME" = failure
