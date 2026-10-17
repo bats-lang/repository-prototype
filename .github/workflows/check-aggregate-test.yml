@@ -6,9 +6,9 @@
 # whose continue-on-error step failed (found by this test), so that is
 # what the step outcome is for.
 #
-# The local action is read from this checkout; a caller of another
-# repository names it by commit (`bats-lang/repository-prototype/.github/
-# actions/check-aggregate@<commit>`) and needs no checkout.
+# The action is named by its commit, as a caller of another repository names
+# it, and needs no checkout. The local form was the first run's (it needed a
+# checkout, which a caller does not need when it names the action by commit).
 name: check-aggregate test
 
 on:
@@ -44,8 +44,7 @@ jobs:
     needs: [pass-a, pass-b]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: ./.github/actions/check-aggregate
+      - uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # this branch (#328)
         with:
           jobs: pass-a pass-b
           results: ${{ toJSON(needs) }}
@@ -56,10 +55,9 @@ jobs:
     needs: [pass-a, skip-c]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - id: aggregate
         continue-on-error: true
-        uses: ./.github/actions/check-aggregate
+        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # this branch (#328)
         with:
           jobs: pass-a skip-c
           results: ${{ toJSON(needs) }}
@@ -74,10 +72,9 @@ jobs:
     needs: [pass-a]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - id: aggregate
         continue-on-error: true
-        uses: ./.github/actions/check-aggregate
+        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # this branch (#328)
         with:
           jobs: pass-a pass-b
           results: ${{ toJSON(needs) }}
