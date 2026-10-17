@@ -1,0 +1,81 @@
+# Tests the check-aggregate action (#328) through a caller that has the
+# shape of a `check` job: a job that passes, one skipped, and aggregators
+# over them. The aggregators that must pass are green; the ones that must
+# fail are continue-on-error and an expect job checks their results, so
+# this workflow is green only when each behaves as it should.
+name: check-aggregate test
+
+on:
+  pull_request:
+    paths:
+      - '.github/actions/check-aggregate/**'
+      - '.github/workflows/check-aggregate-test.yml'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  pass-a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "a passed"
+
+  pass-b:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "b passed"
+
+  skip-c:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "never"
+
+  # Every job passed: green
+  aggregate-pass:
+    if: always()
+    needs: [pass-a, pass-b]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/check-aggregate
+        with:
+          jobs: pass-a pass-b
+          results: ${{ toJSON(needs) }}
+
+  # A needed job skipped: must fail
+  aggregate-skipped:
+    if: always()
+    needs: [pass-a, skip-c]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: ./.github/actions/check-aggregate
+        with:
+          jobs: pass-a skip-c
+          results: ${{ toJSON(needs) }}
+
+  # A job named but not needed: must fail
+  aggregate-missing:
+    if: always()
+    needs: [pass-a]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: ./.github/actions/check-aggregate
+        with:
+          jobs: pass-a pass-b
+          results: ${{ toJSON(needs) }}
+
+  # Expects both negative aggregators to have failed
+  expect-failures:
+    if: always()
+    needs: [aggregate-skipped, aggregate-missing]
+    runs-on: ubuntu-latest
+    steps:
+      - name: The negative cases failed
+        env:
+          SKIPPED: ${{ needs.aggregate-skipped.result }}
+          MISSING: ${{ needs.aggregate-missing.result }}
+        run: |
+          echo "aggregate-skipped: $SKIPPED, aggregate-missing: $MISSING"
+          [ "$SKIPPED" = failure ] && [ "$MISSING" = failure ]

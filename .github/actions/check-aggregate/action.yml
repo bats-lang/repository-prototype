@@ -1,0 +1,70 @@
+# The aggregator of a `check` job: the one job a repository's branch
+# protection requires, which passes only when every job it needs passed
+# (#328). A repository calls it by commit, from the job it names `check`,
+# after the jobs it needs, with `if: always()` so that a skipped or failed
+# job does not skip the aggregator itself:
+#
+#   check:
+#     if: always()
+#     needs: [plan, build, static, e2e]
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: bats-lang/repository-prototype/.github/actions/check-aggregate@<commit>
+#         with:
+#           jobs: plan build static e2e
+#           results: ${{ toJSON(needs) }}
+#
+# It is a composite action and not a reusable workflow on purpose: a job
+# that calls a reusable workflow reports its check as "<caller job> / <called
+# job>", so a reusable aggregator would rename the required check `check`,
+# which branch protection names. A composite action runs inside the caller's
+# own job, so the job, and its check's name, stay the caller's.
+#
+# What passes: each job named in `jobs` has the result `success` in
+# `results`. What does not: `skipped`, `cancelled`, `failure`, and a name
+# that `results` does not hold (a job the caller forgot to list in `needs`,
+# or misspelt). `jobs` must name at least one job. The action uses no token,
+# no secret and no third-party action, so its caller's job needs no
+# permissions.
+#
+# Inputs reach the shell only as environment variables (never spliced into
+# the script). The results are printed as the names and results they hold,
+# not as the whole JSON, since a job may have outputs.
+name: Every needed job passed
+description: Fails unless each job named in `jobs` ended with the result success in `results`.
+
+inputs:
+  jobs:
+    description: The job ids that must have passed, separated by spaces.
+    required: true
+  results:
+    description: The caller's needs context as JSON, toJSON(needs).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Every needed job passed
+      shell: bash
+      env:
+        JOBS: ${{ inputs.jobs }}
+        RESULTS: ${{ inputs.results }}
+      run: |
+        set -eu
+        set -f
+        jq -e 'type == "object"' <<< "$RESULTS" > /dev/null || { echo "::error::results is not a JSON object (pass toJSON(needs))"; exit 1; }
+        [ -n "$JOBS" ] || { echo "::error::jobs names no job"; exit 1; }
+        status=0
+        for job in $JOBS; do
+          result=$(jq -r --arg job "$job" '.[$job].result // "missing"' <<< "$RESULTS")
+          if [ "$result" = success ]; then
+            echo "$job: success"
+          elif [ "$result" = missing ]; then
+            echo "::error::$job is not among the jobs this check needs"
+            status=1
+          else
+            echo "::error::$job ended $result"
+            status=1
+          fi
+        done
+        exit $status
