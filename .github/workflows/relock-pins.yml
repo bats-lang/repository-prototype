@@ -35,22 +35,55 @@
 # change workflow files. So privilege is separated by job, not guarded by a
 # list of what the command must not touch:
 #
-#  1. relock (privileged): finds the newest, relocks, moves the pins, and
-#     hands the change on as outputs (a patch and the pull request's text).
-#     It never runs the caller's command.
-#  2. regenerate (permissions: {}, no secrets, no token, a clean checkout
-#     with no credentials): applies the patch, runs the command, and uploads
-#     one tar of the listed paths. It is a different runner from job 3, so
-#     whatever the command writes (GITHUB_ENV, GITHUB_PATH, .git/hooks, the
-#     runner's tools, ~/relock) is gone with it.
-#  3. publish (privileged): in its own clean checkout applies the same
-#     patch, takes the tar as data only (every member must be a regular file
-#     or directory under a listed path, no absolute or `..` path, nothing
-#     under .git or .github, no link, a size cap; the files are written by
-#     this job's own code, never extracted by tar), commits, pushes and opens
-#     the pull request. The command's only influence on it is the bytes of
-#     the listed regular files. If the command fails, the pins are still
-#     pushed (without the files, the PR's check shows it) and the run fails.
+#  1. relock: finds the newest, relocks, moves the pins, decides the branch
+#     name (once, so a run that crosses midnight is one date) and hands the
+#     change on as job outputs (a patch and the pull request's text). It
+#     never runs the caller's command, and it has no token of its own (only
+#     the repository's default GITHUB_TOKEN to check out, and whether a
+#     RELOCK_TOKEN exists).
+#  2. regenerate (permissions: {}, no secrets, a checkout with no
+#     credentials, a timeout): applies the patch, runs the command, and
+#     uploads one tar of the listed paths. It is a different runner from job
+#     3, so whatever the command writes (GITHUB_ENV, GITHUB_PATH, .git/hooks,
+#     the runner's tools, ~/relock) is gone with it.
+#  3. publish (the only job with RELOCK_TOKEN): in its own clean checkout
+#     applies the same patch, takes the tar as data only (the path rule
+#     below; every member must be a regular file or directory under a listed
+#     path, a size cap; the files are written by this job's own code, never
+#     extracted by tar), commits, pushes and opens the pull request. The
+#     command's only influence on it is the bytes of the listed regular files.
+#
+# What happens when the command goes wrong: if it fails (job 2 fails), or
+# writes a link or anything else that is not a regular file or a directory,
+# or too much, or a path outside the listed ones, or job 3 refuses its tar,
+# the run is red and NOTHING is pushed: an existing relock branch of the day
+# (a good one from an earlier run) is never replaced by one without the
+# files, and the pins are not pushed without them either.
+#
+# The path rule, the same text in job 2's shell and job 3's Python, tested
+# with the same cases: a path is refused when it is empty, starts with `/` or
+# `-`, ends with `/`, has an empty, `.` or `..` component, has a character
+# other than letters, digits and `._/@+=,-` (a newline included), or has a
+# component that is, in any case, `.git`, `.github`, `.gitmodules` or
+# `.gitattributes`, at any depth.
+#
+# Limits, a change from before regenerate existed: the change handed on
+# (the patch, gzipped and base64) is under 100000 characters and the pull
+# request's text under 20000, because a job output goes to a step as an
+# environment variable (128 KiB); a relock larger than that fails with a
+# message. The regenerated files are at most `regenerate-max-bytes`.
+#
+# Concurrency: one relock of a repository at a time (the group below, never
+# cancelled), so a scheduled run and a dispatch cannot interleave their
+# pushes. `branch-prefix` (default `relock/`) names the branch and the pull
+# requests this run supersedes: a test run uses another prefix, and cannot
+# touch the day's real relock.
+#
+# Do not give `regenerate` to a repository that is not public (job 2 has no
+# permissions, so it cannot check out a private one), nor to one whose
+# workflows use actions/cache or other state that a later run trusts: the
+# command's job can write the cache for the caller's ref through the runner's
+# cache token, which no permission setting takes away.
 #
 # The caller's pins, each moved only when the caller has it:
 #
@@ -128,6 +161,16 @@ on:
         description: The most bytes of the regenerated files the publish job accepts
         type: string
         default: '67108864'
+      branch-prefix:
+        description: >-
+          The relock branch is <prefix><date>; older pull requests from
+          branches with this prefix are superseded. A test run uses another
+        type: string
+        default: relock/
+      regenerate-timeout-minutes:
+        description: Minutes the caller's command and its job may take
+        type: string
+        default: '60'
       base:
         description: The branch relocked and the pull request's base
         type: string
@@ -136,10 +179,17 @@ on:
       RELOCK_TOKEN:
         required: false
 
+concurrency:
+  group: relock-pins-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
   relock:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
+      branch: ${{ steps.hand.outputs.branch }}
+      date: ${{ steps.hand.outputs.date }}
       changed: ${{ steps.hand.outputs.changed }}
       head: ${{ steps.newest.outputs.head }}
       compiler: ${{ steps.newest.outputs.compiler }}
@@ -152,15 +202,14 @@ jobs:
       PACKAGE_REPOSITORY: ${{ inputs.package-repository }}
       COMPILER_REPOSITORY: ${{ inputs.compiler-repository }}
       BASE: ${{ inputs.base }}
+      BRANCH_PREFIX: ${{ inputs.branch-prefix }}
       HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
-      GH_TOKEN: ${{ secrets.RELOCK_TOKEN || github.token }}
     steps:
+      # The repository's default token reads it (a private one too); this job
+      # makes no authenticated call and never sees RELOCK_TOKEN's value
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.base }}
-          token: ${{ secrets.RELOCK_TOKEN || github.token }}
-          # Nothing the job runs reads the token from .git/config; git is
-          # given it explicitly where it pushes
           persist-credentials: false
 
       # The compiler and the package repository are relocked against their
@@ -322,6 +371,12 @@ jobs:
           state=$(sed 's/^changed=//' ~/relock/state)
           echo "changed=$state" >> "$GITHUB_OUTPUT"
           [ "$state" = yes ] || exit 0
+          # the day's branch, decided once here and passed on
+          case "$BRANCH_PREFIX" in
+            ''|-*|*[!A-Za-z0-9._/-]*) echo "::error::branch-prefix is refused: $BRANCH_PREFIX"; exit 1 ;;
+          esac
+          date=$(date -u +%Y-%m-%d)
+          { echo "date=$date"; echo "branch=$BRANCH_PREFIX$date"; } >> "$GITHUB_OUTPUT"
           git add -A .github
           if [ -f bats.lock ]; then git add bats.lock; fi
           patch=$(git diff --cached --binary | gzip -9n | base64 -w0)
@@ -337,6 +392,7 @@ jobs:
     needs: relock
     if: inputs.regenerate != '' && needs.relock.outputs.changed == 'yes'
     runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.regenerate-timeout-minutes) }}
     permissions: {}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -362,13 +418,22 @@ jobs:
           set -eu
           [ -n "$REGENERATE_PATHS" ] \
             || { echo "::error::regenerate is given without regenerate-paths: nothing would be committed"; exit 1; }
-          # the same rules job 3 applies to what comes back
+          # the path rule, as job 3's Python states it (see the header)
+          refused() {
+            case "$1" in
+              ''|-*|/*|*/|*//*|*[!A-Za-z0-9._/@+=,-]*) return 0 ;;
+            esac
+            lower=$(printf '%s' "$1" | tr 'A-Z' 'a-z')
+            case "/$lower/" in
+              */./*|*/../*|*/.git/*|*/.github/*|*/.gitmodules/*|*/.gitattributes/*) return 0 ;;
+            esac
+            return 1
+          }
           printf '%s\n' "$REGENERATE_PATHS" | while IFS= read -r path; do
             [ -n "$path" ] || continue
-            case "$path" in
-              .|..|/*|./*|*/|*//*|../*|*/..|*/../*|.git|.git/*|.github|.github/*|*[!A-Za-z0-9._/@+=,-]*)
-                echo "::error::regenerate-paths names a path that is refused: $path"; exit 1 ;;
-            esac
+            if refused "$path"; then
+              echo "::error::regenerate-paths names a path that is refused: $path"; exit 1
+            fi
           done
           printf '%s' "$PATCH" | base64 -d | gunzip | git apply --binary
           sh -eu -c "$REGENERATE"
@@ -398,16 +463,19 @@ jobs:
     if: >-
       always() && needs.relock.result == 'success'
       && needs.relock.outputs.changed == 'yes'
-      && needs.regenerate.result != 'cancelled'
+      && (needs.regenerate.result == 'success' || needs.regenerate.result == 'skipped')
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
+      BRANCH: ${{ needs.relock.outputs.branch }}
+      DATE: ${{ needs.relock.outputs.date }}
+      BRANCH_PREFIX: ${{ inputs.branch-prefix }}
       CHECK_WORKFLOW: ${{ inputs.check-workflow }}
       BASE: ${{ inputs.base }}
       REGENERATE_PATHS: ${{ inputs.regenerate-paths }}
       MAX_BYTES: ${{ inputs.regenerate-max-bytes }}
       PATCH: ${{ needs.relock.outputs.patch }}
       BODY: ${{ needs.relock.outputs.body }}
-      REGENERATED: ${{ needs.regenerate.result }}
       HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
       GH_TOKEN: ${{ secrets.RELOCK_TOKEN || github.token }}
     steps:
@@ -423,12 +491,6 @@ jobs:
           printf '%s' "$PATCH" | base64 -d | gunzip | git apply --binary --index
           mkdir -p ~/relock
           printf '%s' "$BODY" | base64 -d > ~/relock/body.md
-          if [ "$REGENERATED" = failure ]; then
-            {
-              echo
-              echo "**The regenerate command failed** ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID), so the files it writes are not regenerated here: the run is red on purpose."
-            } >> ~/relock/body.md
-          fi
 
       - name: Download what the command wrote
         if: needs.regenerate.result == 'success'
@@ -449,10 +511,14 @@ jobs:
           cap = int(os.environ['MAX_BYTES'])
           allowed = re.compile(r'^[A-Za-z0-9._/@+=,-]+$')
           def refused(name):
-              parts = name.split('/')
-              return (not allowed.match(name) or name.startswith('/')
-                      or name.endswith('/') or '' in parts or '.' in parts
-                      or '..' in parts or parts[0] in ('.git', '.github'))
+              # the path rule of the header, as job 2's shell states it
+              if (not allowed.fullmatch(name) or name.startswith('/')
+                      or name.startswith('-') or name.endswith('/')):
+                  return True
+              for part in name.split('/'):
+                  if part in ('', '.', '..') or part.lower() in ('.git', '.github', '.gitmodules', '.gitattributes'):
+                      return True
+              return False
           def die(message):
               print('::error::' + message)
               sys.exit(1)
@@ -507,7 +573,7 @@ jobs:
       - name: Push the branch, open the pull request and dispatch the check
         run: |
           set -eu
-          branch="relock/$(date -u +%Y-%m-%d)"
+          branch="$BRANCH"
           repo="$GITHUB_REPOSITORY"
           git checkout -q -B "$branch"
           git add -A .github
@@ -516,7 +582,7 @@ jobs:
           printf '%s\n' "$REGENERATE_PATHS" | while IFS= read -r path; do
             [ -z "$path" ] || git add -A -- ":(literal)$path"
           done
-          title="Relock packages and CI pins ($(date -u +%Y-%m-%d))"
+          title="Relock packages and CI pins ($DATE)"
           { echo "$title"; echo; cat ~/relock/body.md; } > ~/relock/message
           git -c user.name="github-actions[bot]" \
             -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
@@ -553,7 +619,7 @@ jobs:
           if [ "$opened" = yes ]; then
             # An older relock is superseded by this one
             gh pr list --repo "$repo" --state open --json number,headRefName \
-              --jq ".[] | select(.headRefName | startswith(\"relock/\")) | select(.headRefName != \"$branch\") | .number" |
+              --jq ".[] | select(.headRefName | startswith(\"$BRANCH_PREFIX\")) | select(.headRefName != \"$branch\") | .number" |
             while read -r older; do
               gh pr close "$older" --repo "$repo" --delete-branch --comment "Superseded by #$number."
             done
@@ -573,7 +639,7 @@ jobs:
           # Without a pull request, only the newest relock branch is kept: an
           # older one is superseded, as its pull request would be (unless
           # someone opened a pull request from it by hand)
-          git -c "$git_auth" ls-remote --heads origin 'relock/*' | sed 's|.*refs/heads/||' | while read -r older; do
+          git -c "$git_auth" ls-remote --heads origin "$BRANCH_PREFIX*" | sed 's|.*refs/heads/||' | while read -r older; do
             [ "$older" != "$branch" ] || continue
             if [ -z "$(gh pr list --repo "$repo" --head "$older" --state open --json number --jq '.[0].number // empty')" ]; then
               git -c "$git_auth" push -q origin --delete "$older" || true
@@ -600,11 +666,3 @@ jobs:
             gh issue create --repo "$repo" --title "$issue_title" --label "human only" --body-file ~/relock/issue.md
           fi
           echo "::warning::Could not open the relock pull request: GitHub Actions may not create pull requests here. $branch is pushed and $CHECK_WORKFLOW dispatched on it; a \"human only\" issue names the branch and says how to turn the setting on."
-
-      # The relock is pushed either way; a command that failed makes the run
-      # red, so it is looked at
-      - name: Fail when the regenerate command failed
-        if: needs.regenerate.result == 'failure'
-        run: |
-          echo "::error::the regenerate command failed: the relock branch has the pins without the files it writes"
-          exit 1
