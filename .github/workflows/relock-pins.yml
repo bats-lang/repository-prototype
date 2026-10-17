@@ -26,16 +26,31 @@
 # bootstrap/c, the C of the compiler it compiles from its locked packages,
 # bats-lang/bats#299) gives `regenerate`, a shell command run in its checkout
 # after the pins moved and only when something did, with the newest bats on
-# PATH and BATS_REPOSITORY set, and `regenerate-paths`, the paths it writes,
-# which are committed with the pins. Both default to off.
+# PATH and BATS_REPOSITORY set, and `regenerate-paths`, the files and
+# directories it writes, one per line, which are committed with the pins.
+# Both default to off, and then the run is the same relock as before.
 #
-# The regenerate command runs the code of the newest published packages (it
-# builds them and runs the result), so it runs WITHOUT any token: the step
-# clears GH_TOKEN and RELOCK_TOKEN, the checkout does not persist its
-# credentials in .git/config (persist-credentials: false), and the push step
-# passes the token to git by itself. RELOCK_TOKEN can change workflow files,
-# so the step also fails if the command changed anything under .github or
-# bats.lock, which only the relock itself may write.
+# The command runs the code of the newest published packages (it builds them
+# and runs the result), while the relock holds RELOCK_TOKEN, which can push and
+# change workflow files. So privilege is separated by job, not guarded by a
+# list of what the command must not touch:
+#
+#  1. relock (privileged): finds the newest, relocks, moves the pins, and
+#     hands the change on as outputs (a patch and the pull request's text).
+#     It never runs the caller's command.
+#  2. regenerate (permissions: {}, no secrets, no token, a clean checkout
+#     with no credentials): applies the patch, runs the command, and uploads
+#     one tar of the listed paths. It is a different runner from job 3, so
+#     whatever the command writes (GITHUB_ENV, GITHUB_PATH, .git/hooks, the
+#     runner's tools, ~/relock) is gone with it.
+#  3. publish (privileged): in its own clean checkout applies the same
+#     patch, takes the tar as data only (every member must be a regular file
+#     or directory under a listed path, no absolute or `..` path, nothing
+#     under .git or .github, no link, a size cap; the files are written by
+#     this job's own code, never extracted by tar), commits, pushes and opens
+#     the pull request. The command's only influence on it is the bytes of
+#     the listed regular files. If the command fails, the pins are still
+#     pushed (without the files, the PR's check shows it) and the run fails.
 #
 # The caller's pins, each moved only when the caller has it:
 #
@@ -109,6 +124,10 @@ on:
           pins (deletions included); required when regenerate is given
         type: string
         default: ''
+      regenerate-max-bytes:
+        description: The most bytes of the regenerated files the publish job accepts
+        type: string
+        default: '67108864'
       base:
         description: The branch relocked and the pull request's base
         type: string
@@ -120,14 +139,19 @@ on:
 jobs:
   relock:
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.hand.outputs.changed }}
+      head: ${{ steps.newest.outputs.head }}
+      compiler: ${{ steps.newest.outputs.compiler }}
+      repository: ${{ steps.newest.outputs.repository }}
+      patch: ${{ steps.hand.outputs.patch }}
+      body: ${{ steps.hand.outputs.body }}
     env:
       PINS: ${{ inputs.workflow-pins }}
       CHECK_WORKFLOW: ${{ inputs.check-workflow }}
       PACKAGE_REPOSITORY: ${{ inputs.package-repository }}
       COMPILER_REPOSITORY: ${{ inputs.compiler-repository }}
       BASE: ${{ inputs.base }}
-      REGENERATE: ${{ inputs.regenerate }}
-      REGENERATE_PATHS: ${{ inputs.regenerate-paths }}
       HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
       GH_TOKEN: ${{ secrets.RELOCK_TOKEN || github.token }}
     steps:
@@ -288,38 +312,201 @@ jobs:
           } > ~/relock/body.md
           cat ~/relock/body.md >> "$GITHUB_STEP_SUMMARY"
 
-      # Files derived from what moved (bats-lang/bats#299): the caller's own
-      # command, run only when the relock changed something. Its command and
-      # paths reach the shell as environment variables, never spliced in.
-      # The command runs the newest packages' code, so it has no token (see
-      # the header) and may not touch what RELOCK_TOKEN would push as a
-      # workflow change.
-      - name: Regenerate what the caller derives from the lock
-        if: inputs.regenerate != ''
-        env:
-          GH_TOKEN: ''
-          RELOCK_TOKEN: ''
-          GITHUB_TOKEN: ''
+      # What job 2 and job 3 take from this one: the change as a patch (the
+      # pins, the lock and any workflow pin this job moved) and the pull
+      # request's text, as job outputs, which no later job can alter
+      - name: Hand the change on
+        id: hand
         run: |
           set -eu
-          grep -q '^changed=yes$' ~/relock/state || exit 0
+          state=$(sed 's/^changed=//' ~/relock/state)
+          echo "changed=$state" >> "$GITHUB_OUTPUT"
+          [ "$state" = yes ] || exit 0
+          git add -A .github
+          if [ -f bats.lock ]; then git add bats.lock; fi
+          patch=$(git diff --cached --binary | gzip -9n | base64 -w0)
+          body=$(base64 -w0 ~/relock/body.md)
+          # an environment variable of a later step is limited to 128 KiB
+          [ ${#patch} -lt 100000 ] && [ ${#body} -lt 20000 ] \
+            || { echo "::error::the relock's change is larger than the jobs hand on (patch ${#patch}, text ${#body})"; exit 1; }
+          { echo "patch=$patch"; echo "body=$body"; } >> "$GITHUB_OUTPUT"
+
+  # Job 2: the caller's command, with nothing to steal and nothing later
+  # that trusts it (see the header)
+  regenerate:
+    needs: relock
+    if: inputs.regenerate != '' && needs.relock.outputs.changed == 'yes'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.relock.outputs.head }}
+          persist-credentials: false
+
+      - name: Set up bats at its newest
+        uses: bats-lang/bats/.github/actions/setup@67ebbf0c4744edce26584eef60ea26438945bab7 # bats main
+        with:
+          bats-version: ${{ needs.relock.outputs.compiler }}
+          repository-version: ${{ needs.relock.outputs.repository }}
+          commit: ${{ needs.relock.outputs.head }}
+          require-lock: 'false'
+
+      - name: Apply the relock, run the command and pack the listed paths
+        env:
+          PATCH: ${{ needs.relock.outputs.patch }}
+          REGENERATE: ${{ inputs.regenerate }}
+          REGENERATE_PATHS: ${{ inputs.regenerate-paths }}
+          MAX_BYTES: ${{ inputs.regenerate-max-bytes }}
+        run: |
+          set -eu
           [ -n "$REGENERATE_PATHS" ] \
             || { echo "::error::regenerate is given without regenerate-paths: nothing would be committed"; exit 1; }
-          guarded() {
-            { git status --porcelain -- .github bats.lock
-              git diff HEAD -- .github bats.lock
-              git ls-files -o --exclude-standard -z -- .github | xargs -0 -r sha256sum
-            } | sha256sum
-          }
-          before=$(guarded)
+          # the same rules job 3 applies to what comes back
+          printf '%s\n' "$REGENERATE_PATHS" | while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            case "$path" in
+              .|..|/*|./*|*/|*//*|../*|*/..|*/../*|.git|.git/*|.github|.github/*|*[!A-Za-z0-9._/@+=,-]*)
+                echo "::error::regenerate-paths names a path that is refused: $path"; exit 1 ;;
+            esac
+          done
+          printf '%s' "$PATCH" | base64 -d | gunzip | git apply --binary
           sh -eu -c "$REGENERATE"
-          [ "$(guarded)" = "$before" ] \
-            || { echo "::error::the regenerate command changed .github or bats.lock, which only the relock writes"; exit 1; }
+          printf '%s\n' "$REGENERATE_PATHS" | while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            [ -e "$path" ] || { echo "::error::the command did not write $path"; exit 1; }
+            if [ -n "$(find "$path" ! -type f ! -type d -print -quit)" ] || [ -L "$path" ]; then
+              echo "::error::$path holds something that is not a regular file or a directory: $(find "$path" ! -type f ! -type d -print -quit)"; exit 1
+            fi
+          done
+          printf '%s\n' "$REGENERATE_PATHS" | grep -v '^$' \
+            | tar --verbatim-files-from -cf "$RUNNER_TEMP/regenerated.tar" -T -
+          size=$(stat -c %s "$RUNNER_TEMP/regenerated.tar")
+          [ "$size" -le "$MAX_BYTES" ] \
+            || { echo "::error::the regenerated files are $size bytes, over regenerate-max-bytes ($MAX_BYTES)"; exit 1; }
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: regenerated
+          path: ${{ runner.temp }}/regenerated.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  # Job 3: the privileged half, from clean inputs only
+  publish:
+    needs: [relock, regenerate]
+    if: >-
+      always() && needs.relock.result == 'success'
+      && needs.relock.outputs.changed == 'yes'
+      && needs.regenerate.result != 'cancelled'
+    runs-on: ubuntu-latest
+    env:
+      CHECK_WORKFLOW: ${{ inputs.check-workflow }}
+      BASE: ${{ inputs.base }}
+      REGENERATE_PATHS: ${{ inputs.regenerate-paths }}
+      MAX_BYTES: ${{ inputs.regenerate-max-bytes }}
+      PATCH: ${{ needs.relock.outputs.patch }}
+      BODY: ${{ needs.relock.outputs.body }}
+      REGENERATED: ${{ needs.regenerate.result }}
+      HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
+      GH_TOKEN: ${{ secrets.RELOCK_TOKEN || github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.relock.outputs.head }}
+          token: ${{ secrets.RELOCK_TOKEN || github.token }}
+          persist-credentials: false
+
+      - name: Apply the relock
+        run: |
+          set -eu
+          printf '%s' "$PATCH" | base64 -d | gunzip | git apply --binary --index
+          mkdir -p ~/relock
+          printf '%s' "$BODY" | base64 -d > ~/relock/body.md
+          if [ "$REGENERATED" = failure ]; then
+            {
+              echo
+              echo "**The regenerate command failed** ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID), so the files it writes are not regenerated here: the run is red on purpose."
+            } >> ~/relock/body.md
+          fi
+
+      - name: Download what the command wrote
+        if: needs.regenerate.result == 'success'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: regenerated
+          path: ${{ runner.temp }}/regenerated
+
+      # The artifact is data from a job that ran the newest packages' code.
+      # Nothing is extracted by tar: each member is checked and its bytes are
+      # written by this script, as a regular file under a listed path.
+      - name: Take the listed files, as data
+        if: needs.regenerate.result == 'success'
+        run: |
+          python3 -I - "$RUNNER_TEMP/regenerated/regenerated.tar" <<'PY'
+          import os, re, shutil, sys, tarfile
+          paths = [p for p in os.environ['REGENERATE_PATHS'].split('\n') if p]
+          cap = int(os.environ['MAX_BYTES'])
+          allowed = re.compile(r'^[A-Za-z0-9._/@+=,-]+$')
+          def refused(name):
+              parts = name.split('/')
+              return (not allowed.match(name) or name.startswith('/')
+                      or name.endswith('/') or '' in parts or '.' in parts
+                      or '..' in parts or parts[0] in ('.git', '.github'))
+          def die(message):
+              print('::error::' + message)
+              sys.exit(1)
+          if not paths:
+              die('regenerate-paths is empty')
+          for path in paths:
+              if refused(path):
+                  die('regenerate-paths names a path that is refused: %r' % path)
+          directories, files, total = [], [], 0
+          with tarfile.open(sys.argv[1], 'r:') as archive:
+              members = archive.getmembers()
+              if len(members) > 100000:
+                  die('too many members in the regenerated files')
+              for member in members:
+                  name = member.name
+                  if refused(name) or not any(name == p or name.startswith(p + '/') for p in paths):
+                      die('a member outside the listed paths or with a refused name: %r' % name)
+                  if member.isdir():
+                      directories.append(name)
+                  elif member.isreg():
+                      total += member.size
+                      if total > cap:
+                          die('the regenerated files are over regenerate-max-bytes (%d)' % cap)
+                      files.append(member)
+                  else:
+                      die('a member that is not a regular file or a directory: %r' % name)
+              for path in paths:
+                  if not any(m.name == path for m in members):
+                      die('the regenerated files do not hold %s' % path)
+                  walked = ''
+                  for part in path.split('/')[:-1]:
+                      walked = os.path.join(walked, part)
+                      if os.path.islink(walked):
+                          die('%s is a link in the checkout' % walked)
+                  if os.path.islink(path) or os.path.isfile(path):
+                      os.remove(path)
+                  elif os.path.isdir(path):
+                      shutil.rmtree(path)
+              for name in directories:
+                  os.makedirs(name, exist_ok=True)
+              for member in files:
+                  os.makedirs(os.path.dirname(member.name) or '.', exist_ok=True)
+                  data = archive.extractfile(member).read()
+                  mode = 0o755 if member.mode & 0o100 else 0o644
+                  descriptor = os.open(member.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+                  with os.fdopen(descriptor, 'wb') as out:
+                      out.write(data)
+                  os.chmod(member.name, mode)
+          print('took %d files (%d bytes) under %s' % (len(files), total, ', '.join(paths)))
+          PY
 
       - name: Push the branch, open the pull request and dispatch the check
         run: |
           set -eu
-          grep -q '^changed=yes$' ~/relock/state || exit 0
           branch="relock/$(date -u +%Y-%m-%d)"
           repo="$GITHUB_REPOSITORY"
           git checkout -q -B "$branch"
@@ -413,3 +600,11 @@ jobs:
             gh issue create --repo "$repo" --title "$issue_title" --label "human only" --body-file ~/relock/issue.md
           fi
           echo "::warning::Could not open the relock pull request: GitHub Actions may not create pull requests here. $branch is pushed and $CHECK_WORKFLOW dispatched on it; a \"human only\" issue names the branch and says how to turn the setting on."
+
+      # The relock is pushed either way; a command that failed makes the run
+      # red, so it is looked at
+      - name: Fail when the regenerate command failed
+        if: needs.regenerate.result == 'failure'
+        run: |
+          echo "::error::the regenerate command failed: the relock branch has the pins without the files it writes"
+          exit 1
