@@ -82,3 +82,102 @@ jobs:
         env:
           OUTCOME: ${{ steps.aggregate.outcome }}
         run: test "$OUTCOME" = failure
+
+  # Each result the platform gives a needed job, played with the results
+  # written out: a cancelled job cannot be had from a run that must itself
+  # finish, so the action is given what `toJSON(needs)` would hold. Then the
+  # malformed inputs. A step that is expected to fail has continue-on-error,
+  # and the step after it reads its outcome.
+  aggregate-results:
+    runs-on: ubuntu-latest
+    steps:
+      - id: result-success
+        continue-on-error: true
+        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # the commit that has the action (#328)
+        with:
+          jobs: a b
+          results: '{"a":{"result":"success"},"b":{"result":"success"}}'
+      - name: result-success ended success
+        env:
+          OUTCOME: ${{ steps.result-success.outcome }}
+        run: test "$OUTCOME" = success
+      - id: result-failure
+        continue-on-error: true
+        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # the commit that has the action (#328)
+        with:
+          jobs: a b
+          results: '{"a":{"result":"success"},"b":{"result":"failure"}}'
+      - name: result-failure ended failure
+        env:
+          OUTCOME: ${{ steps.result-failure.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: result-skipped
+        continue-on-error: true
+        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # the commit that has the action (#328)
+        with:
+          jobs: a b
+          results: '{"a":{"result":"success"},"b":{"result":"skipped"}}'
+      - name: result-skipped ended failure
+        env:
+          OUTCOME: ${{ steps.result-skipped.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: result-cancelled
+        continue-on-error: true
+        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # the commit that has the action (#328)
+        with:
+          jobs: a b
+          results: '{"a":{"result":"success"},"b":{"result":"cancelled"}}'
+      - name: result-cancelled ended failure
+        env:
+          OUTCOME: ${{ steps.result-cancelled.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: result-absent
+        continue-on-error: true
+        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # the commit that has the action (#328)
+        with:
+          jobs: a b
+          results: '{"a":{"result":"success"}}'
+      - name: result-absent ended failure
+        env:
+          OUTCOME: ${{ steps.result-absent.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: result-without-field
+        continue-on-error: true
+        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # the commit that has the action (#328)
+        with:
+          jobs: a
+          results: '{"a":{}}'
+      - name: result-without-field ended failure
+        env:
+          OUTCOME: ${{ steps.result-without-field.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: results-not-json
+        continue-on-error: true
+        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # the commit that has the action (#328)
+        with:
+          jobs: a
+          results: 'not json'
+      - name: results-not-json ended failure
+        env:
+          OUTCOME: ${{ steps.results-not-json.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: results-an-array
+        continue-on-error: true
+        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # the commit that has the action (#328)
+        with:
+          jobs: a
+          results: '["success"]'
+      - name: results-an-array ended failure
+        env:
+          OUTCOME: ${{ steps.results-an-array.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: jobs-name-none
+        continue-on-error: true
+        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # the commit that has the action (#328)
+        with:
+          jobs: ' '
+          results: '{}'
+      - name: jobs-name-none ended failure
+        env:
+          OUTCOME: ${{ steps.jobs-name-none.outcome }}
+        run: test "$OUTCOME" = failure
