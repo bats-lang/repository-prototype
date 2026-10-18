@@ -6,9 +6,11 @@
 # whose continue-on-error step failed (found by this test), so that is
 # what the step outcome is for.
 #
-# The action is named by its commit, as a caller of another repository names
-# it, and needs no checkout. The local form was the first run's (it needed a
-# checkout, which a caller does not need when it names the action by commit).
+# The action is the one in the checked-out head (a local path), so a change
+# to the action is tested by the same run: a test that named the action by
+# commit tested an older action than the one the pull request changes (found
+# when `jobs: ' '` passed). A caller of another repository names it by
+# commit, as the action's header shows.
 name: check-aggregate test
 
 on:
@@ -44,7 +46,8 @@ jobs:
     needs: [pass-a, pass-b]
     runs-on: ubuntu-latest
     steps:
-      - uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # this branch (#328)
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ./.github/actions/check-aggregate
         with:
           jobs: pass-a pass-b
           results: ${{ toJSON(needs) }}
@@ -55,9 +58,10 @@ jobs:
     needs: [pass-a, skip-c]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - id: aggregate
         continue-on-error: true
-        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # this branch (#328)
+        uses: ./.github/actions/check-aggregate
         with:
           jobs: pass-a skip-c
           results: ${{ toJSON(needs) }}
@@ -72,13 +76,114 @@ jobs:
     needs: [pass-a]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - id: aggregate
         continue-on-error: true
-        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@4e1a3b37092ffc8b3719cba8acd6999b878d65de # this branch (#328)
+        uses: ./.github/actions/check-aggregate
         with:
           jobs: pass-a pass-b
           results: ${{ toJSON(needs) }}
       - name: The aggregator failed
         env:
           OUTCOME: ${{ steps.aggregate.outcome }}
+        run: test "$OUTCOME" = failure
+
+  # Each result the platform gives a needed job, played with the results
+  # written out: a cancelled job cannot be had from a run that must itself
+  # finish, so the action is given what `toJSON(needs)` would hold. Then the
+  # malformed inputs. A step that is expected to fail has continue-on-error,
+  # and the step after it reads its outcome.
+  aggregate-results:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - id: result-success
+        continue-on-error: true
+        uses: ./.github/actions/check-aggregate
+        with:
+          jobs: a b
+          results: '{"a":{"result":"success"},"b":{"result":"success"}}'
+      - name: result-success ended success
+        env:
+          OUTCOME: ${{ steps.result-success.outcome }}
+        run: test "$OUTCOME" = success
+      - id: result-failure
+        continue-on-error: true
+        uses: ./.github/actions/check-aggregate
+        with:
+          jobs: a b
+          results: '{"a":{"result":"success"},"b":{"result":"failure"}}'
+      - name: result-failure ended failure
+        env:
+          OUTCOME: ${{ steps.result-failure.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: result-skipped
+        continue-on-error: true
+        uses: ./.github/actions/check-aggregate
+        with:
+          jobs: a b
+          results: '{"a":{"result":"success"},"b":{"result":"skipped"}}'
+      - name: result-skipped ended failure
+        env:
+          OUTCOME: ${{ steps.result-skipped.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: result-cancelled
+        continue-on-error: true
+        uses: ./.github/actions/check-aggregate
+        with:
+          jobs: a b
+          results: '{"a":{"result":"success"},"b":{"result":"cancelled"}}'
+      - name: result-cancelled ended failure
+        env:
+          OUTCOME: ${{ steps.result-cancelled.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: result-absent
+        continue-on-error: true
+        uses: ./.github/actions/check-aggregate
+        with:
+          jobs: a b
+          results: '{"a":{"result":"success"}}'
+      - name: result-absent ended failure
+        env:
+          OUTCOME: ${{ steps.result-absent.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: result-without-field
+        continue-on-error: true
+        uses: ./.github/actions/check-aggregate
+        with:
+          jobs: a
+          results: '{"a":{}}'
+      - name: result-without-field ended failure
+        env:
+          OUTCOME: ${{ steps.result-without-field.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: results-not-json
+        continue-on-error: true
+        uses: ./.github/actions/check-aggregate
+        with:
+          jobs: a
+          results: 'not json'
+      - name: results-not-json ended failure
+        env:
+          OUTCOME: ${{ steps.results-not-json.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: results-an-array
+        continue-on-error: true
+        uses: ./.github/actions/check-aggregate
+        with:
+          jobs: a
+          results: '["success"]'
+      - name: results-an-array ended failure
+        env:
+          OUTCOME: ${{ steps.results-an-array.outcome }}
+        run: test "$OUTCOME" = failure
+      - id: jobs-name-none
+        continue-on-error: true
+        uses: ./.github/actions/check-aggregate
+        with:
+          jobs: ' '
+          results: '{}'
+      - name: jobs-name-none ended failure
+        env:
+          OUTCOME: ${{ steps.jobs-name-none.outcome }}
         run: test "$OUTCOME" = failure
