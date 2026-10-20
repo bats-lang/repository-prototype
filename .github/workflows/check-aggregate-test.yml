@@ -24,19 +24,19 @@ permissions: {}
 
 jobs:
   pass-a:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "a passed"
 
   pass-b:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "b passed"
 
   # Skipped by its condition, as a matrix group with nothing in it would be
   skip-c:
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "never"
 
@@ -44,7 +44,7 @@ jobs:
   aggregate-pass:
     if: always()
     needs: [pass-a, pass-b]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: ./.github/actions/check-aggregate
@@ -56,7 +56,7 @@ jobs:
   aggregate-skipped:
     if: always()
     needs: [pass-a, skip-c]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - id: aggregate
@@ -74,7 +74,7 @@ jobs:
   aggregate-missing:
     if: always()
     needs: [pass-a]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - id: aggregate
@@ -94,7 +94,7 @@ jobs:
   # malformed inputs. A step that is expected to fail has continue-on-error,
   # and the step after it reads its outcome.
   aggregate-results:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - id: result-success

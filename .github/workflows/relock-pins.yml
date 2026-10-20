@@ -185,7 +185,7 @@ concurrency:
 
 jobs:
   relock:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
       branch: ${{ steps.hand.outputs.branch }}
@@ -391,7 +391,7 @@ jobs:
   regenerate:
     needs: relock
     if: inputs.regenerate != '' && needs.relock.outputs.changed == 'yes'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: ${{ fromJSON(inputs.regenerate-timeout-minutes) }}
     permissions: {}
     steps:
@@ -464,7 +464,7 @@ jobs:
       always() && needs.relock.result == 'success'
       && needs.relock.outputs.changed == 'yes'
       && (needs.regenerate.result == 'success' || needs.regenerate.result == 'skipped')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       BRANCH: ${{ needs.relock.outputs.branch }}
