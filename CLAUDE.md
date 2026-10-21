@@ -94,8 +94,8 @@ To publish an updated library package to repository-prototype:
 **Breaking changes keep at least one published version of overlap.** This is the owner's standing rule for the session, in the owner's words, verbatim, with the timestamps the issue (bats-lang/repository-prototype#381) has them:
 
 * 2026-10-19T03:28:04Z: "OK. I'm not sure where this should be but it is a standing rule for the session: breaking changes must have *at least* one version of overlap."
-* 2026-10-21 (this session): "NEVER DEPRECATE IN ONE GO WE HAVE THIS DOCUMENTED CHECK THE HISTORY"
-* 2026-10-21T16:54:38Z: "Just....keep supporting both, have a p1 ticket to remove the deprecated version."
+* 2026-10-21 (this session, mid-turn): "NEVER DEPRECATE IN ONE GO WE HAVE THIS DOCUMENTED CHECK THE HISTORY"; and "I have said this like five times in the conversation. If it's not somewhere you keep add it NOW."
+* 2026-10-21T16:54:38Z (transcript line 64344): "Just....keep supporting both, have a p1 ticket to remove the deprecated version."
 
 The rule's wording (this section's, not the owner's):
 
@@ -104,9 +104,16 @@ The rule's wording (this section's, not the owner's):
 3. The review of a pull request that changes a published signature checks both steps. A pull request that removes or replaces a signature in place gets `Verdict: changes needed` (the review form of bridge's CLAUDE.md).
 4. Publishing the dependents together, in the sentence above, is how they move to the new form. It does not remove the old form in the same version.
 
-Worked example: array#29 replaced `arena_create(max)` in place, with no overlap. bats-lang/array#68 (merged) kept `arena_create(max)` beside the class form, `arena_create_class`, so both forms are published. bats-lang/array#67 (open) is the ticket that removes the deprecated `arena_create(max)` once every dependent has moved to the class form.
+Worked example: bats-lang/array#29 replaced `arena_create(max)` in place, with no overlap. bats-lang/array#68 (merged) kept `arena_create(max)` beside the class form, `arena_create_class`, so both forms are published. bats-lang/array#67 (open) is the ticket that removes the deprecated `arena_create(max)` once every dependent has moved to the class form.
 
-Precedents: process's CLAUDE.md, section "Spawn keeps its old signatures; the proved ones are beside them (#61, #64)"; sha256's CLAUDE.md, its note on the deprecated published forms (sha256#48: one published version holds both, then they are removed).
+What the review of a breaking change checks, each one:
+
+* the old form is still there, beside the new one;
+* a test calls the old form;
+* the old form has a deprecation comment that names the area by keyword and the removal ticket;
+* the removal ticket exists, is p1, and was filed before the change.
+
+Precedents: bats-lang/array#29, bats-lang/array#67 and bats-lang/array#68 (the worked example above); process's CLAUDE.md, section "Spawn keeps its old signatures; the proved ones are beside them (#61, #64)"; sha256's CLAUDE.md, its note on the deprecated published forms (sha256#48: one published version holds both, then they are removed).
 
 **`bats lock` does not refresh `bats_modules/`** (as in the Rust bats). After relocking, rebuild `bats_modules/` from `bats.lock` before trusting `bats check` or `bats build`; stale modules hide API mismatches.
 
