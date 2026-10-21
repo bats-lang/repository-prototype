@@ -89,7 +89,11 @@ To publish an updated library package to repository-prototype:
 
 4. Check each sidecar (`sha256sum -c <archive>.sha256`), then commit the archive and sidecar in repository-prototype and open a PR.
 
-**A package whose API changed is published together with its dependents.** Before publishing, update every package that uses it (grep all repos' `src/`), verify each against a scratch copy of repository-prototype that holds the new archives, and put all of them in one repository-prototype PR. Publishing one alone breaks anyone who locks the latest versions.
+**A package's API change is additive: the old signatures stay and the new ones are added beside them, named in words.** Dependents move to the new form one at a time, each in a pull request of its own under its own CI, so a change is published alone, not with its dependents. The examples are process's `spawn` (process#62 replaced its signatures and pwa's published archive then failed `verify` in repository-prototype#359; process#64 kept the old signatures and added the NUL-proved forms beside them) and the templates of array#63 and arith#57 (`barr_get_inline` beside `barr_get`, `word32_rotr_inline` beside `word32_rotr`).
+
+**Removing the old form is a breaking change, published in two steps.** The first version adds the new form beside the old one, so both work. The second removes the old form, and only once no dependent's newest archive uses it: a ticket for that removal is filed when every dependent has moved, and `verify` accepts the removal for that reason alone. There is never a single version in which a dependent's newest archive stops type-checking.
+
+`verify` (`scripts/verify-archives.sh`) refuses a change when the latest published version of a package that passed `bats check` before it fails after it. A breaking change is therefore not publishable unless every dependent's newest archive also passes, and the additive change is what keeps them passing; a publish of the dependents in the same pull request is not the way.
 
 **`bats lock` does not refresh `bats_modules/`** (as in the Rust bats). After relocking, rebuild `bats_modules/` from `bats.lock` before trusting `bats check` or `bats build`; stale modules hide API mismatches.
 
