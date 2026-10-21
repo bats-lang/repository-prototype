@@ -94,7 +94,7 @@ To publish an updated library package to repository-prototype:
 **Breaking changes keep at least one published version of overlap.** This is the owner's standing rule for the session, in the owner's words, verbatim, with the timestamps the issue (bats-lang/repository-prototype#381) has them:
 
 * 2026-10-19T03:28:04Z: "OK. I'm not sure where this should be but it is a standing rule for the session: breaking changes must have *at least* one version of overlap."
-* 2026-10-21 (this session, mid-turn): "NEVER DEPRECATE IN ONE GO WE HAVE THIS DOCUMENTED CHECK THE HISTORY"; and "I have said this like five times in the conversation. If it's not somewhere you keep add it NOW."
+* 2026-10-21T16:56:11Z (transcript line 64376): "NEVER DEPRECATE IN ONE GO WE HAVE THIS DOCUMENTED CHECK THE HISTORY"; and "I have said this like five times in the conversation. If it's not somewhere you keep add it NOW."
 * 2026-10-21T16:54:38Z (transcript line 64344): "Just....keep supporting both, have a p1 ticket to remove the deprecated version."
 
 The rule's wording (this section's, not the owner's):
