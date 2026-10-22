@@ -89,11 +89,31 @@ To publish an updated library package to repository-prototype:
 
 4. Check each sidecar (`sha256sum -c <archive>.sha256`), then commit the archive and sidecar in repository-prototype and open a PR.
 
-**A package's API change is additive: the old signatures stay and the new ones are added beside them, named in words.** Dependents move to the new form one at a time, each in a pull request of its own under its own CI, so a change is published alone, not with its dependents. The examples are process's `spawn` (process#62 replaced its signatures and pwa's published archive then failed `verify` in repository-prototype#359; process#64 kept the old signatures and added the NUL-proved forms beside them) and the templates of array#63 and arith#57 (`barr_get_inline` beside `barr_get`, `word32_rotr_inline` beside `word32_rotr`).
+**A package's API or type change is additive: the old form stays beside the new one for one published version, and a test calls it.** This is the owner's standing rule (the overlap rule), one requirement:
 
-**Removing the old form is a breaking change, published in two steps.** The first version adds the new form beside the old one, so both work. The second removes the old form, and only once no dependent's newest archive uses it: a ticket for that removal is filed when every dependent has moved, and `verify` accepts the removal for that reason alone. There is never a single version in which a dependent's newest archive stops type-checking.
+* The change adds the new form beside the old one, named by what it adds (as `_proved` is), and both are published in the same version. A test calls the old form, so an edit cannot drop it.
+* A dependent never changes to fit: "Builder should not break json". A dependent moves to the new form later, in a pull request of its own under its own CI.
+* A p2 ticket, filed with the change, removes the old form later. It is not started while a dependent's newest archive still calls the old form, and its removal is accepted by `verify` for that reason alone.
+* Nothing is deprecated or replaced in one go ("NEVER DEPRECATE IN ONE GO"): there is never a single version in which a dependent's newest archive stops type-checking.
+* The package is published alone. It is never published together with its dependents as the way to ship a breaking change.
 
-`verify` (`scripts/verify-archives.sh`) refuses a change when the latest published version of a package that passed `bats check` before it fails after it. A breaking change is therefore not publishable unless every dependent's newest archive also passes, and the additive change is what keeps them passing; a publish of the dependents in the same pull request is not the way.
+`verify` (`scripts/verify-archives.sh`) is the rule's enforcement: it refuses a change when the latest published version of a package that passed `bats check` before it fails after it. A breaking change is therefore not publishable unless every dependent whose newest archive passed before still passes; the additive change is what keeps them passing.
+
+The owner's words, with the timestamps the issue (bats-lang/repository-prototype#381) has them:
+
+* 2026-10-19T03:28:04Z (transcript line 46303): "OK. I'm not sure where this should be but it is a standing rule for the session: breaking changes must have *at least* one version of overlap."
+* 2026-10-20T05:35:29Z (transcript line 51253), on a pull request that changed the word helpers' public signatures: "THERE ARE RULES ABOUT BREAKING CHANGES"
+* 2026-10-21T16:56:11Z (transcript line 64376): "NEVER DEPRECATE IN ONE GO WE HAVE THIS DOCUMENTED CHECK THE HISTORY"
+* 2026-10-21T16:57:11Z (transcript line 64396): "I have said this like five times in the conversation. If it's not somewhere you keep add it NOW."
+
+The review of a pull request that changes a published signature or type checks each one, and a change in place gets `Verdict: changes needed` (the review form of bridge's CLAUDE.md):
+
+* the old form is still there, beside the new one;
+* a test calls the old form;
+* the package is published alone, and no dependent was changed to fit;
+* the p2 ticket that removes the old form exists and was filed with the change.
+
+Examples: process's `spawn` (bats-lang/process#62 replaced its signatures and pwa's published archive then failed `verify` in bats-lang/repository-prototype#359, run https://github.com/bats-lang/repository-prototype/actions/runs/39193126132; bats-lang/process#65, closing process#64, kept the old signatures and added the NUL-proved forms beside them); the templates of bats-lang/array#63 and bats-lang/arith#57 (`barr_get_inline` beside `barr_get`, `word32_rotr_inline` beside `word32_rotr`); bats-lang/array#29 replaced `arena_create(max)` in place, bats-lang/array#68 kept it beside `arena_create_class`, and bats-lang/array#67 removes it once every dependent has moved. Precedents in the packages: process's CLAUDE.md, section "Spawn keeps its old signatures; the proved ones are beside them (#61, #64)", and sha256's note on the published forms of bats-lang/sha256#48.
 
 **`bats lock` does not refresh `bats_modules/`** (as in the Rust bats). After relocking, rebuild `bats_modules/` from `bats.lock` before trusting `bats check` or `bats build`; stale modules hide API mismatches.
 
