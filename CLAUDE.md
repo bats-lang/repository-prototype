@@ -89,33 +89,23 @@ To publish an updated library package to repository-prototype:
 
 4. Check each sidecar (`sha256sum -c <archive>.sha256`), then commit the archive and sidecar in repository-prototype and open a PR.
 
-**A package whose API changed is published together with its dependents.** Before publishing, update every package that uses it (grep all repos' `src/`), verify each against a scratch copy of repository-prototype that holds the new archives, and put all of them in one repository-prototype PR. Publishing them together is how the dependents move to the new form; it is not a licence to remove the old form in the same version (the overlap rule below). Publishing one alone breaks anyone who locks the latest versions only where it removes the old form.
+**A package's API or type change is additive: the old form stays beside the new one for one published version, and a test calls it.** This is the overlap rule, one requirement:
 
-**Breaking changes keep at least one published version of overlap.** This is the owner's standing rule for the session, in the owner's words, verbatim, with the timestamps the issue (bats-lang/repository-prototype#381) has them:
+* The change adds the new form beside the old one, named by what it adds (as `_proved` is), and both are published in the same version with the old form's original types. A test calls the old form, so an edit cannot drop it.
+* A dependent never changes to fit: a package's change must not break its dependents. A dependent moves to the new form later, in a pull request of its own under its own CI.
+* A p2 ticket (never p1), filed with the change, removes the old form once every dependent has moved. It is not started while a dependent's newest archive still calls the old form.
+* The package is published alone, never together with its dependents as the way to ship a breaking change.
 
-* 2026-10-19T03:28:04Z (transcript line 46303): "OK. I'm not sure where this should be but it is a standing rule for the session: breaking changes must have *at least* one version of overlap."
-* 2026-10-20T05:35:29Z (transcript line 51253), on a pull request that changed the word helpers' public signatures: "THERE ARE RULES ABOUT BREAKING CHANGES"
-* 2026-10-21T16:54:35Z (transcript line 64341): "Just....keep supporting both, have a p1 ticket to remove the deprecated version."
-* 2026-10-21T16:56:11Z (transcript line 64376): "NEVER DEPRECATE IN ONE GO WE HAVE THIS DOCUMENTED CHECK THE HISTORY"
-* 2026-10-21T16:57:11Z (transcript line 64396): "I have said this like five times in the conversation. If it's not somewhere you keep add it NOW."
+`verify` (`scripts/verify-archives.sh`) is the rule's enforcement: it refuses a change when the latest published version of a package that passed `bats check` before it fails after it. A breaking change is therefore not publishable unless every dependent whose newest archive passed before still passes; the additive change is what keeps them passing.
 
-The rule's wording (this section's, not the owner's):
-
-1. A breaking change to a published signature is made in two steps, never one. The new form is added beside the old one, named by what it adds (as `_proved` is); the old one is marked deprecated in a one-line comment that names its area by keyword and its removal ticket; a test calls the old form, so an edit cannot drop it. One published version holds both.
-2. The ticket that removes the old form is filed with the change, as p1. It is not started while a dependent still calls the old form. Its Done-when is that every dependent has moved (in pull requests of their own, published) and `verify` passes.
-3. The review of a pull request that changes a published signature checks both steps. A pull request that changes a published signature in place gets `Verdict: changes needed` (the review form of bridge's CLAUDE.md).
-4. Publishing the dependents together, in the sentence above, is how they move to the new form. It does not remove the old form in the same version.
-
-Worked example: bats-lang/array#29 replaced `arena_create(max)` in place, with no overlap. bats-lang/array#68 (merged) kept `arena_create(max)` beside the class form, `arena_create_class`, so both forms are published. bats-lang/array#67 (open) is the ticket that removes the deprecated `arena_create(max)` once every dependent has moved to the class form.
-
-What the review of a breaking change checks, each one:
+The review of a pull request that changes a published signature or type checks each one, and a change in place gets `Verdict: changes needed` (the review form of bridge's CLAUDE.md):
 
 * the old form is still there, beside the new one;
 * a test calls the old form;
-* the old form has a deprecation comment that names the area by keyword and the removal ticket;
-* the removal ticket exists, is p1, and was filed before the change.
+* the package is published alone, and no dependent was changed to fit;
+* the p2 ticket that removes the old form exists and was filed with the change.
 
-Precedents: bats-lang/array#29, bats-lang/array#67 and bats-lang/array#68 (the worked example above); process's CLAUDE.md, section "Spawn keeps its old signatures; the proved ones are beside them (#61, #64)"; sha256's CLAUDE.md, its note on the deprecated published forms (bats-lang/sha256#48: one published version holds both, then they are removed).
+Precedents in the packages: process's CLAUDE.md, section "Spawn keeps its old signatures; the proved ones are beside them (#61, #64)", and array's `barr_get_inline` beside `barr_get`.
 
 **`bats lock` does not refresh `bats_modules/`** (as in the Rust bats). After relocking, rebuild `bats_modules/` from `bats.lock` before trusting `bats check` or `bats build`; stale modules hide API mismatches.
 
