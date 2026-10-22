@@ -92,8 +92,8 @@ To publish an updated library package to repository-prototype:
 **A package's API or type change is additive: the old form stays beside the new one for one published version, and a test calls it.** This is the owner's standing rule (the overlap rule), one requirement:
 
 * The change adds the new form beside the old one, named by what it adds (as `_proved` is), and both are published in the same version. A test calls the old form, so an edit cannot drop it.
-* A dependent never changes to fit: "Builder should not break json". A dependent moves to the new form later, in a pull request of its own under its own CI.
-* A p2 ticket, filed with the change, removes the old form later. It is not started while a dependent's newest archive still calls the old form, and its removal is accepted by `verify` for that reason alone.
+* A dependent never changes to fit: the owner said "No. Builder should not break json" (2026-10-22T14:21:34Z) when a worker had made json change to fit a builder change. A dependent moves to the new form later, in a pull request of its own under its own CI.
+* A p2 ticket, filed with the change, removes the old form later (the owner's words of 2026-10-22T14:22:48Z, below, which supersede the p1 of 2026-10-21T16:54:35Z). It is not started while a dependent's newest archive still calls the old form, and its removal is accepted by `verify` for that reason alone.
 * Nothing is deprecated or replaced in one go ("NEVER DEPRECATE IN ONE GO"): there is never a single version in which a dependent's newest archive stops type-checking.
 * The package is published alone. It is never published together with its dependents as the way to ship a breaking change.
 
@@ -103,6 +103,9 @@ The owner's words, with the timestamps the issue (bats-lang/repository-prototype
 
 * 2026-10-19T03:28:04Z (transcript line 46303): "OK. I'm not sure where this should be but it is a standing rule for the session: breaking changes must have *at least* one version of overlap."
 * 2026-10-20T05:35:29Z (transcript line 51253), on a pull request that changed the word helpers' public signatures: "THERE ARE RULES ABOUT BREAKING CHANGES"
+* 2026-10-22T14:20:54Z: "We always do that. Overlap rule" (said of a review that had offered the overlap rule as one of two options: it is always the rule, never an option).
+* 2026-10-22T14:21:34Z: "No. Builder should not break json" (said when a worker had made json change to fit a builder change: a dependent never changes to fit).
+* 2026-10-22T14:22:48Z: "Make sure briefs always say to keep compat and file a p2 to remove the old version" (the removal ticket is p2; this supersedes the p1 of 2026-10-21T16:54:35Z, "have a p1 ticket to remove the deprecated version", which is therefore not quoted above).
 * 2026-10-21T16:56:11Z (transcript line 64376): "NEVER DEPRECATE IN ONE GO WE HAVE THIS DOCUMENTED CHECK THE HISTORY"
 * 2026-10-21T16:57:11Z (transcript line 64396): "I have said this like five times in the conversation. If it's not somewhere you keep add it NOW."
 
