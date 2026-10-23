@@ -1,0 +1,14 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # The daily relock dispatches it on its relock/<date> branch: a pull
+  # request opened with GITHUB_TOKEN starts no workflow by itself
+  workflow_dispatch:
+
+jobs:
+  check:
+    uses: bats-lang/repository-prototype/.github/workflows/package-check.yml@@@COMMIT@@ # @@COMMENT@@
