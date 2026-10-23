@@ -48,7 +48,7 @@ the same CI.
 * **The lock:** `bats.lock` is committed (a package with no dependencies
   commits the empty one `bats lock` writes). CI never runs `bats lock` for the package: `bats check` and
   `bats build` fetch exactly the locked versions, and fail when the lock
-  is missing or does not match `bats.toml`. A library's lock pins only
+  does not match `bats.toml`; the setup action fails when it is missing. A library's lock pins only
   its own CI and tests; its dependents still resolve their own.
 * **The compiler:** its commit is in `.github/bats-version`, read by
   every workflow that builds bats (and by `publish.yml` here).
