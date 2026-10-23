@@ -1,0 +1,93 @@
+# Tests relock-pins.yml (#395, area: relock comment) as check-aggregate-test.yml
+# tests its action: the workflow in the checked-out head (a local path) relocks
+# a scratch caller (tests/relock-pins/workflows/scratch-caller.yml, named by
+# `workflows-directory`; `publish: 'false'` pushes nothing) and the change it
+# hands on is read. Every `uses:` line it moved must be
+# `uses: <pin>@<new commit> # <repo> main <first 7 hex>` and nothing else.
+# A step then plays that rule against three bad patches (no comment, two
+# comments, the wrong 7 hex) and each must fail it.
+name: relock-pins test
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/relock-pins.yml'
+      - '.github/workflows/relock-pins-test.yml'
+      - 'tests/relock-pins/**'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  relock:
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      workflow-pins: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml
+        bats-lang/bats/.github/actions/setup
+      publish: 'false'
+      branch-prefix: relock-test/
+
+  check:
+    needs: relock
+    runs-on: ubuntu-24.04
+    env:
+      CHANGED: ${{ needs.relock.outputs.changed }}
+      PATCH: ${{ needs.relock.outputs.patch }}
+    steps:
+      - name: The moved pin lines carry the comment
+        run: |
+          set -eu
+          [ "$CHANGED" = yes ] || { echo "::error::the scratch caller's pins did not move (changed=$CHANGED)"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/t"
+          printf '%s' "$PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/t/good.patch"
+          cat "$RUNNER_TEMP/t/good.patch"
+
+          # The rule: each added line with `uses:` is exactly
+          # `uses: <owner>/<repo>/<path>@<40 hex> # <repo> main <7 hex>`, the
+          # 7 hex are the first of the 40, and the commit is not the old one.
+          # Three lines are expected: the scratch caller's.
+          cat > "$RUNNER_TEMP/t/rule.sh" <<'RULE'
+          set -eu
+          count=0
+          while IFS= read -r line; do
+            case "$line" in
+              +*uses:*) ;;
+              *) continue ;;
+            esac
+            count=$((count + 1))
+            if ! printf '%s\n' "$line" | grep -Eq '^\+ *(- )?uses: [A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[A-Za-z0-9._/-]+@[0-9a-f]{40} # [A-Za-z0-9._-]+ main [0-9a-f]{7}$'; then
+              echo "refused: $line"; exit 1
+            fi
+            use=${line#*uses: }
+            pin=${use%%@*}
+            rest=${use#*@}
+            commit=${rest%% *}
+            repo=$(printf '%s' "$pin" | cut -d/ -f2)
+            [ "${rest#"$commit # $repo main "}" = "$(printf '%.7s' "$commit")" ] \
+              || { echo "refused (comment is not '$repo main <first 7 of the commit>'): $line"; exit 1; }
+            case "$commit" in
+              67ebbf0c4744edce26584eef60ea26438945bab7|678ecb3*) echo "refused (not moved): $line"; exit 1 ;;
+            esac
+          done < "$1"
+          [ "$count" -eq 3 ] || { echo "refused: $count added uses lines, expected 3"; exit 1; }
+          RULE
+          sh "$RUNNER_TEMP/t/rule.sh" "$RUNNER_TEMP/t/good.patch"
+          echo "the moved lines carry the comment"
+
+      - name: A missing, a doubled and a wrong comment are refused
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP/t"
+          # rewrite the added uses lines of the good patch, one way per patch
+          awk '/^\+.*uses:/ { sub(/ # .*/, "") } { print }' good.patch > missing.patch
+          awk '/^\+.*uses:/ { $0 = $0 " # v1" } { print }' good.patch > doubled.patch
+          awk '/^\+.*uses:/ { sub(/ main [0-9a-f][0-9a-f]*$/, " main 0000000") } { print }' good.patch > wrong.patch
+          for bad in missing doubled wrong; do
+            if sh rule.sh "$bad.patch"; then
+              echo "::error::the rule accepted the $bad patch"; exit 1
+            fi
+            echo "the $bad patch is refused"
+          done

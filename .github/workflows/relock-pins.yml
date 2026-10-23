@@ -95,7 +95,13 @@
 #   pinned too, moved to the commit relocked against;
 # - each reusable workflow named in workflow-pins, called from
 #   .github/workflows as <owner>/<repo>/<path>@<commit>, moved to its
-#   repository's newest main commit.
+#   repository's newest main commit. The line is written
+#   `uses: <pin>@<commit> # <repo> main <first 7 hex of the commit>` (the
+#   <repo> of <owner>/<repo>), replacing any comment the line had, so a line
+#   never carries two: `bats check-pins` fails a commit with no comment saying
+#   which version it is, and one form serves every repository (#395). It is
+#   written for every pin line, moved or not, so a line left with another
+#   comment is healed by the next relock.
 #
 # Every input of this file is pinned (#332): actions/checkout by commit, and
 # the compiler, ATS2 and the package repository by bats's setup action
@@ -175,12 +181,30 @@ on:
         description: The branch relocked and the pull request's base
         type: string
         default: main
+      workflows-directory:
+        description: The directory whose files are searched for the workflow pins (a test uses a fixture's)
+        type: string
+        default: .github/workflows
+      publish:
+        description: >-
+          'false' stops after the relock (and regenerate): nothing is pushed
+          and no pull request is opened, and the change is the outputs. A test
+          runs the relock so
+        type: string
+        default: 'true'
+    outputs:
+      changed:
+        description: yes when a pin or the lock moved, else no
+        value: ${{ jobs.relock.outputs.changed }}
+      patch:
+        description: The change as a patch, gzipped and base64 (empty when nothing moved)
+        value: ${{ jobs.relock.outputs.patch }}
     secrets:
       RELOCK_TOKEN:
         required: false
 
 concurrency:
-  group: relock-pins-${{ github.repository }}
+  group: relock-pins-${{ github.repository }}-${{ inputs.branch-prefix }}
   cancel-in-progress: false
 
 jobs:
@@ -203,6 +227,8 @@ jobs:
       COMPILER_REPOSITORY: ${{ inputs.compiler-repository }}
       BASE: ${{ inputs.base }}
       BRANCH_PREFIX: ${{ inputs.branch-prefix }}
+      WORKFLOWS_DIRECTORY: ${{ inputs.workflows-directory }}
+      PUBLISH: ${{ inputs.publish }}
       HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
     steps:
       # The repository's default token reads it (a private one too); this job
@@ -272,26 +298,54 @@ jobs:
           if [ -f .github/bats-version ]; then printf '%s\n' "$compiler_new" > .github/bats-version; fi
           if [ -f .github/repository-version ]; then printf '%s\n' "$repository_new" > .github/repository-version; fi
 
-          # Each workflow pin, to its repository's newest main commit
+          # Each workflow pin, to its repository's newest main commit, with
+          # the comment `# <repo> main <7 hex>` that bats check-pins requires
+          # (#395, area: relock comment). awk edits the lines, index() matching
+          # the pin as text, so no pattern and no sed.
+          case "$WORKFLOWS_DIRECTORY" in
+            ''|-*|*[!A-Za-z0-9._/-]*) echo "::error::workflows-directory is refused: $WORKFLOWS_DIRECTORY"; exit 1 ;;
+          esac
           : > ~/relock/pins
           for pin in $PINS; do
             owner_repo=$(printf '%s' "$pin" | cut -d/ -f1-2)
             newest=$(git ls-remote "https://github.com/$owner_repo.git" refs/heads/main | cut -f1)
             test -n "$newest" || { echo "::error::no main in $owner_repo"; exit 1; }
-            pattern=$(printf '%s' "$pin" | sed 's/\./\\./g')
-            old=$(grep -rhoE "$pattern@[^[:space:]]+" .github/workflows | head -1 | sed 's/.*@//')
-            test -n "$old" || { echo "::error::no workflow in .github/workflows calls $pin"; exit 1; }
+            old=$(grep -rhF -- "$pin@" "$WORKFLOWS_DIRECTORY" | awk -v pin="$pin@" '{ i = index($0, pin); if (i) { t = substr($0, i + length(pin)); sub(/[ \t].*/, "", t); print t; exit } }')
+            test -n "$old" || { echo "::error::no workflow in $WORKFLOWS_DIRECTORY calls $pin"; exit 1; }
+            comment="${owner_repo#*/} main $(printf '%.7s' "$newest")"
+            grep -rlF -- "$pin@" "$WORKFLOWS_DIRECTORY" > ~/relock/pin-files
+            while IFS= read -r file; do
+              awk -v pin="$pin@" -v newest="$newest" -v comment="$comment" -v file="$file" '
+                {
+                  i = index($0, pin)
+                  if (!i) { print; next }
+                  rest = substr($0, i + length(pin))
+                  sub(/^[^ \t]*/, "", rest)
+                  head = substr($0, 1, i - 1) pin newest
+                  if (substr($0, 1, i - 1) ~ /uses:[ \t]*[^ \t]*$/) {
+                    if (rest !~ /^[ \t]*(#.*)?$/) {
+                      print "::error file=" file ",line=" NR "::text after the pin that is not a comment"
+                      bad = 1
+                    }
+                    print head " # " comment
+                  } else {
+                    print head rest
+                  }
+                }
+                END { exit bad }' "$file" > ~/relock/pin-file.new
+              cat ~/relock/pin-file.new > "$file"
+            done < ~/relock/pin-files
             if [ "$old" != "$newest" ]; then
-              grep -rlE "$pattern@" .github/workflows | xargs sed -i -E "s|$pattern@[^[:space:]]+|$pin@$newest|g"
               printf '%s %s %s %s\n' "$pin" "$owner_repo" "$old" "$newest" >> ~/relock/pins
             fi
           done
 
           # The workflow pins stay where they are when GITHUB_TOKEN would
-          # have to change workflow files, which it cannot
+          # have to change workflow files, which it cannot (a run that
+          # publishes nothing has no push to refuse)
           : > ~/relock/pins-left
-          if [ "$HAS_RELOCK_TOKEN" != true ] && [ -s ~/relock/pins ]; then
-            git checkout -- .github/workflows
+          if [ "$HAS_RELOCK_TOKEN" != true ] && [ "$PUBLISH" = true ]; then
+            git checkout -- "$WORKFLOWS_DIRECTORY"
             mv ~/relock/pins ~/relock/pins-left
             : > ~/relock/pins
             while read -r pin owner_repo old new; do
@@ -377,7 +431,7 @@ jobs:
           esac
           date=$(date -u +%Y-%m-%d)
           { echo "date=$date"; echo "branch=$BRANCH_PREFIX$date"; } >> "$GITHUB_OUTPUT"
-          git add -A .github
+          git add -A .github "$WORKFLOWS_DIRECTORY"
           if [ -f bats.lock ]; then git add bats.lock; fi
           patch=$(git diff --cached --binary | gzip -9n | base64 -w0)
           body=$(base64 -w0 ~/relock/body.md)
@@ -463,6 +517,7 @@ jobs:
     if: >-
       always() && needs.relock.result == 'success'
       && needs.relock.outputs.changed == 'yes'
+      && inputs.publish == 'true'
       && (needs.regenerate.result == 'success' || needs.regenerate.result == 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
