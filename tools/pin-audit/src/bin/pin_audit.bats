@@ -15,18 +15,28 @@
       request for all of a repository's files, and the checker's own file
       discovery then reads them as it reads a checkout).
    3. Each workflow of the clone (.github/workflows/*.yml and *.yaml) that
-      runs bats, that is, has a `steps:` and a bats command in the position
-      of one (`bats check`, `bats build`, ...: `git grep -l --all-match`),
-      must call bats's setup action in that same file (`uses:` of
-      bats-lang/bats/.github/actions/setup at a full commit, or bats's own
-      ./.github/actions/setup: `git grep -q`, one run for each such file).
-      The setup action is what runs the pin check, so a workflow that sets
-      bats up by hand skips it. A workflow with no steps of its own (a
-      `uses:` of a shared workflow, as relock.yml and publish.yml are) or
-      none that runs bats (review-gate*.yml, a Node or Gradle job) is not
-      one that sets bats up and is not asked to call the action: the
-      reason, with the research, is on #365. The rule is per file, not per
-      job: a file whose other job calls the action passes.
+      runs bats must have an enabled step that calls bats's setup action.
+      Runs bats: the file has a `steps:` and a line, not a comment, that has
+      the word bats as a command (bare, at the end of a path such as
+      seed/debug/bats or /tmp/bats-c/release/bats, after a wrapper such as
+      env, time, sudo or exec, or a variable whose name has bats in it, or
+      any variable in the position of a command) followed by a bats
+      subcommand (those of `bats --help`): `git grep -l --all-match`. It is
+      read widely on purpose, since a false positive is a failure that
+      names its workflow and is fixed in it and
+      a false negative is a workflow that skips the pin check. The setup
+      step: a key `uses:` of a step of the list under `steps:`, of
+      bats-lang/bats/.github/actions/setup at a full commit or of bats's own
+      ./.github/actions/setup, in a step with no `if:` that is false; the
+      text of a run block, a comment, and a `uses:` of another indentation
+      are not one (`grep -Pz`, one run for each such file). The setup action
+      is what runs the pin check, so a workflow that sets bats up by hand,
+      however it calls the compiler, skips it. A workflow with no steps of
+      its own (a `uses:` of a shared workflow, as relock.yml and publish.yml
+      are) or none that runs bats (review-gate*.yml, a Node or Gradle job)
+      is not asked to call the action. The rule is per file, not per job: a
+      file whose other job calls the action passes, and so does one whose
+      job is disabled by a job-level `if:`.
    4. The checker itself: `bats check-pins --discover` inside the clone
       (env -C), its findings and the exceptions it lists
       (`# unpinned: <reason>`, listed and not failures) in the job log.
@@ -224,11 +234,77 @@ fn _clone_argv {l:agz}{s,e:nat | s <= e; e <= 524288; e - s <= 255}
   $L.list_vt_cons(_arg_name("audit-clones/", b, s, e, ""),
     $L.list_vt_nil())))))))
 
+(* The regular expressions of the two tests of the setup rule. Both are read
+   by tools (git grep -E, grep -P); the program only names them. Keyword:
+   setup rule (the research and the cases are on #365). *)
+
+(* bats's subcommands, as `bats --help` lists them (init, add, remove, lock,
+   build, run, test, check, tree, upload, clean, ats2, clone-repository,
+   record-commit, check-pins, completions, fixtures, with-env), after the
+   options that come before one (--quiet, --run-in <dir>), or a backslash
+   that ends the line (the subcommand is on the next one) *)
+val _bats_tail =
+  "( +--quiet| +--run-in +[^ ]+)*( +(init|add|remove|lock|build|run|test|check|tree|upload|clean|ats2|clone-repository|record-commit|check-pins|completions|fixtures|with-env)([ \"');&|`\\]|$)| *\\\\$)"
+
+(* the word bats as a command: bare, at the end of any path, or a variable
+   or an expression whose name has bats in it *)
+val _bats_word =
+  "(bats|[$]\\{?[A-Za-z_0-9]*[Bb][Aa][Tt][Ss][A-Za-z_0-9]*\\}?|[$]\\{\\{[^}]*[Bb][Aa][Tt][Ss][^}]*\\}\\})\"?"
+
+(* any variable, which is bats when it is in the position of a command *)
+val _any_variable = "\"?[$]\\{?[A-Za-z_][A-Za-z_0-9]*\\}?\"?"
+
+(* the positions of a command: after run:, a dash, &&, ||, a pipe, ;, (, $(,
+   a backtick, or a wrapper (env, time, sudo, exec, command, nohup, xargs)
+   with its assignments *)
+val _command_position =
+  "(run: *[|>]?-? *|(&&|[|;(`-]) *|[$]\\( *|(env|time|sudo|exec|command|nohup|xargs)( +[A-Za-z_]+=[^ ]*)* +)"
+
+(* a blank line or a comment line *)
+val _blank_line = "[ ]*(?:#[^\\n]*)?\\r?\\n"
+
+(* a key uses: of the setup action at a full commit, or the local action, to
+   the end of its line (a quote, a comment after it are allowed) *)
+val _setup_uses_line =
+  "uses:[ ]*[\"']?(?:\\./\\.github/actions/setup|bats-lang/bats/\\.github/actions/setup@[0-9a-f]{40})[\"']?[ ]*(?:#[^\\n]*)?\\r?\\n"
+
+(* a key if: that is false (false, 'false', "false", ${{ false }}, any case) *)
+val _if_false_line =
+  "if:[ ]*(?:\\$\\{\\{[ ]*)?[\"']?(?i:false)[\"']?(?:[ ]*\\}\\})?[ ]*(?:#[^\\n]*)?\\r?\\n"
+
+(* from the first line of a step to the column of its key uses: (resp. if:)
+   with the lines of the step between, the first such key and no earlier *)
+val _skip_to_uses =
+  "[^\\n]*+\\n(?:(?!\\g{d}[ ]\\g{p}uses:)(?:\\g{d}[ ]++[^\\n]*+\\n|[ ]*(?:#[^\\n]*)?\\r?\\n))*+\\g{d}[ ]\\g{p}"
+val _skip_to_if =
+  "[^\\n]*+\\n(?:(?!\\g{d}[ ]\\g{p}if:)(?:\\g{d}[ ]++[^\\n]*+\\n|[ ]*(?:#[^\\n]*)?\\r?\\n))*+\\g{d}[ ]\\g{p}"
+
+(* A line that is not a comment and runs bats: the word bats (a path before
+   it, a wrapper, a variable) and a subcommand of bats *)
+fn _runs_bats_regex (): $P.arg_entry = let
+  var out : $B.builder(0) = $B.create()
+  val () = $B.bput(out, "^ *")
+  val () = $B.bput(out, _bats_word)
+  val () = $B.bput(out, _bats_tail)
+  val () = $B.bput(out, "|^ *[^# ].*[^A-Za-z0-9_.-]")
+  val () = $B.bput(out, _bats_word)
+  val () = $B.bput(out, _bats_tail)
+  val () = $B.bput(out, "|^ *")
+  val () = $B.bput(out, _any_variable)
+  val () = $B.bput(out, _bats_tail)
+  val () = $B.bput(out, "|^ *[^# ].*")
+  val () = $B.bput(out, _command_position)
+  val () = $B.bput(out, _any_variable)
+  val () = $B.bput(out, _bats_tail)
+  val @(a, k) = $B.to_arr(out)
+in @(a, k) end
+
 (* The workflows of the clone that run bats: a file with a `steps:` and a
-   bats command in the position of one (the start of a line or after `- `,
-   `run:`, `&&`, `||`, `|`, `;`, `(` or sudo, as bats's check-pins reads
-   commands), one path on each line. git grep's status is 0 for some, 1 for
-   none. A workflow whose jobs only `uses:` a shared workflow has no
+   line (not a comment) that runs bats, one path on each line. Read as
+   widely as a line can be: a false positive is a failure that names its
+   workflow and is fixed in it, a false negative
+   is a workflow that skips the check. git grep's status is 0 for some, 1
+   for none. A workflow whose jobs only `uses:` a shared workflow has no
    `steps:`, and its inputs that hold bats commands (relock.yml's
    `regenerate:`) are run by that workflow's own setup. *)
 fn _workflows_argv {l:agz}{s,e:nat | s <= e; e <= 524288; e - s <= 255}
@@ -238,33 +314,76 @@ fn _workflows_argv {l:agz}{s,e:nat | s <= e; e <= 524288; e - s <= 255}
   $L.list_vt_cons(_arg_name("audit-clones/", b, s, e, ""),
   $L.list_vt_cons(_arg_s("grep"),
   $L.list_vt_cons(_arg_s("-l"),
+  $L.list_vt_cons(_arg_s("-i"),
   $L.list_vt_cons(_arg_s("--all-match"),
   $L.list_vt_cons(_arg_s("-E"),
   $L.list_vt_cons(_arg_s("-e"),
   $L.list_vt_cons(_arg_s("^ +steps:"),
   $L.list_vt_cons(_arg_s("-e"),
-  $L.list_vt_cons(_arg_s("(^ *(- +)?|run: *[|>]?-? *|(&&|[|;(]) *|sudo +)([.]/)?(dist/[a-z]+/)?bats +[a-z]"),
+  $L.list_vt_cons(_runs_bats_regex(),
   $L.list_vt_cons(_arg_s("--"),
   $L.list_vt_cons(_arg_s(":(glob).github/workflows/*.yml"),
   $L.list_vt_cons(_arg_s(":(glob).github/workflows/*.yaml"),
-    $L.list_vt_nil()))))))))))))))
+    $L.list_vt_nil())))))))))))))))
 
-(* Whether one workflow of the clone calls the setup action at a full commit
-   (or bats's own, by path): git grep's status, 0 for found, 1 for none *)
+(* A step of the file that is enabled and has, as its own key, a `uses:` of
+   the setup action at a full commit or by the local path. grep -P over the
+   whole file (-z); the steps are the list under a `steps:` that is not
+   inside a block scalar, at the indentation of its first dash, and a key of
+   a step is at the column of the first key. So the text of a run block, a
+   comment, a `uses:` of another indentation, and a step whose `if:` is
+   false (false, 'false', ${{ false }}) are not it. *)
+fn _setup_regex (): $P.arg_entry = let
+  var out : $B.builder(0) = $B.create()
+  val () = $B.bput(out, "(?m)")
+  (* the start of the file to a `steps:` line, a block scalar (a header that
+     ends in | or >, and the lines indented under it) taken whole *)
+  val () = $B.bput(out, "\\A(?:(?>(?<h>[ ]*)[^\\n]*[:-][ ]+[|>][-+0-9]*[ ]*(?:#[^\\n]*)?\\r?\\n(?:\\g{h}[ ]+[^\\n]*+\\n|[ ]*\\r?\\n)*|[^\\n]*+\\n))*?")
+  val () = $B.bput(out, "(?<s>[ ]*)steps:[ ]*(?:#[^\\n]*)?\\r?\\n")
+  (* d: the indentation of the list's dashes *)
+  val () = $B.bput(out, "(?=(?:")
+  val () = $B.bput(out, _blank_line)
+  val () = $B.bput(out, ")*(?<d>\\g{s}[ ]*)-)")
+  (* the list, up to the step this test looks at; p: the spaces after its dash *)
+  val () = $B.bput(out, "(?:\\g{d}-[^\\n]*+\\n|\\g{d}[ ]++[^\\n]*+\\n|")
+  val () = $B.bput(out, _blank_line)
+  val () = $B.bput(out, ")*?\\g{d}-(?<p>[ ]+)")
+  (* it has the key uses: as the first key or later *)
+  val () = $B.bput(out, "(?=")
+  val () = $B.bput(out, _setup_uses_line)
+  val () = $B.bput(out, "|")
+  val () = $B.bput(out, _skip_to_uses)
+  val () = $B.bput(out, _setup_uses_line)
+  val () = $B.bput(out, ")")
+  (* and no key if: false *)
+  val () = $B.bput(out, "(?!")
+  val () = $B.bput(out, _if_false_line)
+  val () = $B.bput(out, "|")
+  val () = $B.bput(out, _skip_to_if)
+  val () = $B.bput(out, _if_false_line)
+  val () = $B.bput(out, ")")
+  val @(a, k) = $B.to_arr(out)
+in @(a, k) end
+
+(* Whether one workflow of the clone has an enabled step that calls the
+   setup action at a full commit (or bats's own, by path): grep's status, 0
+   for found, 1 for none, 2 for an error *)
 fn _setup_argv {l,l2:agz}{s,e,fs,fe:nat | s <= e; e <= 524288; e - s <= 255;
                                            fs <= fe; fe <= 524288; fe - fs <= 255}
   (b: !$A.borrow(byte, l, 524288), s: int s, e: int e,
    fb: !$A.borrow(byte, l2, 524288), fs: int fs, fe: int fe): $L.listv($P.arg_entry) =
-  $L.list_vt_cons(_arg_s("git"),
+  $L.list_vt_cons(_arg_s("env"),
   $L.list_vt_cons(_arg_s("-C"),
   $L.list_vt_cons(_arg_name("audit-clones/", b, s, e, ""),
   $L.list_vt_cons(_arg_s("grep"),
+  $L.list_vt_cons(_arg_s("-P"),
+  $L.list_vt_cons(_arg_s("-z"),
   $L.list_vt_cons(_arg_s("-q"),
-  $L.list_vt_cons(_arg_s("-E"),
-  $L.list_vt_cons(_arg_s("^ *(- +)?uses: *([.]/[.]github/actions/setup|bats-lang/bats/[.]github/actions/setup@[0-9a-f]{40})"),
+  $L.list_vt_cons(_arg_s("-e"),
+  $L.list_vt_cons(_setup_regex(),
   $L.list_vt_cons(_arg_s("--"),
-  $L.list_vt_cons(_arg_name(":(literal)", fb, fs, fe, ""),
-    $L.list_vt_nil())))))))))
+  $L.list_vt_cons(_arg_name("", fb, fs, fe, ""),
+    $L.list_vt_nil())))))))))))
 
 (* The checker, run inside the clone *)
 fn _check_argv {l:agz}{s,e:nat | s <= e; e <= 524288; e - s <= 255}
@@ -304,17 +423,17 @@ fn _audit_file {l,l2:agz}{s,e,fs,fe:nat | s <= e; e <= 524288; e - s <= 255; fs 
   (b: !$A.borrow(byte, l, 524288), s: int s, e: int e,
    fb: !$A.borrow(byte, l2, 524288), fs: int fs, fe: int fe): int =
   if fe - fs <= 255 then let
-    val setup = _run("git", _setup_argv(b, s, e, fb, fs, fe))
+    val setup = _run("env", _setup_argv(b, s, e, fb, fs, fe))
   in
     if setup = 0 then 0
     else if setup = 1 then let
       val () = _error_line(b, s, e)
       val () = print! ("workflow ")
       val () = _print_range(fb, fs, fe)
-    in (println! (" runs bats but does not call bats's setup action (bats-lang/bats/.github/actions/setup at a full commit), so the pin check never runs in it"); 1) end
+    in (println! (" runs bats but has no enabled step that calls bats's setup action (bats-lang/bats/.github/actions/setup at a full commit), so the pin check never runs in it"); 1) end
     else let
       val () = _error_line(b, s, e)
-      val () = print! ("git grep could not look for the setup action in ")
+      val () = print! ("grep could not look for a step of the setup action in ")
       val () = _print_range(fb, fs, fe)
     in (println! (" (status ", setup, ")"); 1) end
   end

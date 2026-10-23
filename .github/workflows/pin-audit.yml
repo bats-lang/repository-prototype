@@ -1,8 +1,8 @@
 # The weekly pin audit (#365, piece 3 of #353; the audit #352 was): every
 # non-archived repository of the organisation is cloned and run through
 # `bats check-pins --discover`, and a workflow of it that runs bats without
-# calling bats's setup action (the step that runs the checker in a
-# repository's own CI) fails too. A red run names the failing repositories
+# an enabled step that calls bats's setup action (the step that runs the
+# checker in a repository's own CI) fails too. A red run names the failing repositories
 # (`::error` lines and the last line of the log); `# unpinned: <reason>`
 # exceptions are listed in the log, not failures. The audit is
 # tools/pin-audit (bats, quire#646), and the choice of gh for the
