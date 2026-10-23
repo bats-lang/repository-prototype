@@ -66,94 +66,96 @@ implement put_days (out, days) = let
 in if days = 1 then $B.sized_rope_bput(out, " day") else $B.sized_rope_bput(out, " days") end
 
 fun _word_chars {l:agz}{n:pos}{i,j:nat | i <= j; j <= n} .<j - i>.
-  (b: !$A.borrow(byte, l, n), i: int i, j: int j): bool =
+  (bytes: !$A.borrow(byte, l, n), i: int i, j: int j): bool =
   if i >= j then true
   else let
-    val c = byte2int0($A.read<byte>(b, i))
+    val c = byte2int0($A.read<byte>(bytes, i))
   in
-    if c > 32 && c < 127 && c <> 124 then _word_chars(b, i + 1, j) else false
+    if c > 32 && c < 127 && c <> 124 then _word_chars(bytes, i + 1, j) else false
   end
 
 (* A name, kind or version: one or more printable ASCII bytes with no space
    and no '|' (which would end a table cell) *)
 fn _word_ok {l:agz}{n:pos}{i,j:nat | i <= j; j <= n}
-  (b: !$A.borrow(byte, l, n), i: int i, j: int j): bool =
-  if i < j then _word_chars(b, i, j) else false
+  (bytes: !$A.borrow(byte, l, n), i: int i, j: int j): bool =
+  if i < j then _word_chars(bytes, i, j) else false
 
 fun _digits_only {l:agz}{n:pos}{i,j:nat | i <= j; j <= n} .<j - i>.
-  (b: !$A.borrow(byte, l, n), i: int i, j: int j): bool =
+  (bytes: !$A.borrow(byte, l, n), i: int i, j: int j): bool =
   if i >= j then true
   else let
-    val c = byte2int0($A.read<byte>(b, i))
+    val c = byte2int0($A.read<byte>(bytes, i))
   in
-    if c >= 48 && c <= 57 then _digits_only(b, i + 1, j) else false
+    if c >= 48 && c <= 57 then _digits_only(bytes, i + 1, j) else false
   end
 
 (* The age: 1 to 6 digits, with no leading zero unless it is the one digit *)
 fn _age_ok {l:agz}{n:pos}{i,j:nat | i <= j; j <= n}
-  (b: !$A.borrow(byte, l, n), i: int i, j: int j): bool =
+  (bytes: !$A.borrow(byte, l, n), i: int i, j: int j): bool =
   if i >= j then false
   else if j - i > 6 then false
-  else if ~_digits_only(b, i, j) then false
+  else if ~_digits_only(bytes, i, j) then false
   else if j - i = 1 then true
-  else byte2int0($A.read<byte>(b, i)) <> 48
+  else byte2int0($A.read<byte>(bytes, i)) <> 48
 
 fn _status_is {l:agz}{n:pos}{i,j:nat | i <= j; j <= n}
-  (b: !$A.borrow(byte, l, n), i: int i, j: int j, status: move_status): bool =
-  span_is(b, i, j, status_words(status))
+  (bytes: !$A.borrow(byte, l, n), i: int i, j: int j, status: move_status): bool =
+  span_is(bytes, i, j, status_words(status))
 
-(* Whether b[i, j) is the words of one of the four statuses *)
+(* Whether bytes[i, j) is the words of one of the four statuses *)
 fn _status_ok {l:agz}{n:pos}{i,j:nat | i <= j; j <= n}
-  (b: !$A.borrow(byte, l, n), i: int i, j: int j): bool =
-  _status_is(b, i, j, Status_moved()) || _status_is(b, i, j, Status_major_not_moved())
-  || _status_is(b, i, j, Status_too_new()) || _status_is(b, i, j, Status_current())
+  (bytes: !$A.borrow(byte, l, n), i: int i, j: int j): bool =
+  _status_is(bytes, i, j, Status_moved()) || _status_is(bytes, i, j, Status_major_not_moved())
+  || _status_is(bytes, i, j, Status_too_new()) || _status_is(bytes, i, j, Status_current())
 
-(* The line b[line_start, line_stop) as a table row appended to out, when it
+(* The line bytes[line_start, line_stop) as a table row appended to out, when it
    is a record: whether it is. The row is appended only when it is. *)
 fn _render_line {l:agz}{n:pos}{line_stop:nat | line_stop <= n}
   {line_start:nat | line_start <= line_stop}
-  (b: !$A.borrow(byte, l, n), line_start: int line_start, line_stop: int line_stop,
+  (bytes: !$A.borrow(byte, l, n), line_start: int line_start, line_stop: int line_stop,
    out: !$B.sized_rope): bool = let
-  val t1 = find_byte(b, line_stop, line_start, 9)
+  val first_tab = find_byte(bytes, line_stop, line_start, 9)
 in
-  if t1 >= line_stop then false
+  if first_tab >= line_stop then false
   else let
-    val t2 = find_byte(b, line_stop, t1 + 1, 9)
+    val second_tab = find_byte(bytes, line_stop, first_tab + 1, 9)
   in
-    if t2 >= line_stop then false
+    if second_tab >= line_stop then false
     else let
-      val t3 = find_byte(b, line_stop, t2 + 1, 9)
+      val third_tab = find_byte(bytes, line_stop, second_tab + 1, 9)
     in
-      if t3 >= line_stop then false
+      if third_tab >= line_stop then false
       else let
-        val t4 = find_byte(b, line_stop, t3 + 1, 9)
+        val fourth_tab = find_byte(bytes, line_stop, third_tab + 1, 9)
       in
-        if t4 >= line_stop then false
+        if fourth_tab >= line_stop then false
         else let
-          val t5 = find_byte(b, line_stop, t4 + 1, 9)
+          val fifth_tab = find_byte(bytes, line_stop, fourth_tab + 1, 9)
         in
-          if t5 >= line_stop then false
-          else if find_byte(b, line_stop, t5 + 1, 9) < line_stop then false
-          else if ~_word_ok(b, line_start, t1) then false
-          else if ~_word_ok(b, t1 + 1, t2) then false
-          else if ~_word_ok(b, t2 + 1, t3) then false
-          else if ~_word_ok(b, t3 + 1, t4) then false
-          else if ~_age_ok(b, t4 + 1, t5) then false
-          else if ~_status_ok(b, t5 + 1, line_stop) then false
+          if fifth_tab >= line_stop then false
+          else if find_byte(bytes, line_stop, fifth_tab + 1, 9) < line_stop then false
+          else if ~_word_ok(bytes, line_start, first_tab) then false
+          else if ~_word_ok(bytes, first_tab + 1, second_tab) then false
+          else if ~_word_ok(bytes, second_tab + 1, third_tab) then false
+          else if ~_word_ok(bytes, third_tab + 1, fourth_tab) then false
+          else if ~_age_ok(bytes, fourth_tab + 1, fifth_tab) then false
+          else if ~_status_ok(bytes, fifth_tab + 1, line_stop) then false
           else let
             val () = $B.sized_rope_bput(out, "| ")
-            val () = $B.sized_rope_copy(out, b, line_start, t1)
+            val () = $B.sized_rope_copy(out, bytes, line_start, first_tab)
             val () = $B.sized_rope_bput(out, " | ")
-            val () = $B.sized_rope_copy(out, b, t1 + 1, t2)
+            val () = $B.sized_rope_copy(out, bytes, first_tab + 1, second_tab)
             val () = $B.sized_rope_bput(out, " | ")
-            val () = $B.sized_rope_copy(out, b, t2 + 1, t3)
+            val () = $B.sized_rope_copy(out, bytes, second_tab + 1, third_tab)
             val () = $B.sized_rope_bput(out, " | ")
-            val () = $B.sized_rope_copy(out, b, t3 + 1, t4)
+            val () = $B.sized_rope_copy(out, bytes, third_tab + 1, fourth_tab)
             val () = $B.sized_rope_bput(out, " | ")
-            val () = $B.sized_rope_copy(out, b, t4 + 1, t5)
-            val () = if span_is(b, t4 + 1, t5, "1") then $B.sized_rope_bput(out, " day | ")
-                     else $B.sized_rope_bput(out, " days | ")
-            val () = $B.sized_rope_copy(out, b, t5 + 1, line_stop)
+            val () = $B.sized_rope_copy(out, bytes, fourth_tab + 1, fifth_tab)
+            val () =
+              if span_is(bytes, fourth_tab + 1, fifth_tab, "1")
+              then $B.sized_rope_bput(out, " day | ")
+              else $B.sized_rope_bput(out, " days | ")
+            val () = $B.sized_rope_copy(out, bytes, fifth_tab + 1, line_stop)
             val () = $B.sized_rope_bput(out, " |\n")
           in true end
         end
@@ -162,27 +164,29 @@ in
   end
 end
 
-fun _render_lines {l:agz}{n:pos}{k:nat | k <= n}{i:nat | i <= k}{number:pos} .<k - i>.
-  (b: !$A.borrow(byte, l, n), k: int k, i: int i, number: int number, out: !$B.sized_rope)
-  : [bad:nat] int bad =
-  if i >= k then 0
+fun _render_lines {l:agz}{n:pos}{records_len:nat | records_len <= n}
+  {i:nat | i <= records_len}{number:pos} .<records_len - i>.
+  (bytes: !$A.borrow(byte, l, n), records_len: int records_len, i: int i,
+   number: int number, out: !$B.sized_rope): [bad:nat] int bad =
+  if i >= records_len then 0
   else let
-    val line_stop = find_byte(b, k, i, 10)
+    val line_stop = find_byte(bytes, records_len, i, 10)
   in
-    if ~_render_line(b, i, line_stop, out) then number
-    else if line_stop >= k then 0
-    else _render_lines(b, k, line_stop + 1, number + 1, out)
+    if ~_render_line(bytes, i, line_stop, out) then number
+    else if line_stop >= records_len then 0
+    else _render_lines(bytes, records_len, line_stop + 1, number + 1, out)
   end
 
-(* The table of the records in b[0, k), appended to out: the header and one
-   row for each record, in order. The result is 0 when every line is a
+(* The table of the records in records[0, records_len), appended to out: the
+   header and one row for each record, in order. The result is 0 when every line is a
    record, else the number (from 1) of the first line that is not, and the
    rows before it are in out (the caller discards them). Lines end at a
    newline, and the last needs none. No records is the header alone. *)
-#pub fn render_table {l:agz}{n:pos}{k:nat | k <= n}
-  (records: !$A.borrow(byte, l, n), k: int k, out: !$B.sized_rope): [bad:nat] int bad
+#pub fn render_table {l:agz}{n:pos}{records_len:nat | records_len <= n}
+  (records: !$A.borrow(byte, l, n), records_len: int records_len, out: !$B.sized_rope)
+  : [bad:nat] int bad
 
-implement render_table (records, k, out) = let
+implement render_table (records, records_len, out) = let
   val () = $B.sized_rope_bput(out, "| Kind | Name | Old | New | Release age | Status |\n")
   val () = $B.sized_rope_bput(out, "| --- | --- | --- | --- | --- | --- |\n")
-in _render_lines(records, k, 0, 1, out) end
+in _render_lines(records, records_len, 0, 1, out) end

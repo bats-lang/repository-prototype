@@ -19,14 +19,14 @@ staload "support.sats"
 (* The length of a text *)
 fn text_length {text_len:nat} (text: string text_len): int text_len = g1u2i(string1_length(text))
 
-(* Whether the chunk's bytes b[i, used) are the literal from at on *)
+(* Whether the chunk's bytes[i, used) are the literal from at on *)
 fun _equal_from {l:agz}{n:pos}{used:nat | used <= n}{i:nat | i <= used}{literal_len:nat}
   {at:nat | at + (used - i) <= literal_len} .<used - i>.
-  (b: !$A.borrow(byte, l, n), used: int used, i: int i, literal: string literal_len,
+  (bytes: !$A.borrow(byte, l, n), used: int used, i: int i, literal: string literal_len,
    at: int at): bool =
   if i >= used then true
-  else if byte2int0($A.read<byte>(b, i)) = char2int0(string_get_at(literal, at)) then
-    _equal_from(b, used, i + 1, literal, at + 1)
+  else if byte2int0($A.read<byte>(bytes, i)) = char2int0(string_get_at(literal, at)) then
+    _equal_from(bytes, used, i + 1, literal, at + 1)
   else false
 
 fun _chunks_are {k:nat}{literal_len:nat}{at:nat | at <= literal_len} .<k>.

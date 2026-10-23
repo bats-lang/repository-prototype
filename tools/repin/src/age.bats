@@ -32,21 +32,21 @@ implement age_days (now, published) =
 (* A time in seconds is 1 to 12 decimal digits (a year after 30000 is
    outside the rule), so the value never overflows a long *)
 fun _digits_value {l:agz}{n:pos}{i,j:nat | i <= j; j <= n} .<j - i>.
-  (b: !$A.borrow(byte, l, n), i: int i, j: int j, value: lint): @(bool, lint) =
+  (text: !$A.borrow(byte, l, n), i: int i, j: int j, value: lint): @(bool, lint) =
   if i >= j then @(true, value)
   else let
-    val digit = byte2int0($A.read<byte>(b, i))
+    val digit = byte2int0($A.read<byte>(text, i))
   in
     if digit >= 48 && digit <= 57 then
-      _digits_value(b, i + 1, j, value * 10L + g0int2int_int_lint(digit - 48))
+      _digits_value(text, i + 1, j, value * 10L + g0int2int_int_lint(digit - 48))
     else @(false, 0L)
   end
 
-(* The number written as the decimal digits b[i, j): whether it is 1 to 12
+(* The number written as the decimal digits text[i, j): whether it is 1 to 12
    digits, and its value *)
 #pub fn parse_seconds {l:agz}{n:pos}{i,j:nat | i <= j; j <= n}
-  (b: !$A.borrow(byte, l, n), i: int i, j: int j): @(bool, lint)
+  (text: !$A.borrow(byte, l, n), i: int i, j: int j): @(bool, lint)
 
-implement parse_seconds (b, i, j) =
-  if j - i >= 1 && j - i <= 12 then _digits_value(b, i, j, 0L)
+implement parse_seconds (text, i, j) =
+  if j - i >= 1 && j - i <= 12 then _digits_value(text, i, j, 0L)
   else @(false, 0L)

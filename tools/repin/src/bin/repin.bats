@@ -21,14 +21,16 @@ staload "age.sats"
 staload "records.sats"
 staload "support.sats"
 
-fun _skip_arguments {l:agz}{n:pos}{k:nat | k <= n}{i:nat | i <= k}{count:nat} .<count>.
-  (b: !$A.borrow(byte, l, n), k: int k, i: int i, count: int count)
-  : [j:nat | i <= j; j <= k] int j =
+fun _skip_arguments {l:agz}{n:pos}{args_len:nat | args_len <= n}
+  {i:nat | i <= args_len}{count:nat} .<count>.
+  (args: !$A.borrow(byte, l, n), args_len: int args_len, i: int i, count: int count)
+  : [j:nat | i <= j; j <= args_len] int j =
   if count <= 0 then i
   else let
-    val stop = find_byte(b, k, i, 0)
+    val stop = find_byte(args, args_len, i, 0)
   in
-    if stop >= k then k else _skip_arguments(b, k, stop + 1, count - 1)
+    if stop >= args_len then args_len
+    else _skip_arguments(args, args_len, stop + 1, count - 1)
   end
 
 (* The records file at the path args[start, stop): the table, or the number
@@ -93,26 +95,26 @@ in 2 end
 (* The argument at index (the program is 0) of the NUL-separated arguments
    args[0, k): where it starts and where it ends; it is absent when it starts
    at k *)
-fn _argument {l:agz}{n:pos}{k:nat | k <= n}{index:nat}
-  (args: !$A.borrow(byte, l, n), k: int k, index: int index)
-  : [start,stop:nat | start <= stop; stop <= k] @(int start, int stop) = let
-  val start = _skip_arguments(args, k, 0, index)
-  val stop = find_byte(args, k, start, 0)
+fn _argument {l:agz}{n:pos}{args_len:nat | args_len <= n}{index:nat}
+  (args: !$A.borrow(byte, l, n), args_len: int args_len, index: int index)
+  : [start,stop:nat | start <= stop; stop <= args_len] @(int start, int stop) = let
+  val start = _skip_arguments(args, args_len, 0, index)
+  val stop = find_byte(args, args_len, start, 0)
 in @(start, stop) end
 
-fn _command {l:agz}{n:pos | n <= 4096}{k:nat | k <= n}
-  (args: !$A.borrow(byte, l, n), k: int k): int = let
-  val @(command_start, command_stop) = _argument(args, k, 1)
-  val @(second_start, second_stop) = _argument(args, k, 2)
-  val @(third_start, third_stop) = _argument(args, k, 3)
-  val @(fourth_start, fourth_stop) = _argument(args, k, 4)
+fn _command {l:agz}{n:pos | n <= 4096}{args_len:nat | args_len <= n}
+  (args: !$A.borrow(byte, l, n), args_len: int args_len): int = let
+  val @(command_start, command_stop) = _argument(args, args_len, 1)
+  val @(second_start, second_stop) = _argument(args, args_len, 2)
+  val @(third_start, third_stop) = _argument(args, args_len, 3)
+  val @(fourth_start, fourth_stop) = _argument(args, args_len, 4)
 in
-  if command_start >= k then _usage()
+  if command_start >= args_len then _usage()
   else if span_is(args, command_start, command_stop, "table") then
-    (if second_start < k && third_start >= k
+    (if second_start < args_len && third_start >= args_len
      then _table(args, second_start, second_stop) else _usage())
   else if span_is(args, command_start, command_stop, "age") then
-    (if third_start < k && fourth_start >= k
+    (if third_start < args_len && fourth_start >= args_len
      then _age(args, second_start, second_stop, third_start, third_stop) else _usage())
   else _usage()
 end
@@ -121,8 +123,8 @@ implement main0 () = let
   val buffer = $A.alloc<byte>(4096)
   val length =
     (case+ $E.args_read(buffer, 4096) of
-     | ~$R.some(k) => k
-     | ~$R.none() => 0): [k:nat | k <= 4096] int k
+     | ~$R.some(count) => count
+     | ~$R.none() => 0): [count:nat | count <= 4096] int count
   val @(frozen, view) = $A.freeze<byte>(buffer)
   val status = _command(view, length)
   val () = $A.drop<byte>(frozen, view)

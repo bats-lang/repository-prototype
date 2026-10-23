@@ -22,65 +22,71 @@
   | Read_too_long
   | Read_failed
 
-fun _put_range {l:agz}{n:pos}{i,k:nat | i <= k; k <= n}{m:nat | m + (k - i) <= 524288} .<k - i>.
-  (b: !$A.borrow(byte, l, n), i: int i, k: int k,
-   out: !$B.builder(m) >> $B.builder(m + (k - i))): void =
-  if i >= k then ()
+fun _put_range {l:agz}{n:pos}{i,stop:nat | i <= stop; stop <= n}
+  {used:nat | used + (stop - i) <= 524288} .<stop - i>.
+  (bytes: !$A.borrow(byte, l, n), i: int i, stop: int stop,
+   out: !$B.builder(used) >> $B.builder(used + (stop - i))): void =
+  if i >= stop then ()
   else let
-    val () = $B.put_char(out, $AR.low_byte(byte2int0($A.read<byte>(b, i))))
-  in _put_range(b, i + 1, k, out) end
+    val () = $B.put_char(out, $AR.low_byte(byte2int0($A.read<byte>(bytes, i))))
+  in _put_range(bytes, i + 1, stop, out) end
 
-(* b[i, k) appended to out; the builder's length after is in its type *)
-#pub fn put_range {l:agz}{n:pos}{i,k:nat | i <= k; k <= n}{m:nat | m + (k - i) <= 524288}
-  (b: !$A.borrow(byte, l, n), i: int i, k: int k,
-   out: !$B.builder(m) >> $B.builder(m + (k - i))): void
+(* bytes[start, stop) appended to out; the builder's length after is in its
+   type *)
+#pub fn put_range {l:agz}{n:pos}{start,stop:nat | start <= stop; stop <= n}
+  {used:nat | used + (stop - start) <= 524288}
+  (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop,
+   out: !$B.builder(used) >> $B.builder(used + (stop - start))): void
 
-implement put_range (b, i, k, out) = _put_range(b, i, k, out)
+implement put_range (bytes, start, stop, out) = _put_range(bytes, start, stop, out)
 
-fun _print_range {l:agz}{n:pos}{i,k:nat | i <= k; k <= n} .<k - i>.
-  (b: !$A.borrow(byte, l, n), i: int i, k: int k): void =
-  if i >= k then ()
+fun _print_range {l:agz}{n:pos}{i,stop:nat | i <= stop; stop <= n} .<stop - i>.
+  (bytes: !$A.borrow(byte, l, n), i: int i, stop: int stop): void =
+  if i >= stop then ()
   else let
-    val () = print_char(int2char0(byte2int0($A.read<byte>(b, i))))
-  in _print_range(b, i + 1, k) end
+    val () = print_char(int2char0(byte2int0($A.read<byte>(bytes, i))))
+  in _print_range(bytes, i + 1, stop) end
 
-(* b[i, k) to standard output *)
-#pub fn print_range {l:agz}{n:pos}{i,k:nat | i <= k; k <= n}
-  (b: !$A.borrow(byte, l, n), i: int i, k: int k): void
+(* bytes[start, stop) to standard output *)
+#pub fn print_range {l:agz}{n:pos}{start,stop:nat | start <= stop; stop <= n}
+  (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop): void
 
-implement print_range (b, i, k) = _print_range(b, i, k)
+implement print_range (bytes, start, stop) = _print_range(bytes, start, stop)
 
-fun _find_byte {l:agz}{n:pos}{k:nat | k <= n}{i:nat | i <= k} .<k - i>.
-  (b: !$A.borrow(byte, l, n), k: int k, i: int i, stop: int): [j:nat | i <= j; j <= k] int j =
-  if i >= k then i
-  else if byte2int0($A.read<byte>(b, i)) = stop then i
-  else _find_byte(b, k, i + 1, stop)
+fun _find_byte {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit} .<limit - i>.
+  (bytes: !$A.borrow(byte, l, n), limit: int limit, i: int i, wanted: int)
+  : [j:nat | i <= j; j <= limit] int j =
+  if i >= limit then i
+  else if byte2int0($A.read<byte>(bytes, i)) = wanted then i
+  else _find_byte(bytes, limit, i + 1, wanted)
 
-(* The first place at or after i of b[0, k) where the byte is stop, or k *)
-#pub fn find_byte {l:agz}{n:pos}{k:nat | k <= n}{i:nat | i <= k}
-  (b: !$A.borrow(byte, l, n), k: int k, i: int i, stop: int): [j:nat | i <= j; j <= k] int j
+(* The first place at or after start of bytes[0, limit) where the byte is
+   wanted, or limit *)
+#pub fn find_byte {l:agz}{n:pos}{limit:nat | limit <= n}{start:nat | start <= limit}
+  (bytes: !$A.borrow(byte, l, n), limit: int limit, start: int start, wanted: int)
+  : [j:nat | start <= j; j <= limit] int j
 
-implement find_byte (b, k, i, stop) = _find_byte(b, k, i, stop)
+implement find_byte (bytes, limit, start, wanted) = _find_byte(bytes, limit, start, wanted)
 
-fun _lit_from {l:agz}{n:pos}{k:nat | k <= n}{i:nat | i <= k}{literal_len:nat}
-  {m:nat | m <= literal_len} .<literal_len - m>.
-  (b: !$A.borrow(byte, l, n), k: int k, i: int i, literal: string literal_len,
-   literal_len: int literal_len, m: int m): bool =
-  if m >= literal_len then true
-  else if i >= k then false
-  else if byte2int0($A.read<byte>(b, i)) = char2int0(string_get_at(literal, m)) then
-    _lit_from(b, k, i + 1, literal, literal_len, m + 1)
+fun _lit_from {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit}{literal_len:nat}
+  {at:nat | at <= literal_len} .<literal_len - at>.
+  (bytes: !$A.borrow(byte, l, n), limit: int limit, i: int i, literal: string literal_len,
+   literal_len: int literal_len, at: int at): bool =
+  if at >= literal_len then true
+  else if i >= limit then false
+  else if byte2int0($A.read<byte>(bytes, i)) = char2int0(string_get_at(literal, at)) then
+    _lit_from(bytes, limit, i + 1, literal, literal_len, at + 1)
   else false
 
-(* Whether the bytes b[line_start, line_stop) are exactly the text literal *)
+(* Whether bytes[line_start, line_stop) are exactly the text literal *)
 #pub fn span_is {l:agz}{n:pos}{line_stop:nat | line_stop <= n}
   {line_start:nat | line_start <= line_stop}{literal_len:nat}
-  (b: !$A.borrow(byte, l, n), line_start: int line_start, line_stop: int line_stop,
+  (bytes: !$A.borrow(byte, l, n), line_start: int line_start, line_stop: int line_stop,
    literal: string literal_len): bool
 
-implement span_is (b, line_start, line_stop, literal) =
+implement span_is (bytes, line_start, line_stop, literal) =
   if line_stop - line_start = g1u2i(string1_length(literal)) then
-    _lit_from(b, line_stop, line_start, literal, g1u2i(string1_length(literal)), 0)
+    _lit_from(bytes, line_stop, line_start, literal, g1u2i(string1_length(literal)), 0)
   else false
 
 (* Reads an open file to its end into out. A chunk that would take the
@@ -93,47 +99,48 @@ fun _drain {m:nat | m <= 524288} .<524288 - m>.
 in
   case+ $F.file_read(fd, chunk, 4096) of
   | ~$R.err(_) => let val () = $A.free<byte>(chunk) in Read_failed() end
-  | ~$R.ok(k) =>
-    if k <= 0 then let val () = $A.free<byte>(chunk) in Read_whole() end
-    else if $B.length(out) + k > 524288 then
+  | ~$R.ok(count) =>
+    if count <= 0 then let val () = $A.free<byte>(chunk) in Read_whole() end
+    else if $B.length(out) + count > 524288 then
       let val () = $A.free<byte>(chunk) in Read_too_long() end
     else let
       val @(frozen, view) = $A.freeze<byte>(chunk)
-      val () = _put_range(view, 0, k, out)
+      val () = _put_range(view, 0, count, out)
       val () = $A.drop<byte>(frozen, view)
       val () = $A.free<byte>($A.thaw<byte>(frozen))
     in _drain(fd, out) end
 end
 
-fun _copy_path {l,other_loc:agz}{n:pos}{m:nat | m <= n}{capacity:pos | m < capacity}
-  {i:nat | i <= m} .<m - i>.
-  (p: !$A.borrow(byte, l, n), m: int m, destination: !$A.arr(byte, other_loc, capacity),
-   i: int i): void =
-  if i >= m then ()
+fun _copy_path {l,other_loc:agz}{n:pos}{path_len:nat | path_len <= n}
+  {capacity:pos | path_len < capacity}{i:nat | i <= path_len} .<path_len - i>.
+  (path: !$A.borrow(byte, l, n), path_len: int path_len,
+   destination: !$A.arr(byte, other_loc, capacity), i: int i): void =
+  if i >= path_len then ()
   else let
-    val () = $A.set<byte>(destination, i, $A.read<byte>(p, i))
-  in _copy_path(p, m, destination, i + 1) end
+    val () = $A.set<byte>(destination, i, $A.read<byte>(path, i))
+  in _copy_path(path, path_len, destination, i + 1) end
 
-(* The path p[0, m) opened for reading; the path is copied into an array of
+(* The path path[0, path_len) opened for reading; the path is copied into an array of
    its own length and a zero, which file_open takes. *)
-fn _open_read {l:agz}{n:pos}{m:nat | m <= n; m < 524288}
-  (p: !$A.borrow(byte, l, n), m: int m): $R.result($F.fd, $F.io_error) = let
-  val path_copy = $A.alloc<byte>(m + 1)
-  val () = _copy_path(p, m, path_copy, 0)
+fn _open_read {l:agz}{n:pos}{path_len:nat | path_len <= n; path_len < 524288}
+  (path: !$A.borrow(byte, l, n), path_len: int path_len): $R.result($F.fd, $F.io_error) = let
+  val path_copy = $A.alloc<byte>(path_len + 1)
+  val () = _copy_path(path, path_len, path_copy, 0)
   val @(frozen, view) = $A.freeze<byte>(path_copy)
-  val opened = $F.file_open(view, m + 1, $F.ReadOnly(), $F.OpenExisting(), 0)
+  val opened = $F.file_open(view, path_len + 1, $F.ReadOnly(), $F.OpenExisting(), 0)
   val () = $A.drop<byte>(frozen, view)
   val () = $A.free<byte>($A.thaw<byte>(frozen))
 in opened end
 
-(* The bytes of the file at the path p[0, m), read into out: how the read
+(* The bytes of the file at the path path[0, path_len), read into out: how the read
    ended, and the words of the error when it failed (an empty text
    otherwise) *)
-#pub fn read_file {l:agz}{n:pos}{m:nat | m <= n; m < 524288}
-  (p: !$A.borrow(byte, l, n), m: int m, out: !$B.builder(0) >> $B.builder_v): @(read_end, string)
+#pub fn read_file {l:agz}{n:pos}{path_len:nat | path_len <= n; path_len < 524288}
+  (path: !$A.borrow(byte, l, n), path_len: int path_len,
+   out: !$B.builder(0) >> $B.builder_v): @(read_end, string)
 
-implement read_file (p, m, out) =
-  case+ _open_read(p, m) of
+implement read_file (path, path_len, out) =
+  case+ _open_read(path, path_len) of
   | ~$R.err(failure) => @(Read_failed(), $F.io_error_text(failure))
   | ~$R.ok(fd) => let
       val ended = _drain(fd, out)
