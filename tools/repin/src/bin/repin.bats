@@ -93,8 +93,8 @@ fn _usage (): int = let
 in 2 end
 
 (* The argument at index (the program is 0) of the NUL-separated arguments
-   args[0, k): where it starts and where it ends; it is absent when it starts
-   at k *)
+   args[0, args_len): where it starts and where it ends; it is absent when it
+   starts at args_len *)
 fn _argument {l:agz}{n:pos}{args_len:nat | args_len <= n}{index:nat}
   (args: !$A.borrow(byte, l, n), args_len: int args_len, index: int index)
   : [start,stop:nat | start <= stop; stop <= args_len] @(int start, int stop) = let

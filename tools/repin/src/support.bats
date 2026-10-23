@@ -93,8 +93,8 @@ implement span_is (bytes, line_start, line_stop, literal) =
    builder past its capacity is not appended (nothing is cut): the outcome is
    Read_too_long. Each chunk is at least one byte, so the room left is the
    metric. *)
-fun _drain {m:nat | m <= 524288} .<524288 - m>.
-  (fd: !$F.fd, out: !$B.builder(m) >> $B.builder_v): read_end = let
+fun _drain {used:nat | used <= 524288} .<524288 - used>.
+  (fd: !$F.fd, out: !$B.builder(used) >> $B.builder_v): read_end = let
   val chunk = $A.alloc<byte>(4096)
 in
   case+ $F.file_read(fd, chunk, 4096) of
@@ -147,7 +147,8 @@ implement read_file (path, path_len, out) =
       val () = $R.discard<int><$F.io_error>($F.file_close(fd))
     in @(ended, "") end
 
-fun _print_chunks {k:nat} .<k>. (chunks: $B.rope_sized_list(k)): void =
+fun _print_chunks {chunk_count:nat} .<chunk_count>.
+  (chunks: $B.rope_sized_list(chunk_count)): void =
   case+ chunks of
   | ~$B.rope_sized_nil() => ()
   | ~$B.rope_sized_cons(chunk, used, rest) => let

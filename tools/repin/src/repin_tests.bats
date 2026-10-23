@@ -29,8 +29,9 @@ fun _equal_from {l:agz}{n:pos}{used:nat | used <= n}{i:nat | i <= used}{literal_
     _equal_from(bytes, used, i + 1, literal, at + 1)
   else false
 
-fun _chunks_are {k:nat}{literal_len:nat}{at:nat | at <= literal_len} .<k>.
-  (chunks: $B.rope_sized_list(k), literal: string literal_len, literal_len: int literal_len,
+fun _chunks_are {chunk_count:nat}{literal_len:nat}{at:nat | at <= literal_len} .<chunk_count>.
+  (chunks: $B.rope_sized_list(chunk_count), literal: string literal_len,
+   literal_len: int literal_len,
    at: int at): bool =
   case+ chunks of
   | ~$B.rope_sized_nil() => at = literal_len

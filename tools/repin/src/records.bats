@@ -69,9 +69,10 @@ fun _word_chars {l:agz}{n:pos}{i,j:nat | i <= j; j <= n} .<j - i>.
   (bytes: !$A.borrow(byte, l, n), i: int i, j: int j): bool =
   if i >= j then true
   else let
-    val c = byte2int0($A.read<byte>(bytes, i))
+    val byte_value = byte2int0($A.read<byte>(bytes, i))
   in
-    if c > 32 && c < 127 && c <> 124 then _word_chars(bytes, i + 1, j) else false
+    if byte_value > 32 && byte_value < 127 && byte_value <> 124
+    then _word_chars(bytes, i + 1, j) else false
   end
 
 (* A name, kind or version: one or more printable ASCII bytes with no space
@@ -84,9 +85,9 @@ fun _digits_only {l:agz}{n:pos}{i,j:nat | i <= j; j <= n} .<j - i>.
   (bytes: !$A.borrow(byte, l, n), i: int i, j: int j): bool =
   if i >= j then true
   else let
-    val c = byte2int0($A.read<byte>(bytes, i))
+    val byte_value = byte2int0($A.read<byte>(bytes, i))
   in
-    if c >= 48 && c <= 57 then _digits_only(bytes, i + 1, j) else false
+    if byte_value >= 48 && byte_value <= 57 then _digits_only(bytes, i + 1, j) else false
   end
 
 (* The age: 1 to 6 digits, with no leading zero unless it is the one digit *)
