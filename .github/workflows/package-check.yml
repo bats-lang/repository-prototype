@@ -1,0 +1,113 @@
+# The check job of every library repository (#393, piece of #353). A library's
+# .github/workflows/check.yml is only a caller of this workflow, by commit
+# (#269), and chooses what runs by which test directories it has, never by
+# editing a workflow:
+#
+#   name: check
+#   on:
+#     push:
+#       branches: [main]
+#     pull_request:
+#       branches: [main]
+#     workflow_dispatch:
+#   jobs:
+#     check:
+#       uses: bats-lang/repository-prototype/.github/workflows/package-check.yml@<commit> # <version>
+#
+# What runs: the bats setup action, `bats check`, `bats test`, then each kind
+# of test only when its directory exists: tests/static, tests/dynamic (with
+# valgrind, and with Node and `npm ci` when tests/dynamic/package.json
+# exists), tests/c (a job of its own on ubuntu-24.04 and macos-26). The
+# existence tests are `hashFiles(...) != ''`, a GitHub expression, so no shell
+# decides anything. The lock: CLAUDE.md, "A library's check.yml".
+name: package-check
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # the setup action names a pull request's head, the merge's second parent (bats#283)
+          fetch-depth: 2
+
+      # require-lock stays at the action's default, true: a package with no
+      # dependencies commits the empty bats.lock that `bats lock` writes, so
+      # `bats check` also refuses a #use the lock does not name (CLAUDE.md, "A library's check.yml")
+      - name: Set up bats
+        id: bats
+        uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats 8e978df (#287)
+
+      - name: bats check
+        env:
+          REPOSITORY: ${{ steps.bats.outputs.repository }}
+        run: bats check --repository "$REPOSITORY"
+
+      # A package's unit tests are in its src/ ($UNITTEST.run blocks), so there
+      # is no directory to look for: a package with none prints "no tests found"
+      # and exits 0 (about 2 s)
+      - name: Unit tests
+        env:
+          REPOSITORY: ${{ steps.bats.outputs.repository }}
+        run: bats test --repository "$REPOSITORY"
+
+      - name: Static tests
+        if: hashFiles('tests/static/**') != ''
+        env:
+          REPOSITORY: ${{ steps.bats.outputs.repository }}
+        run: tests/static/run.sh "$REPOSITORY"
+
+      - name: Install valgrind
+        if: hashFiles('tests/dynamic/**') != ''
+        run: sudo apt-get install -y -q valgrind
+
+      - name: Set up Node.js
+        if: hashFiles('tests/dynamic/package.json') != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install the dynamic tests' Node packages
+        if: hashFiles('tests/dynamic/package.json') != ''
+        working-directory: tests/dynamic
+        run: npm ci --no-audit --no-fund
+
+      - name: Dynamic tests
+        if: hashFiles('tests/dynamic/**') != ''
+        env:
+          REPOSITORY: ${{ steps.bats.outputs.repository }}
+        run: tests/dynamic/run.sh "$REPOSITORY"
+
+  # A job's own `if` cannot call hashFiles (only a step's can), and a matrix
+  # cannot be empty, so this job says whether tests/c exists as the outcome of
+  # a step that runs only then; the next job is skipped otherwise.
+  layout:
+    runs-on: ubuntu-24.04
+    outputs:
+      c-tests: ${{ steps.c-tests.outcome }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: tests/c exists
+        id: c-tests
+        if: hashFiles('tests/c/**') != ''
+        run: echo "tests/c exists"
+
+  c-runtime:
+    needs: layout
+    if: needs.layout.outputs.c-tests == 'success'
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-26]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: C runtime tests
+        run: tests/c/run.sh
