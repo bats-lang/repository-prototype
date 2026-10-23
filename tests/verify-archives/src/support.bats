@@ -1,0 +1,1 @@
+../../../tools/pin-audit/src/support.bats

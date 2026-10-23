@@ -1,0 +1,60 @@
+# Runs the tests of this repository's own tools (#396): `bats test` of the pin
+# audit (tools/pin-audit, planted git repositories) and of the script that
+# verifies added archives (tests/verify-archives: scripts/verify-archives.sh on
+# planted git repositories, with a stand-in bats). Each test package is built
+# first, since its tests run the binaries it builds.
+name: tools test
+
+on:
+  pull_request:
+    paths:
+      - 'tools/**'
+      - 'tests/verify-archives/**'
+      - 'scripts/verify-archives.sh'
+      - '.github/workflows/tools-test.yml'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # bats's setup action, pinned by commit as verify.yml does: the compiler built
+      # from the bootstrap C of the commit named, ATS2 installed by `bats ats2
+      # install` (SHA-256 checked), and a package repository at the commit named.
+      # This repository has no pin files, so both commits are given here. The tools'
+      # locks name packages newer than that commit, so the packages are fetched from
+      # this checkout, which is the repository itself (--repository below).
+      - name: Set up bats
+        uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
+        with:
+          bats-version: e00d6338999b69c43ee59d81423b85c9bfc981e1
+          repository-version: f78231483761dae99cebf497bd3e25da2552e5e7
+          require-lock: 'false'
+
+      - name: Build the pin audit and its stand-in gh
+        working-directory: tools/pin-audit
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
+
+      - name: Test the pin audit
+        working-directory: tools/pin-audit
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats test --repository "$REPOSITORY"
+
+      - name: Build the verify-archives test and its stand-in bats
+        working-directory: tests/verify-archives
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
+
+      - name: Test verify-archives.sh
+        working-directory: tests/verify-archives
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats test --repository "$REPOSITORY"

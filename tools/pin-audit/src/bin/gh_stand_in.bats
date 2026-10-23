@@ -18,28 +18,17 @@ fun _flood {n:nat} .<n>. (n: int n): void =
     val () = print! ("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n")
   in _flood(n - 1) end
 
-fn _exists {sn:nat | sn < 4096} (path: string sn): bool = let
-  var probe : $B.builder(0) = $B.create()
-  val @(ended, _) = read_constant(path, probe)
-  val () = $B.builder_free(probe)
-in
-  case+ ended of
-  | Read_whole() => true
-  | Read_too_long() => true
-  | Read_failed() => false
-end
-
 implement main0 () =
-  if _exists("gh-fail") then exit_void(1)
-  else if _exists("gh-flood") then _flood(8000)
+  if constant_exists("gh-fail") then exit_void(1)
+  else if constant_exists("gh-flood") then _flood(8000)
   else let
     var names : $B.builder(0) = $B.create()
     val @(ended, _) = read_constant("gh-names.txt", names)
     val @(arr, k) = $B.to_arr(names)
-    val @(fz, bv) = $A.freeze<byte>(arr)
-    val () = print_range(bv, 0, k)
-    val () = $A.drop<byte>(fz, bv)
-    val () = $A.free<byte>($A.thaw<byte>(fz))
+    val @(frozen, view) = $A.freeze<byte>(arr)
+    val () = print_range(view, 0, k)
+    val () = $A.drop<byte>(frozen, view)
+    val () = $A.free<byte>($A.thaw<byte>(frozen))
   in
     case+ ended of
     | Read_whole() => ()

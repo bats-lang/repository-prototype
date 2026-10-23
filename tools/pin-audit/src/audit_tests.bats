@@ -30,36 +30,8 @@ staload "allowlist.sats"
    Commands
    ============================================================ *)
 
-fn _len {sn:nat} (s: string sn): int sn = g1u2i(string1_length(s))
-
-fn _nothing (): $L.listv($P.arg_entry) = $L.list_vt_nil()
-
-fn _l1 (a: $P.arg_entry): $L.listv($P.arg_entry) =
-  $L.list_vt_cons(a, $L.list_vt_nil())
-
-fn _l2 (a: $P.arg_entry, b: $P.arg_entry): $L.listv($P.arg_entry) =
-  $L.list_vt_cons(a, _l1(b))
-
-fn _l3 (a: $P.arg_entry, b: $P.arg_entry, c: $P.arg_entry): $L.listv($P.arg_entry) =
-  $L.list_vt_cons(a, _l2(b, c))
-
-fn _l4 (a: $P.arg_entry, b: $P.arg_entry, c: $P.arg_entry, d: $P.arg_entry): $L.listv($P.arg_entry) =
-  $L.list_vt_cons(a, _l3(b, c, d))
-
-(* program with the arguments, whose first is the program's own name: its
-   status, ~1 when it could not be run *)
-fn _run {pn:nat | pn < 4096} (prog: string pn, args: $L.listv($P.arg_entry)): int =
-  run_with(prog, $L.list_vt_cons(arg_text(prog), args), _nothing())
-
-fn _join2 {an,bn:nat | an < 4096; bn < 4096} (a: string an, b: string bn): $P.arg_entry = let
-  var out : $B.builder(0) = $B.create()
-  val () = $B.bput(out, a)
-  val () = $B.bput(out, b)
-  val @(arr, k) = $B.to_arr(out)
-in @(arr, k) end
-
 (* dir/planted/name.git *)
-fn _repo_arg {dn,nn:nat | dn < 200; nn < 100} (dir: string dn, name: string nn): $P.arg_entry = let
+fn _repo_arg {dir_len,name_len:nat | dir_len < 200; name_len < 100} (dir: string dir_len, name: string name_len): $P.arg_entry = let
   var out : $B.builder(0) = $B.create()
   val () = $B.bput(out, dir)
   val () = $B.bput(out, "/planted/")
@@ -72,11 +44,9 @@ in @(arr, k) end
    Files
    ============================================================ *)
 
-vtypedef path_text = [l:agz][k:nat | k < 1000] @($A.arr(byte, l, 524288), int k)
-
 (* dir/planted/name.git/rel *)
-fn _repo_path {dn,nn,rn,fn_:nat | dn < 200; nn < 100; rn < 300; fn_ < 300}
-  (dir: string dn, name: string nn, rel: string rn, file: string fn_): path_text = let
+fn _repo_path {dir_len,name_len,rel_len,file_len:nat | dir_len < 200; name_len < 100; rel_len < 300; file_len < 300}
+  (dir: string dir_len, name: string name_len, rel: string rel_len, file: string file_len): path_text = let
   var out : $B.builder(0) = $B.create()
   val () = $B.bput(out, dir)
   val () = $B.bput(out, "/planted/")
@@ -87,41 +57,11 @@ fn _repo_path {dn,nn,rn,fn_:nat | dn < 200; nn < 100; rn < 300; fn_ < 300}
   val @(arr, k) = $B.to_arr(out)
 in @(arr, k) end
 
-(* dir/rel *)
-fn _case_path {dn,rn:nat | dn < 200; rn < 300} (dir: string dn, rel: string rn): path_text = let
-  var out : $B.builder(0) = $B.create()
-  val () = $B.bput(out, dir)
-  val () = $B.bput(out, "/")
-  val () = $B.bput(out, rel)
-  val @(arr, k) = $B.to_arr(out)
-in @(arr, k) end
-
-fun _write_chunks {n:nat}{l:agz}{pn:pos}{m:nat | m <= pn; m < 524288} .<n>.
-  (p: !$A.borrow(byte, l, pn), m: int m, chunks: $B.rope_sized_list(n), append: bool): bool =
-  case+ chunks of
-  | ~$B.rope_sized_nil() => true
-  | ~$B.rope_sized_cons(chunk, used, rest) => let
-      val @(fz, bv) = $A.freeze<byte>(chunk)
-      val ok = write_file(p, m, bv, used, append)
-      val () = $A.drop<byte>(fz, bv)
-      val () = $A.free<byte>($A.thaw<byte>(fz))
-      val ok_rest = _write_chunks(p, m, rest, true)
-    in ok && ok_rest end
-
-(* The rope written to the file at the path (made or emptied first) *)
-fn _write_rope(path: path_text, text: $B.sized_rope): bool = let
-  val @(parr, pk) = path
-  val @(pfz, pbv) = $A.freeze<byte>(parr)
-  val ok = _write_chunks(pbv, pk, $B.sized_rope_chunks(text), false)
-  val () = $A.drop<byte>(pfz, pbv)
-  val () = $A.free<byte>($A.thaw<byte>(pfz))
-in ok end
-
-fun _put_repeated {n:nat} .<n>. (r: !$B.sized_rope, n: int n): void =
+fun _put_repeated {n:nat} .<n>. (rope: !$B.sized_rope, n: int n): void =
   if n <= 0 then ()
   else let
-    val () = $B.sized_rope_put(r, 97)
-  in _put_repeated(r, n - 1) end
+    val () = $B.sized_rope_put(rope, 97)
+  in _put_repeated(rope, n - 1) end
 
 (* ============================================================
    A case's directory
@@ -129,86 +69,86 @@ fun _put_repeated {n:nat} .<n>. (r: !$B.sized_rope, n: int n): void =
 
 (* A fresh dir: the templates, the stand-in gh, an allowlist with no entry
    and an empty name list. The old one, if any, is removed first. *)
-fn _fresh {dn:nat | dn < 200} (dir: string dn): void = let
-  val _ = _run("rm", _l3(arg_text("-rf"), arg_text("--"), arg_text(dir)))
-  val _ = _run("mkdir", $L.list_vt_cons(arg_text("-p"), $L.list_vt_cons(arg_text("--"),
-            _l3(_join2(dir, "/tools/pin-audit"), _join2(dir, "/planted"), _join2(dir, "/bin")))))
-  val _ = _run("cp", _l3(arg_text("-R"), arg_text("templates"), _join2(dir, "/tools/pin-audit/templates")))
-  val _ = _run("cp", _l2(arg_text("dist/debug/gh_stand_in"), _join2(dir, "/bin/gh")))
+fn _fresh {dir_len:nat | dir_len < 200} (dir: string dir_len): void = let
+  val _ = run_program("rm", args3(arg_text("-rf"), arg_text("--"), arg_text(dir)))
+  val _ = run_program("mkdir", $L.list_vt_cons(arg_text("-p"), $L.list_vt_cons(arg_text("--"),
+            args3(join_text2(dir, "/tools/pin-audit"), join_text2(dir, "/planted"), join_text2(dir, "/bin")))))
+  val _ = run_program("cp", args3(arg_text("-R"), arg_text("templates"), join_text2(dir, "/tools/pin-audit/templates")))
+  val _ = run_program("cp", args2(arg_text("dist/debug/gh_stand_in"), join_text2(dir, "/bin/gh")))
   var allowlist : $B.sized_rope = $B.sized_rope_create()
   val () = $B.sized_rope_bput(allowlist, "# no entries\n")
-  val _ = _write_rope(_case_path(dir, "tools/pin-audit/allowlist.txt"), allowlist)
+  val _ = write_rope(join_path3(dir, "/", "tools/pin-audit/allowlist.txt"), allowlist)
   var names : $B.sized_rope = $B.sized_rope_create()
-  val _ = _write_rope(_case_path(dir, "gh-names.txt"), names)
+  val _ = write_rope(join_path3(dir, "/", "gh-names.txt"), names)
 in () end
 
 (* The repository dir/planted/name.git, a new one, with no commit *)
-fn _plant {dn,nn:nat | dn < 200; nn < 100} (dir: string dn, name: string nn): void = let
-  val _ = _run("git", _l3(arg_text("init"), arg_text("-q"), _repo_arg(dir, name)))
+fn _plant {dir_len,name_len:nat | dir_len < 200; name_len < 100} (dir: string dir_len, name: string name_len): void = let
+  val _ = run_program("git", args3(arg_text("init"), arg_text("-q"), _repo_arg(dir, name)))
 in () end
 
 (* The repository's commit of everything written in it *)
-fn _commit {dn,nn:nat | dn < 200; nn < 100} (dir: string dn, name: string nn): void = let
-  val _ = _run("git", _l4(arg_text("-C"), _repo_arg(dir, name), arg_text("add"), arg_text("-A")))
-  val _ = _run("git", $L.list_vt_cons(arg_text("-C"), $L.list_vt_cons(_repo_arg(dir, name),
+fn _commit {dir_len,name_len:nat | dir_len < 200; name_len < 100} (dir: string dir_len, name: string name_len): void = let
+  val _ = run_program("git", args4(arg_text("-C"), _repo_arg(dir, name), arg_text("add"), arg_text("-A")))
+  val _ = run_program("git", $L.list_vt_cons(arg_text("-C"), $L.list_vt_cons(_repo_arg(dir, name),
             $L.list_vt_cons(arg_text("-c"), $L.list_vt_cons(arg_text("user.name=plant"),
             $L.list_vt_cons(arg_text("-c"), $L.list_vt_cons(arg_text("user.email=plant@example.com"),
-            _l4(arg_text("commit"), arg_text("-q"), arg_text("-m"), arg_text("plant")))))))))
+            args4(arg_text("commit"), arg_text("-q"), arg_text("-m"), arg_text("plant")))))))))
 in () end
 
 (* The rope as a file of the planted repository, in folder rel (a
    directory is made) *)
-fn _put_rope {dn,nn,rn,fn_:nat | dn < 200; nn < 100; rn < 300; fn_ < 300}
-  (dir: string dn, name: string nn, rel: string rn, file: string fn_, text: $B.sized_rope): void = let
-  val _ = _run("mkdir", _l3(arg_text("-p"), arg_text("--"), _join2(dir, "/planted/")))
+fn _put_rope {dir_len,name_len,rel_len,file_len:nat | dir_len < 200; name_len < 100; rel_len < 300; file_len < 300}
+  (dir: string dir_len, name: string name_len, rel: string rel_len, file: string file_len, text: $B.sized_rope): void = let
+  val _ = run_program("mkdir", args3(arg_text("-p"), arg_text("--"), join_text2(dir, "/planted/")))
   var folder : $B.builder(0) = $B.create()
   val () = $B.bput(folder, dir)
   val () = $B.bput(folder, "/planted/")
   val () = $B.bput(folder, name)
   val () = $B.bput(folder, ".git/")
   val () = $B.bput(folder, rel)
-  val @(farr, fk) = $B.to_arr(folder)
-  val _ = _run("mkdir", _l3(arg_text("-p"), arg_text("--"), @(farr, fk)))
-  val _ = _write_rope(_repo_path(dir, name, rel, file), text)
+  val @(folder_array, folder_len) = $B.to_arr(folder)
+  val _ = run_program("mkdir", args3(arg_text("-p"), arg_text("--"), @(folder_array, folder_len)))
+  val _ = write_rope(_repo_path(dir, name, rel, file), text)
 in () end
 
 (* The text of a file of the planted repository *)
-fn _put {dn,nn,rn,fn_,cn:nat | dn < 200; nn < 100; rn < 300; fn_ < 300; cn < 100000}
-  (dir: string dn, name: string nn, rel: string rn, file: string fn_, content: string cn): void = let
+fn _put {dir_len,name_len,rel_len,file_len,content_len:nat | dir_len < 200; name_len < 100; rel_len < 300; file_len < 300; content_len < 100000}
+  (dir: string dir_len, name: string name_len, rel: string rel_len, file: string file_len, content: string content_len): void = let
   var text : $B.sized_rope = $B.sized_rope_create()
   val () = $B.sized_rope_bput(text, content)
 in _put_rope(dir, name, rel, file, text) end
 
 (* A workflow file of the planted repository *)
-fn _workflow {dn,nn,fn_,cn:nat | dn < 200; nn < 100; fn_ < 300; cn < 100000}
-  (dir: string dn, name: string nn, file: string fn_, content: string cn): void =
+fn _workflow {dir_len,name_len,file_len,content_len:nat | dir_len < 200; name_len < 100; file_len < 300; content_len < 100000}
+  (dir: string dir_len, name: string name_len, file: string file_len, content: string content_len): void =
   _put(dir, name, ".github/workflows/", file, content)
 
-fun _fill_loop {l:agz}{tk:nat | tk <= 524288}{t:nat | t <= tk}{cn,mn,nn:nat} .<tk - t>.
-  (tb: !$A.borrow(byte, l, 524288), tk: int tk, t: int t, out: !$B.sized_rope,
-   commit: string cn, comment: string mn, minute: string nn, mutate: int): void = let
-  val c = lit_step(tb, tk, t, "@@COMMIT@@")
+fun _fill_loop {l:agz}{template_len:nat | template_len <= 524288}{template_at:nat | template_at <= template_len}{commit_len,comment_len,minute_len:nat} .<template_len - template_at>.
+  (template_text: !$A.borrow(byte, l, 524288), template_len: int template_len, template_at: int template_at, out: !$B.sized_rope,
+   commit: string commit_len, comment: string comment_len, minute: string minute_len, mutate: int): void = let
+  val commit_end = lit_step(template_text, template_len, template_at, "@@COMMIT@@")
 in
-  if c >= 0 then let
+  if commit_end >= 0 then let
     val () = $B.sized_rope_bput(out, commit)
-  in _fill_loop(tb, tk, c, out, commit, comment, minute, mutate) end
+  in _fill_loop(template_text, template_len, commit_end, out, commit, comment, minute, mutate) end
   else let
-    val m = lit_step(tb, tk, t, "@@COMMENT@@")
+    val comment_end = lit_step(template_text, template_len, template_at, "@@COMMENT@@")
   in
-    if m >= 0 then let
+    if comment_end >= 0 then let
       val () = $B.sized_rope_bput(out, comment)
-    in _fill_loop(tb, tk, m, out, commit, comment, minute, mutate) end
+    in _fill_loop(template_text, template_len, comment_end, out, commit, comment, minute, mutate) end
     else let
-      val n = lit_step(tb, tk, t, "@@MINUTE@@")
+      val minute_end = lit_step(template_text, template_len, template_at, "@@MINUTE@@")
     in
-      if n >= 0 then let
+      if minute_end >= 0 then let
         val () = $B.sized_rope_bput(out, minute)
-      in _fill_loop(tb, tk, n, out, commit, comment, minute, mutate) end
-      else if t >= tk then ()
+      in _fill_loop(template_text, template_len, minute_end, out, commit, comment, minute, mutate) end
+      else if template_at >= template_len then ()
       else let
-        val b = byte2int0($A.read<byte>(tb, t))
-        val () = $B.sized_rope_put(out, $AR.low_byte(if t = mutate then 126 else b))
-      in _fill_loop(tb, tk, t + 1, out, commit, comment, minute, mutate) end
+        val byte_value = byte2int0($A.read<byte>(template_text, template_at))
+        val () = $B.sized_rope_put(out, $AR.low_byte(if template_at = mutate then 126 else byte_value))
+      in _fill_loop(template_text, template_len, template_at + 1, out, commit, comment, minute, mutate) end
     end
   end
 end
@@ -216,97 +156,91 @@ end
 (* The template at template_path with its holes filled with the values
    (mutate: the place of one byte of a segment changed to `~`, or ~1), as
    a workflow file of the planted repository *)
-fn _fill {dn,nn,fn_,tn,cn,mn,hn:nat | dn < 200; nn < 100; fn_ < 300; tn < 4096}
-  (dir: string dn, name: string nn, file: string fn_, template_path: string tn,
-   commit: string cn, comment: string mn, minute: string hn, mutate: int): void = let
+fn _fill {dir_len,name_len,file_len,template_path_len,commit_len,comment_len,minute_len:nat | dir_len < 200; name_len < 100; file_len < 300; template_path_len < 4096}
+  (dir: string dir_len, name: string name_len, file: string file_len, template_path: string template_path_len,
+   commit: string commit_len, comment: string comment_len, minute: string minute_len, mutate: int): void = let
   var template : $B.builder(0) = $B.create()
   val @(ended, _) = read_constant(template_path, template)
-  val @(tarr, tk) = $B.to_arr(template)
-  val @(tfz, tbv) = $A.freeze<byte>(tarr)
+  val @(template_array, template_len) = $B.to_arr(template)
+  val @(template_frozen, template_view) = $A.freeze<byte>(template_array)
   var text : $B.sized_rope = $B.sized_rope_create()
-  val () = _fill_loop(tbv, tk, 0, text, commit, comment, minute, mutate)
-  val () = $A.drop<byte>(tfz, tbv)
-  val () = $A.free<byte>($A.thaw<byte>(tfz))
+  val () = _fill_loop(template_view, template_len, 0, text, commit, comment, minute, mutate)
+  val () = $A.drop<byte>(template_frozen, template_view)
+  val () = $A.free<byte>($A.thaw<byte>(template_frozen))
 in _put_rope(dir, name, ".github/workflows/", file, text) end
 
 (* The sha256 of the text, as 64 digits, appended to the rope *)
-fn _hash_into {cn:nat | cn < 100000} (text: !$B.sized_rope, content: string cn): void = let
+fn _hash_into {content_len:nat | content_len < 100000} (text: !$B.sized_rope, content: string content_len): void = let
   var body : $B.builder(0) = $B.create()
   val () = $B.bput(body, content)
   val @(arr, k) = $B.to_arr(body)
   val hex = sha256_hex(arr, k)
   val () = $A.free<byte>(arr)
-  val @(hfz, hbv) = $A.freeze<byte>(hex)
-  val () = $B.sized_rope_copy(text, hbv, 0, 64)
-  val () = $A.drop<byte>(hfz, hbv)
-  val () = $A.free<byte>($A.thaw<byte>(hfz))
+  val @(hash_frozen, hash_view) = $A.freeze<byte>(hex)
+  val () = $B.sized_rope_copy(text, hash_view, 0, 64)
+  val () = $A.drop<byte>(hash_frozen, hash_view)
+  val () = $A.free<byte>($A.thaw<byte>(hash_frozen))
 in () end
 
 (* The allowlist of the case: one entry, the key, the sha256 of the first
    content, the sha256 of the second when it is not empty, and ` # ` and
    the comment when it is not empty *)
-fn _allow {dn,kn,an,bn,cn:nat | dn < 200; kn < 1000; an < 100000; bn < 100000; cn < 1000}
-  (dir: string dn, key: string kn, first: string an, second: string bn, comment: string cn): void = let
+fn _allow {dir_len,key_len,first_len,second_len,comment_len:nat | dir_len < 200; key_len < 1000; first_len < 100000; second_len < 100000; comment_len < 1000}
+  (dir: string dir_len, key: string key_len, first: string first_len, second: string second_len, comment: string comment_len): void = let
   var text : $B.sized_rope = $B.sized_rope_create()
   val () = $B.sized_rope_bput(text, key)
   val () = $B.sized_rope_bput(text, " ")
   val () = _hash_into(text, first)
   val () =
-    if _len(second) > 0 then let
+    if text_length(second) > 0 then let
       val () = $B.sized_rope_bput(text, " ")
     in _hash_into(text, second) end
     else ()
   val () =
-    if _len(comment) > 0 then let
+    if text_length(comment) > 0 then let
       val () = $B.sized_rope_bput(text, " # ")
     in $B.sized_rope_bput(text, comment) end
     else ()
   val () = $B.sized_rope_bput(text, "\n")
-  val _ = _write_rope(_case_path(dir, "tools/pin-audit/allowlist.txt"), text)
+  val _ = write_rope(join_path3(dir, "/", "tools/pin-audit/allowlist.txt"), text)
 in () end
 
 (* The allowlist of the case, as written *)
-fn _allow_raw {dn,cn:nat | dn < 200; cn < 100000} (dir: string dn, content: string cn): void = let
+fn _allow_raw {dir_len,content_len:nat | dir_len < 200; content_len < 100000} (dir: string dir_len, content: string content_len): void = let
   var text : $B.sized_rope = $B.sized_rope_create()
   val () = $B.sized_rope_bput(text, content)
-  val _ = _write_rope(_case_path(dir, "tools/pin-audit/allowlist.txt"), text)
+  val _ = write_rope(join_path3(dir, "/", "tools/pin-audit/allowlist.txt"), text)
 in () end
 
 (* The names gh prints, one on each line *)
-fn _names {dn,cn:nat | dn < 200; cn < 100000} (dir: string dn, content: string cn): void = let
+fn _names {dir_len,content_len:nat | dir_len < 200; content_len < 100000} (dir: string dir_len, content: string content_len): void = let
   var text : $B.sized_rope = $B.sized_rope_create()
   val () = $B.sized_rope_bput(text, content)
-  val _ = _write_rope(_case_path(dir, "gh-names.txt"), text)
+  val _ = write_rope(join_path3(dir, "/", "gh-names.txt"), text)
 in () end
 
 (* A file of the case (an empty one: gh-fail makes the stand-in exit 1,
    gh-flood makes it print more than the audit reads) *)
-fn _flag {dn,fn_:nat | dn < 200; fn_ < 300} (dir: string dn, file: string fn_): void = let
+fn _flag {dir_len,file_len:nat | dir_len < 200; file_len < 300} (dir: string dir_len, file: string file_len): void = let
   var text : $B.sized_rope = $B.sized_rope_create()
-  val _ = _write_rope(_case_path(dir, file), text)
+  val _ = write_rope(join_path3(dir, "/", file), text)
 in () end
-
-(* The current directory, in an array of 4096 bytes: its length *)
-fn _cwd {l:agz} (buf: !$A.arr(byte, l, 4096)): [k:nat | k <= 4096] int k =
-  case+ $E.cwd_read(buf, 4096) of
-  | ~$R.some(k) => k
-  | ~$R.none() => 0
 
 (* gitconfig of the case: https://github.com/bats-lang/ is the directory of
    its planted repositories (url.<dir>.insteadOf) *)
-fn _config {dn:nat | dn < 200} (dir: string dn): void = let
+fn _config {dir_len:nat | dir_len < 200} (dir: string dir_len): void = let
   val cwd = $A.alloc<byte>(4096)
-  val ck = _cwd(cwd)
-  val @(cfz, cbv) = $A.freeze<byte>(cwd)
+  val cwd_len = cwd_length(cwd)
+  val @(cwd_frozen, cwd_view) = $A.freeze<byte>(cwd)
   var text : $B.sized_rope = $B.sized_rope_create()
   val () = $B.sized_rope_bput(text, "[url \"file://")
-  val () = $B.sized_rope_copy(text, cbv, 0, ck)
+  val () = $B.sized_rope_copy(text, cwd_view, 0, cwd_len)
   val () = $B.sized_rope_bput(text, "/")
   val () = $B.sized_rope_bput(text, dir)
   val () = $B.sized_rope_bput(text, "/planted/\"]\n\tinsteadOf = https://github.com/bats-lang/\n")
-  val _ = _write_rope(_case_path(dir, "gitconfig"), text)
-  val () = $A.drop<byte>(cfz, cbv)
-  val () = $A.free<byte>($A.thaw<byte>(cfz))
+  val _ = write_rope(join_path3(dir, "/", "gitconfig"), text)
+  val () = $A.drop<byte>(cwd_frozen, cwd_view)
+  val () = $A.free<byte>($A.thaw<byte>(cwd_frozen))
 in () end
 
 (* ============================================================
@@ -316,78 +250,62 @@ in () end
 (* The built audit in dir, with the stand-in gh first on PATH and the
    planted repositories behind GIT_CONFIG_GLOBAL: its exit status, its
    output in out *)
-fn _audit {dn:nat | dn < 200} (dir: string dn, out: !$B.builder(0) >> $B.builder_v): @(int, read_end) = let
+fn _audit {dir_len:nat | dir_len < 200} (dir: string dir_len, out: !$B.builder(0) >> $B.builder_v): @(int, read_end) = let
   val () = _config(dir)
   val cwd = $A.alloc<byte>(4096)
-  val ck = _cwd(cwd)
-  val @(cfz, cbv) = $A.freeze<byte>(cwd)
+  val cwd_len = cwd_length(cwd)
+  val @(cwd_frozen, cwd_view) = $A.freeze<byte>(cwd)
   var pname : $B.builder(0) = $B.create()
   val () = $B.bput(pname, "PATH")
-  val @(parr, _) = $B.to_arr(pname)
+  val @(variable_array, _) = $B.to_arr(pname)
   val old = $A.alloc<byte>(8192)
-  val ok = (case+ $E.get_cstr(parr, 524288, old, 8192) of | ~$R.some(k) => k | ~$R.none() => 0): [k:nat | k <= 8192] int k
-  val () = $A.free<byte>(parr)
-  val @(ofz, obv) = $A.freeze<byte>(old)
+  val old_path_len = (case+ $E.get_cstr(variable_array, 524288, old, 8192) of | ~$R.some(k) => k | ~$R.none() => 0): [k:nat | k <= 8192] int k
+  val () = $A.free<byte>(variable_array)
+  val @(old_frozen, old_view) = $A.freeze<byte>(old)
   var path_entry : $B.builder(0) = $B.create()
   val () = $B.bput(path_entry, "PATH=")
-  val () = put_range(cbv, 0, ck, path_entry)
+  val () = put_range(cwd_view, 0, cwd_len, path_entry)
   val () = $B.bput(path_entry, "/")
   val () = $B.bput(path_entry, dir)
   val () = $B.bput(path_entry, "/bin:")
-  val () = put_range(obv, 0, ok, path_entry)
-  val @(pe_arr, pe_k) = $B.to_arr(path_entry)
+  val () = put_range(old_view, 0, old_path_len, path_entry)
+  val @(path_entry_array, path_entry_len) = $B.to_arr(path_entry)
   var config_entry : $B.builder(0) = $B.create()
   val () = $B.bput(config_entry, "GIT_CONFIG_GLOBAL=")
-  val () = put_range(cbv, 0, ck, config_entry)
+  val () = put_range(cwd_view, 0, cwd_len, config_entry)
   val () = $B.bput(config_entry, "/")
   val () = $B.bput(config_entry, dir)
   val () = $B.bput(config_entry, "/gitconfig")
-  val @(ce_arr, ce_k) = $B.to_arr(config_entry)
+  val @(config_entry_array, config_entry_len) = $B.to_arr(config_entry)
   val result = capture_with("env",
-    _l4(arg_text("env"), arg_text("-C"), arg_text(dir), arg_text("../../../dist/debug/pin_audit")),
-    _l2(@(pe_arr, pe_k), @(ce_arr, ce_k)), out)
-  val () = $A.drop<byte>(ofz, obv)
-  val () = $A.free<byte>($A.thaw<byte>(ofz))
-  val () = $A.drop<byte>(cfz, cbv)
-  val () = $A.free<byte>($A.thaw<byte>(cfz))
+    args4(arg_text("env"), arg_text("-C"), arg_text(dir), arg_text("../../../dist/debug/pin_audit")),
+    args2(@(path_entry_array, path_entry_len), @(config_entry_array, config_entry_len)), out)
+  val () = $A.drop<byte>(old_frozen, old_view)
+  val () = $A.free<byte>($A.thaw<byte>(old_frozen))
+  val () = $A.drop<byte>(cwd_frozen, cwd_view)
+  val () = $A.free<byte>($A.thaw<byte>(cwd_frozen))
 in result end
-
-fun _contains {l:agz}{ok:nat | ok <= 524288}{i:nat | i <= ok}{sn:pos} .<ok - i>.
-  (ob: !$A.borrow(byte, l, 524288), ok: int ok, i: int i, needle: string sn): bool =
-  if i >= ok then false
-  else if lit_step(ob, ok, i, needle) >= 0 then true
-  else _contains(ob, ok, i + 1, needle)
-
-(* Whether the output holds the text; the empty text is always held *)
-fn _has {l:agz}{ok:nat | ok <= 524288} {sn:nat}
-  (ob: !$A.borrow(byte, l, 524288), ok: int ok, needle: string sn): bool =
-  if _len(needle) > 0 then _contains(ob, ok, 0, needle) else true
-
-(* Whether the output lacks the text; the empty text is always lacked *)
-fn _lacks {l:agz}{ok:nat | ok <= 524288} {sn:nat}
-  (ob: !$A.borrow(byte, l, 524288), ok: int ok, needle: string sn): bool =
-  if _len(needle) > 0 then ~_contains(ob, ok, 0, needle) else true
 
 (* Runs the case and judges it: the exit status is want, the output holds
    the three texts and lacks the last. A failing case prints what it saw. *)
-fn _judge {dn,an,bn,cn,xn:nat | dn < 200}
-  (dir: string dn, want: int, first: string an, second: string bn, third: string cn, absent: string xn): bool = let
+fn _judge {dir_len,first_len,second_len,third_len,absent_len:nat | dir_len < 200}
+  (dir: string dir_len, want: int, first: string first_len, second: string second_len, third: string third_len, absent: string absent_len): bool = let
   var out : $B.builder(0) = $B.create()
   val @(status, ended) = _audit(dir, out)
-  val @(oarr, ok) = $B.to_arr(out)
-  val @(ofz, obv) = $A.freeze<byte>(oarr)
+  val @(output_array, output_len) = $B.to_arr(out)
+  val @(output_frozen, output_view) = $A.freeze<byte>(output_array)
   val whole = (case+ ended of | Read_whole() => true | Read_too_long() => false | Read_failed() => false): bool
-  val good = whole && status = want && _has(obv, ok, first) && _has(obv, ok, second) && _has(obv, ok, third) && _lacks(obv, ok, absent): bool
+  val good = whole && status = want && output_has(output_view, output_len, first) && output_has(output_view, output_len, second) && output_has(output_view, output_len, third) && output_lacks(output_view, output_len, absent): bool
   val () =
     if good then ()
     else let
       val () = println! ("FAIL ", dir, ": exit status ", status, " (wanted ", want, "), the output was read whole: ", whole)
       val () = println! ("  wanted: ", first, " | ", second, " | ", third, " | and lacking: ", absent)
       val () = println! ("  the audit's output:")
-      val () = print_range(obv, 0, ok)
+      val () = print_range(output_view, 0, output_len)
     in println! ("  (the case's directory ", dir, " is kept)") end
-  val () = $A.drop<byte>(ofz, obv)
-  val () = $A.free<byte>($A.thaw<byte>(ofz))
+  val () = $A.drop<byte>(output_frozen, output_view)
+  val () = $A.free<byte>($A.thaw<byte>(output_frozen))
 in good end
 
 (* ============================================================
@@ -395,20 +313,20 @@ in good end
    ============================================================ *)
 
 (* Whether the file is the template, each as a text of its own *)
-fn _matches {tn,fn_:nat | tn < 4096; fn_ < 4096} (template: string tn, file: string fn_): bool = let
-  var tb : $B.builder(0) = $B.create()
-  val () = $B.bput(tb, template)
-  val @(tarr, tk) = $B.to_arr(tb)
-  var fb : $B.builder(0) = $B.create()
-  val () = $B.bput(fb, file)
-  val @(farr, fk) = $B.to_arr(fb)
-  val @(tfz, tbv) = $A.freeze<byte>(tarr)
-  val @(ffz, fbv) = $A.freeze<byte>(farr)
-  val result = template_matches(tbv, tk, fbv, fk)
-  val () = $A.drop<byte>(ffz, fbv)
-  val () = $A.free<byte>($A.thaw<byte>(ffz))
-  val () = $A.drop<byte>(tfz, tbv)
-  val () = $A.free<byte>($A.thaw<byte>(tfz))
+fn _matches {template_string_len,file_string_len:nat | template_string_len < 4096; file_string_len < 4096} (template: string template_string_len, file: string file_string_len): bool = let
+  var template_builder : $B.builder(0) = $B.create()
+  val () = $B.bput(template_builder, template)
+  val @(template_array, template_len) = $B.to_arr(template_builder)
+  var file_builder : $B.builder(0) = $B.create()
+  val () = $B.bput(file_builder, file)
+  val @(file_array, file_len) = $B.to_arr(file_builder)
+  val @(template_frozen, template_view) = $A.freeze<byte>(template_array)
+  val @(file_frozen, file_view) = $A.freeze<byte>(file_array)
+  val result = template_matches(template_view, template_len, file_view, file_len)
+  val () = $A.drop<byte>(file_frozen, file_view)
+  val () = $A.free<byte>($A.thaw<byte>(file_frozen))
+  val () = $A.drop<byte>(template_frozen, template_view)
+  val () = $A.free<byte>($A.thaw<byte>(template_frozen))
 in result end
 
 $UNITTEST.run begin
@@ -551,8 +469,9 @@ fn test_listed_third_hash_fails (): bool = let
   val () = _allow(dir, "bespoke/.github/workflows/own.yml", "name: own\non: push\n", "name: next\non: push\n", "bespoke#1")
 in _judge(dir, 1, "bespoke: .github/workflows/own.yml: not canonical: its sha256 ", "is not listed for it in tools/pin-audit/allowlist.txt", "1 not canonical", "pass, its") end
 
-(* An entry whose comment is `canonical` passes *)
-fn test_canonical_comment_passes (): bool = let
+(* The comment `canonical` names no ticket: every entry names the p2 ticket
+   that says to fix its file, so the entry fails the audit *)
+fn test_canonical_comment_fails (): bool = let
   val dir = "build/pin-audit-tests/canonical-comment"
   val () = _fresh(dir)
   val () = _plant(dir, "bespoke")
@@ -560,7 +479,7 @@ fn test_canonical_comment_passes (): bool = let
   val () = _commit(dir, "bespoke")
   val () = _names(dir, "bespoke\n")
   val () = _allow(dir, "bespoke/.github/workflows/own.yml", "name: own\non: push\n", "", "canonical")
-in _judge(dir, 0, "own.yml: pass, its sha256 is the current hash", "0 failing", "", "::error") end
+in _judge(dir, 1, "allowlist.txt line 1: it has no ticket comment", "bespoke: .github/workflows/own.yml: not canonical", "1 entries, 1 failing", "pass, its") end
 
 (* An entry with no ticket comment fails the audit, named, and lists
    nothing *)
@@ -645,7 +564,7 @@ fn test_symbolic_link_fails (): bool = let
   val () = _fresh(dir)
   val () = _plant(dir, "link")
   val () = _workflow(dir, "link", "real.yml", "name: real\n")
-  val _ = _run("ln", _l3(arg_text("-s"), arg_text("real.yml"), _join2(dir, "/planted/link.git/.github/workflows/link.yml")))
+  val _ = run_program("ln", args3(arg_text("-s"), arg_text("real.yml"), join_text2(dir, "/planted/link.git/.github/workflows/link.yml")))
   val () = _commit(dir, "link")
   val () = _names(dir, "link\n")
 in _judge(dir, 1, "link: .github/workflows/link.yml: not canonical: it is a symbolic link", "link.yml", "", "") end

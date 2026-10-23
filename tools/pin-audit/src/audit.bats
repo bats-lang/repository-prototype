@@ -41,128 +41,128 @@ datatype template_result =
   | Template_other
   | Template_equal
 
-(* The template whose file name is nbv[0, nk) (at most 255 bytes) against
-   the file fb[0, fk); with report it says what it found *)
-fn _try_template {ln,lf:agz}{nk:nat | nk <= 255}{fk:nat | fk <= 524288}
-  (nbv: !$A.borrow(byte, ln, 1024), nk: int nk,
-   fb: !$A.borrow(byte, lf, 524288), fk: int fk, report: bool): template_result = let
-  var pb : $B.builder(0) = $B.create()
-  val () = $B.bput(pb, "tools/pin-audit/templates/")
-  val () = put_range(nbv, 0, nk, pb)
-  val @(parr, pk) = $B.to_arr(pb)
-  val @(pfz, pbv) = $A.freeze<byte>(parr)
+(* The template whose file name is template_name_view[0, template_name_len) (at most 255 bytes) against
+   the file file_text[0, file_len); with report it says what it found *)
+fn _try_template {template_name_loc,file_loc:agz}{template_name_len:nat | template_name_len <= 255}{file_len:nat | file_len <= 524288}
+  (template_name_view: !$A.borrow(byte, template_name_loc, 1024), template_name_len: int template_name_len,
+   file_text: !$A.borrow(byte, file_loc, 524288), file_len: int file_len, report: bool): template_result = let
+  var path_builder : $B.builder(0) = $B.create()
+  val () = $B.bput(path_builder, "tools/pin-audit/templates/")
+  val () = put_range(template_name_view, 0, template_name_len, path_builder)
+  val @(path_array, path_len) = $B.to_arr(path_builder)
+  val @(path_frozen, path_view) = $A.freeze<byte>(path_array)
   var content : $B.builder(0) = $B.create()
-  val @(ended, why) = read_file(pbv, pk, content)
-  val () = $A.drop<byte>(pfz, pbv)
-  val () = $A.free<byte>($A.thaw<byte>(pfz))
-  val @(carr, ck) = $B.to_arr(content)
-  val @(cfz, cbv) = $A.freeze<byte>(carr)
+  val @(ended, why) = read_file(path_view, path_len, content)
+  val () = $A.drop<byte>(path_frozen, path_view)
+  val () = $A.free<byte>($A.thaw<byte>(path_frozen))
+  val @(content_array, content_len) = $B.to_arr(content)
+  val @(content_frozen, content_view) = $A.freeze<byte>(content_array)
   val result =
     (case+ ended of
      | Read_whole() => let
          val () =
            if report then let
              val () = print! ("   template ")
-             val () = print_range(nbv, 0, nk)
-           in println! (": read, ", ck, " bytes") end
+             val () = print_range(template_name_view, 0, template_name_len)
+           in println! (": read, ", content_len, " bytes") end
            else ()
        in
-         if template_matches(cbv, ck, fb, fk) then Template_equal() else Template_other()
+         if template_matches(content_view, content_len, file_text, file_len) then Template_equal() else Template_other()
        end
      | Read_too_long() => let
          val () = print! ("::error title=pin audit::template ")
-         val () = print_range(nbv, 0, nk)
+         val () = print_range(template_name_view, 0, template_name_len)
        in (println! (" is longer than the 524288 bytes the audit reads"); Template_unreadable()) end
      | Read_failed() => let
          val () = print! ("::error title=pin audit::template ")
-         val () = print_range(nbv, 0, nk)
+         val () = print_range(template_name_view, 0, template_name_len)
        in (println! (" could not be read: ", why); Template_unreadable()) end): template_result
-  val () = $A.drop<byte>(cfz, cbv)
-  val () = $A.free<byte>($A.thaw<byte>(cfz))
+  val () = $A.drop<byte>(content_frozen, content_view)
+  val () = $A.free<byte>($A.thaw<byte>(content_frozen))
 in result end
 
 (* Entry i and after of the templates directory: the length of the name of
-   the first template the file fb[0, fk) is (copied to name_out), else 0,
+   the first template the file file_text[0, file_len) is (copied to name_out), else 0,
    with how many templates were read and how many could not be. With
    report, no template is looked for: every one is read and said. *)
-fun _scan {n:nat}{i:nat | i <= n}{lf,lo:agz}{fk:nat | fk <= 524288} .<n - i>.
-  (es: !$F.entries(n), n: int n, i: int i,
-   fb: !$A.borrow(byte, lf, 524288), fk: int fk,
-   name_out: !$A.arr(byte, lo, 256), report: bool, loaded: int, bad: int)
-  : @([f:nat | f <= 255] int f, int, int) =
+fun _scan {n:nat}{i:nat | i <= n}{file_loc,out_loc:agz}{file_len:nat | file_len <= 524288} .<n - i>.
+  (entries: !$F.entries(n), n: int n, i: int i,
+   file_text: !$A.borrow(byte, file_loc, 524288), file_len: int file_len,
+   name_out: !$A.arr(byte, out_loc, 256), report: bool, loaded: int, bad: int)
+  : @([found_len:nat | found_len <= 255] int found_len, int, int) =
   if i >= n then @(0, loaded, bad)
   else let
-    val nbuf = $A.alloc<byte>(1024)
-    val nk = $F.entries_name(es, i, nbuf, 1024)
-    val @(nfz, nbv) = $A.freeze<byte>(nbuf)
-    val yml = (if nk >= 5 then lit_step(nbv, nk, nk - 4, ".yml") >= 0 else false): bool
+    val name_buffer = $A.alloc<byte>(1024)
+    val name_len = $F.entries_name(entries, i, name_buffer, 1024)
+    val @(name_frozen, name_view) = $A.freeze<byte>(name_buffer)
+    val yml = (if name_len >= 5 then lit_step(name_view, name_len, name_len - 4, ".yml") >= 0 else false): bool
     val @(found, loaded2, bad2) =
       (if ~yml then @(0, loaded, bad)
-       else if nk > 255 then let
-         val () = print! ("::error title=pin audit::a template name of ", nk, " bytes is longer than the 255 the audit will put in a path")
+       else if name_len > 255 then let
+         val () = print! ("::error title=pin audit::a template name of ", name_len, " bytes is longer than the 255 the audit will put in a path")
          val () = println! ()
        in @(0, loaded, bad + 1) end
        else
-         (case+ _try_template(nbv, nk, fb, fk, report) of
+         (case+ _try_template(name_view, name_len, file_text, file_len, report) of
           | Template_unreadable() => @(0, loaded, bad + 1)
           | Template_other() => @(0, loaded + 1, bad)
           | Template_equal() =>
               if report then @(0, loaded + 1, bad)
-              else let val () = copy_into(nbv, nk, name_out) in @(nk, loaded + 1, bad) end)): @([f:nat | f <= 255] int f, int, int)
-    val () = $A.drop<byte>(nfz, nbv)
-    val () = $A.free<byte>($A.thaw<byte>(nfz))
+              else let val () = copy_into(name_view, name_len, name_out) in @(name_len, loaded + 1, bad) end)): @([found_len:nat | found_len <= 255] int found_len, int, int)
+    val () = $A.drop<byte>(name_frozen, name_view)
+    val () = $A.free<byte>($A.thaw<byte>(name_frozen))
   in
     if found > 0 then @(found, loaded2, bad2)
-    else _scan(es, n, i + 1, fb, fk, name_out, report, loaded2, bad2)
+    else _scan(entries, n, i + 1, file_text, file_len, name_out, report, loaded2, bad2)
   end
 
-(* The name of the template the file fb[0, fk) is, in name_out[0, result),
+(* The name of the template the file file_text[0, file_len) is, in name_out[0, result),
    or 0 when it is none *)
-fn _template_of {lf,lo:agz}{fk:nat | fk <= 524288}
-  (fb: !$A.borrow(byte, lf, 524288), fk: int fk, name_out: !$A.arr(byte, lo, 256))
-  : [f:nat | f <= 255] int f = let
-  var pb : $B.builder(0) = $B.create()
-  val () = $B.bput(pb, "tools/pin-audit/templates")
-  val @(parr, pk) = $B.to_arr(pb)
-  val @(pfz, pbv) = $A.freeze<byte>(parr)
-  val listed = dir_entries(pbv, pk)
-  val () = $A.drop<byte>(pfz, pbv)
-  val () = $A.free<byte>($A.thaw<byte>(pfz))
+fn _template_of {file_loc,out_loc:agz}{file_len:nat | file_len <= 524288}
+  (file_text: !$A.borrow(byte, file_loc, 524288), file_len: int file_len, name_out: !$A.arr(byte, out_loc, 256))
+  : [found_len:nat | found_len <= 255] int found_len = let
+  var path_builder : $B.builder(0) = $B.create()
+  val () = $B.bput(path_builder, "tools/pin-audit/templates")
+  val @(path_array, path_len) = $B.to_arr(path_builder)
+  val @(path_frozen, path_view) = $A.freeze<byte>(path_array)
+  val listed = dir_entries(path_view, path_len)
+  val () = $A.drop<byte>(path_frozen, path_view)
+  val () = $A.free<byte>($A.thaw<byte>(path_frozen))
 in
   case+ listed of
   | ~$R.err(_) => 0
-  | ~$R.ok(es) => let
-      val @(found, _, _) = _scan(es, $F.entries_count(es), 0, fb, fk, name_out, false, 0, 0)
-      val () = $F.entries_free(es)
+  | ~$R.ok(entries) => let
+      val @(found, _, _) = _scan(entries, $F.entries_count(entries), 0, file_text, file_len, name_out, false, 0, 0)
+      val () = $F.entries_free(entries)
     in found end
 end
 
 (* Reads every template once and says each: how many were read and how many
    could not be (a missing directory counts as one) *)
 fn _templates_check (): @(int, int) = let
-  var pb : $B.builder(0) = $B.create()
-  val () = $B.bput(pb, "tools/pin-audit/templates")
-  val @(parr, pk) = $B.to_arr(pb)
-  val @(pfz, pbv) = $A.freeze<byte>(parr)
-  val listed = dir_entries(pbv, pk)
-  val () = $A.drop<byte>(pfz, pbv)
-  val () = $A.free<byte>($A.thaw<byte>(pfz))
+  var path_builder : $B.builder(0) = $B.create()
+  val () = $B.bput(path_builder, "tools/pin-audit/templates")
+  val @(path_array, path_len) = $B.to_arr(path_builder)
+  val @(path_frozen, path_view) = $A.freeze<byte>(path_array)
+  val listed = dir_entries(path_view, path_len)
+  val () = $A.drop<byte>(path_frozen, path_view)
+  val () = $A.free<byte>($A.thaw<byte>(path_frozen))
   val empty = $A.alloc<byte>(524288)
-  val @(efz, ebv) = $A.freeze<byte>(empty)
-  val r =
+  val @(empty_frozen, empty_view) = $A.freeze<byte>(empty)
+  val counts =
     (case+ listed of
-     | ~$R.err(e) => let
-         val () = println! ("::error title=pin audit::the templates directory tools/pin-audit/templates could not be read: ", $F.io_error_text(e))
+     | ~$R.err(failure) => let
+         val () = println! ("::error title=pin audit::the templates directory tools/pin-audit/templates could not be read: ", $F.io_error_text(failure))
        in @(0, 1) end
-     | ~$R.ok(es) => let
+     | ~$R.ok(entries) => let
          val name_out = $A.alloc<byte>(256)
-         val @(_, loaded, bad) = _scan(es, $F.entries_count(es), 0, ebv, 0, name_out, true, 0, 0)
+         val @(_, loaded, bad) = _scan(entries, $F.entries_count(entries), 0, empty_view, 0, name_out, true, 0, 0)
          val () = $A.free<byte>(name_out)
-         val () = $F.entries_free(es)
+         val () = $F.entries_free(entries)
        in @(loaded, bad) end): @(int, int)
-  val () = $A.drop<byte>(efz, ebv)
-  val () = $A.free<byte>($A.thaw<byte>(efz))
-in r end
+  val () = $A.drop<byte>(empty_frozen, empty_view)
+  val () = $A.free<byte>($A.thaw<byte>(empty_frozen))
+in counts end
 
 (* ============================================================
    The counts
@@ -174,22 +174,32 @@ in r end
    workflows) *)
 typedef tally = @(int, int, int, int, int, int, int)
 
-(* One more file, in the column which (1 hash, 2 template, 3 not canonical,
-   4 over the bound, 5 unreadable); which 6 is one more repository error and
-   no file *)
-fn _bump (t: tally, which: int): tally = let
-  val @(files, hashed, templated, not_canonical, over_bound, unreadable, repository_errors) = t
+(* The column of the counts a file or a failure goes into: hashed, templated,
+   not canonical, over the bound, unreadable; Column_repository is one more
+   repository error and no file. Every caller matches all six (case+). *)
+datatype column =
+  | Column_hashed
+  | Column_templated
+  | Column_not_canonical
+  | Column_over_bound
+  | Column_unreadable
+  | Column_repository
+
+(* One more file in the column, or one more repository error *)
+fn _bump (counts: tally, which: column): tally = let
+  val @(files, hashed, templated, not_canonical, over_bound, unreadable, repository_errors) = counts
 in
-  if which = 1 then @(files + 1, hashed + 1, templated, not_canonical, over_bound, unreadable, repository_errors)
-  else if which = 2 then @(files + 1, hashed, templated + 1, not_canonical, over_bound, unreadable, repository_errors)
-  else if which = 3 then @(files + 1, hashed, templated, not_canonical + 1, over_bound, unreadable, repository_errors)
-  else if which = 4 then @(files + 1, hashed, templated, not_canonical, over_bound + 1, unreadable, repository_errors)
-  else if which = 5 then @(files + 1, hashed, templated, not_canonical, over_bound, unreadable + 1, repository_errors)
-  else @(files, hashed, templated, not_canonical, over_bound, unreadable, repository_errors + 1)
+  case+ which of
+  | Column_hashed() => @(files + 1, hashed + 1, templated, not_canonical, over_bound, unreadable, repository_errors)
+  | Column_templated() => @(files + 1, hashed, templated + 1, not_canonical, over_bound, unreadable, repository_errors)
+  | Column_not_canonical() => @(files + 1, hashed, templated, not_canonical + 1, over_bound, unreadable, repository_errors)
+  | Column_over_bound() => @(files + 1, hashed, templated, not_canonical, over_bound + 1, unreadable, repository_errors)
+  | Column_unreadable() => @(files + 1, hashed, templated, not_canonical, over_bound, unreadable + 1, repository_errors)
+  | Column_repository() => @(files, hashed, templated, not_canonical, over_bound, unreadable, repository_errors + 1)
 end
 
-fn _failures (t: tally): int = let
-  val @(_, _, _, not_canonical, over_bound, unreadable, repository_errors) = t
+fn _failures (counts: tally): int = let
+  val @(_, _, _, not_canonical, over_bound, unreadable, repository_errors) = counts
 in not_canonical + over_bound + unreadable + repository_errors end
 
 (* ============================================================
@@ -198,243 +208,245 @@ in not_canonical + over_bound + unreadable + repository_errors end
 
 (* The start of a file's failure line: the annotation, the repository, the
    path *)
-fn _file_error {ln,lp:agz}{s,e,fs,fe:nat | s <= e; e <= 524288; fs <= fe; fe <= 524288}
-  (nb: !$A.borrow(byte, ln, 524288), s: int s, e: int e,
-   pb: !$A.borrow(byte, lp, 524288), fs: int fs, fe: int fe): void = let
+fn _file_error {repository_loc,path_loc:agz}{repository_start,repository_end,path_start,path_end:nat | repository_start <= repository_end; repository_end <= 524288; path_start <= path_end; path_end <= 524288}
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
+   path_text: !$A.borrow(byte, path_loc, 524288), path_start: int path_start, path_end: int path_end): void = let
   val () = print! ("::error title=pin audit::")
-  val () = print_range(nb, s, e)
+  val () = print_range(repository_text, repository_start, repository_end)
   val () = print! (": ")
-  val () = print_range(pb, fs, fe)
+  val () = print_range(path_text, path_start, path_end)
 in print! (": ") end
 
 (* The start of a file's passing line *)
-fn _file_pass {lp:agz}{fs,fe:nat | fs <= fe; fe <= 524288}
-  (pb: !$A.borrow(byte, lp, 524288), fs: int fs, fe: int fe): void = let
+fn _file_pass {path_loc:agz}{path_start,path_end:nat | path_start <= path_end; path_end <= 524288}
+  (path_text: !$A.borrow(byte, path_loc, 524288), path_start: int path_start, path_end: int path_end): void = let
   val () = print! ("   ")
-  val () = print_range(pb, fs, fe)
+  val () = print_range(path_text, path_start, path_end)
 in print! (": pass, ") end
 
-(* The file whose bytes are cb[0, ck) and whose sha256 is hb[0, 64): its
+(* The file whose bytes are content_text[0, content_len) and whose sha256 is hash_text[0, 64): its
    verdict is printed and its column returned *)
-fn _verdict {ln,lp,lc,lh,la:agz}{s,e,fs,fe,ck,ak:nat | s <= e; e <= 524288; fs <= fe; fe <= 524288; ck <= 524288; ak <= 524288}
-  (nb: !$A.borrow(byte, ln, 524288), s: int s, e: int e,
-   pb: !$A.borrow(byte, lp, 524288), fs: int fs, fe: int fe,
-   cb: !$A.borrow(byte, lc, 524288), ck: int ck,
-   hb: !$A.borrow(byte, lh, 64),
-   ab: !$A.borrow(byte, la, 524288), ak: int ak): int = let
-  val @(listed_at, slot, line_no) = allowlist_find(ab, ak, nb, s, e, pb, fs, fe, hb)
+fn _verdict {repository_loc,path_loc,content_loc,hash_loc,allowlist_loc:agz}{repository_start,repository_end,path_start,path_end,content_len,allowlist_len:nat | repository_start <= repository_end; repository_end <= 524288; path_start <= path_end; path_end <= 524288; content_len <= 524288; allowlist_len <= 524288}
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
+   path_text: !$A.borrow(byte, path_loc, 524288), path_start: int path_start, path_end: int path_end,
+   content_text: !$A.borrow(byte, content_loc, 524288), content_len: int content_len,
+   hash_text: !$A.borrow(byte, hash_loc, 64),
+   allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len): column = let
+  val @(slot, line_number) = allowlist_find(allowlist_text, allowlist_len, repository_text, repository_start, repository_end, path_text, path_start, path_end, hash_text)
   val name_out = $A.alloc<byte>(256)
-  val named = _template_of(cb, ck, name_out)
-  val @(nfz, nbv) = $A.freeze<byte>(name_out)
-  val listed = listed_at >= 0: bool
-  val column =
+  val named = _template_of(content_text, content_len, name_out)
+  val @(template_name_frozen, template_name_view) = $A.freeze<byte>(name_out)
+  val listed = (case+ slot of | Hash_current() => true | Hash_next() => true | Hash_unlisted() => false): bool
+  val verdict_column =
     (if listed && named = 0 then let
-       val () = _file_pass(pb, fs, fe)
+       val () = _file_pass(path_text, path_start, path_end)
        val () = print! ("its sha256 is the ")
-       val () = (if slot = 1 then print! ("current") else print! ("next"))
-       val () = print! (" hash of tools/pin-audit/allowlist.txt line ", line_no)
-     in (println! (); 1) end
+       val () =
+         (case+ slot of
+          | Hash_current() => print! ("current")
+          | Hash_next() => print! ("next")
+          | Hash_unlisted() => print! ("unlisted"))
+       val () = print! (" hash of tools/pin-audit/allowlist.txt line ", line_number)
+     in (println! (); Column_hashed()) end
      else if ~listed && named > 0 then let
-       val () = _file_pass(pb, fs, fe)
+       val () = _file_pass(path_text, path_start, path_end)
        val () = print! ("equal to the template ")
-       val () = print_range(nbv, 0, named)
-     in (println! (" with its holes filled"); 2) end
+       val () = print_range(template_name_view, 0, named)
+     in (println! (" with its holes filled"); Column_templated()) end
      else if listed then let
-       val () = _file_error(nb, s, e, pb, fs, fe)
-       val () = print! ("not canonical: its sha256 is listed in tools/pin-audit/allowlist.txt line ", line_no, " and it equals the template ")
-       val () = print_range(nbv, 0, named)
-     in (println! ("; exactly one may hold: drop the allowlist entry"); 3) end
+       val () = _file_error(repository_text, repository_start, repository_end, path_text, path_start, path_end)
+       val () = print! ("not canonical: its sha256 is listed in tools/pin-audit/allowlist.txt line ", line_number, " and it equals the template ")
+       val () = print_range(template_name_view, 0, named)
+     in (println! ("; exactly one may hold: drop the allowlist entry"); Column_not_canonical()) end
      else let
-       val () = _file_error(nb, s, e, pb, fs, fe)
+       val () = _file_error(repository_text, repository_start, repository_end, path_text, path_start, path_end)
        val () = print! ("not canonical: its sha256 ")
-       val () = print_range(hb, 0, 64)
-     in (println! (" is not listed for it in tools/pin-audit/allowlist.txt and it equals no template with its holes filled"); 3) end): int
-  val () = $A.drop<byte>(nfz, nbv)
-  val () = $A.free<byte>($A.thaw<byte>(nfz))
-in column end
+       val () = print_range(hash_text, 0, 64)
+     in (println! (" is not listed for it in tools/pin-audit/allowlist.txt and it equals no template with its holes filled"); Column_not_canonical()) end): column
+  val () = $A.drop<byte>(template_name_frozen, template_name_view)
+  val () = $A.free<byte>($A.thaw<byte>(template_name_frozen))
+in verdict_column end
 
-(* The file pb[fs, fe) of the clone of nb[s, e), at most 255 bytes of path
+(* The file path_text[path_start, path_end) of the clone of repository_text[repository_start, repository_end), at most 255 bytes of path
    and of name: read (at most 524288 bytes), hashed and judged *)
-fn _audit_file_in {ln,lp,la:agz}{s,e,fs,fe,ak:nat | s <= e; e - s <= 255; e <= 524288; fs <= fe; fe - fs <= 255; fe <= 524288; ak <= 524288}
-  (nb: !$A.borrow(byte, ln, 524288), s: int s, e: int e,
-   pb: !$A.borrow(byte, lp, 524288), fs: int fs, fe: int fe,
-   symlink: bool, ab: !$A.borrow(byte, la, 524288), ak: int ak, t: tally): tally =
+fn _audit_file_in {repository_loc,path_loc,allowlist_loc:agz}{repository_start,repository_end,path_start,path_end,allowlist_len:nat | repository_start <= repository_end; repository_end - repository_start <= 255; repository_end <= 524288; path_start <= path_end; path_end - path_start <= 255; path_end <= 524288; allowlist_len <= 524288}
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
+   path_text: !$A.borrow(byte, path_loc, 524288), path_start: int path_start, path_end: int path_end,
+   symlink: bool, allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len, counts: tally): tally =
   if symlink then let
-    val () = _file_error(nb, s, e, pb, fs, fe)
+    val () = _file_error(repository_text, repository_start, repository_end, path_text, path_start, path_end)
     val () = println! ("not canonical: it is a symbolic link (git mode 120000), which no template or hash describes")
-  in _bump(t, 3) end
+  in _bump(counts, Column_not_canonical()) end
   else let
-    var path : $B.builder(0) = $B.create()
-    val () = $B.bput(path, "audit-clones/")
-    val () = put_range(nb, s, e, path)
-    val () = $B.bput(path, "/")
-    val () = put_range(pb, fs, fe, path)
-    val @(parr, pk) = $B.to_arr(path)
-    val @(pfz, pbv) = $A.freeze<byte>(parr)
+    var clone_path : $B.builder(0) = $B.create()
+    val () = $B.bput(clone_path, "audit-clones/")
+    val () = put_range(repository_text, repository_start, repository_end, clone_path)
+    val () = $B.bput(clone_path, "/")
+    val () = put_range(path_text, path_start, path_end, clone_path)
+    val @(clone_array, clone_len) = $B.to_arr(clone_path)
+    val @(clone_frozen, clone_view) = $A.freeze<byte>(clone_array)
     var content : $B.builder(0) = $B.create()
-    val @(ended, why) = read_file(pbv, pk, content)
-    val () = $A.drop<byte>(pfz, pbv)
-    val () = $A.free<byte>($A.thaw<byte>(pfz))
-    val @(carr, ck) = $B.to_arr(content)
+    val @(ended, why) = read_file(clone_view, clone_len, content)
+    val () = $A.drop<byte>(clone_frozen, clone_view)
+    val () = $A.free<byte>($A.thaw<byte>(clone_frozen))
+    val @(content_array, content_len) = $B.to_arr(content)
   in
     case+ ended of
     | Read_whole() => let
-        val hex = sha256_hex(carr, ck)
-        val @(hfz, hbv) = $A.freeze<byte>(hex)
-        val @(cfz, cbv) = $A.freeze<byte>(carr)
-        val column = _verdict(nb, s, e, pb, fs, fe, cbv, ck, hbv, ab, ak)
-        val () = $A.drop<byte>(cfz, cbv)
-        val () = $A.free<byte>($A.thaw<byte>(cfz))
-        val () = $A.drop<byte>(hfz, hbv)
-        val () = $A.free<byte>($A.thaw<byte>(hfz))
-      in _bump(t, column) end
+        val hex = sha256_hex(content_array, content_len)
+        val @(hash_frozen, hash_view) = $A.freeze<byte>(hex)
+        val @(content_frozen, content_view) = $A.freeze<byte>(content_array)
+        val file_column = _verdict(repository_text, repository_start, repository_end, path_text, path_start, path_end, content_view, content_len, hash_view, allowlist_text, allowlist_len)
+        val () = $A.drop<byte>(content_frozen, content_view)
+        val () = $A.free<byte>($A.thaw<byte>(content_frozen))
+        val () = $A.drop<byte>(hash_frozen, hash_view)
+        val () = $A.free<byte>($A.thaw<byte>(hash_frozen))
+      in _bump(counts, file_column) end
     | Read_too_long() => let
-        val () = $A.free<byte>(carr)
-        val () = _file_error(nb, s, e, pb, fs, fe)
+        val () = $A.free<byte>(content_array)
+        val () = _file_error(repository_text, repository_start, repository_end, path_text, path_start, path_end)
         val () = println! ("over the bound: the file is longer than the 524288 bytes the audit reads, so it is not compared")
-      in _bump(t, 4) end
+      in _bump(counts, Column_over_bound()) end
     | Read_failed() => let
-        val () = $A.free<byte>(carr)
-        val () = _file_error(nb, s, e, pb, fs, fe)
+        val () = $A.free<byte>(content_array)
+        val () = _file_error(repository_text, repository_start, repository_end, path_text, path_start, path_end)
         val () = println! ("unreadable: ", why)
-      in _bump(t, 5) end
+      in _bump(counts, Column_unreadable()) end
   end
 
-(* The workflow file pb[fs, fe) of the repository nb[s, e) *)
-fn _audit_file {ln,lp,la:agz}{s,e,fs,fe,ak:nat | s <= e; e - s <= 255; e <= 524288; fs <= fe; fe <= 524288; ak <= 524288}
-  (nb: !$A.borrow(byte, ln, 524288), s: int s, e: int e,
-   pb: !$A.borrow(byte, lp, 524288), fs: int fs, fe: int fe,
-   symlink: bool, ab: !$A.borrow(byte, la, 524288), ak: int ak, t: tally): tally =
-  if fe - fs > 255 then let
-    val () = _file_error(nb, s, e, pb, fs, fe)
-    val () = println! ("over the bound: its path is ", fe - fs, " bytes, longer than the 255 the audit will put in a path")
-  in _bump(t, 4) end
-  else _audit_file_in(nb, s, e, pb, fs, fe, symlink, ab, ak, t)
+(* The workflow file path_text[path_start, path_end) of the repository repository_text[repository_start, repository_end) *)
+fn _audit_file {repository_loc,path_loc,allowlist_loc:agz}{repository_start,repository_end,path_start,path_end,allowlist_len:nat | repository_start <= repository_end; repository_end - repository_start <= 255; repository_end <= 524288; path_start <= path_end; path_end <= 524288; allowlist_len <= 524288}
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
+   path_text: !$A.borrow(byte, path_loc, 524288), path_start: int path_start, path_end: int path_end,
+   symlink: bool, allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len, counts: tally): tally =
+  if path_end - path_start > 255 then let
+    val () = _file_error(repository_text, repository_start, repository_end, path_text, path_start, path_end)
+    val () = println! ("over the bound: its path is ", path_end - path_start, " bytes, longer than the 255 the audit will put in a path")
+  in _bump(counts, Column_over_bound()) end
+  else _audit_file_in(repository_text, repository_start, repository_end, path_text, path_start, path_end, symlink, allowlist_text, allowlist_len, counts)
 
 (* ============================================================
    One repository
    ============================================================ *)
 
-(* Whether nb[s, e) is a name the clone's path can hold: letters, digits,
+(* Whether repository_text[repository_start, repository_end) is a name the clone's path can hold: letters, digits,
    '.', '_' and '-', and not "." or "..". It goes into arguments, never a
    shell, and into audit-clones/<name>. *)
-fn _name_ok {ln:agz}{s,e:nat | s <= e; e <= 524288}
-  (nb: !$A.borrow(byte, ln, 524288), s: int s, e: int e): bool =
-  if e <= s then false
-  else if class_end(nb, e, s, 1) < e then false
-  else if line_is(nb, s, e, ".") then false
-  else if line_is(nb, s, e, "..") then false
+fn _name_ok {repository_loc:agz}{repository_start,repository_end:nat | repository_start <= repository_end; repository_end <= 524288}
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end): bool =
+  if repository_end <= repository_start then false
+  else if class_end(repository_text, repository_end, repository_start, Class_name()) < repository_end then false
+  else if line_is(repository_text, repository_start, repository_end, ".") then false
+  else if line_is(repository_text, repository_start, repository_end, "..") then false
   else true
 
 (* The annotation that names the repository, ready for its message *)
-fn _repository_error {ln:agz}{s,e:nat | s <= e; e <= 524288}
-  (nb: !$A.borrow(byte, ln, 524288), s: int s, e: int e): void = let
+fn _repository_error {repository_loc:agz}{repository_start,repository_end:nat | repository_start <= repository_end; repository_end <= 524288}
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end): void = let
   val () = print! ("::error title=pin audit::")
-  val () = print_range(nb, s, e)
+  val () = print_range(repository_text, repository_start, repository_end)
 in print! (": ") end
 
-fn _clone_argv {ln:agz}{s,e:nat | s <= e; e - s <= 255; e <= 524288}
-  (nb: !$A.borrow(byte, ln, 524288), s: int s, e: int e): $L.listv($P.arg_entry) =
+fn _clone_argv {repository_loc:agz}{repository_start,repository_end:nat | repository_start <= repository_end; repository_end - repository_start <= 255; repository_end <= 524288}
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end): $L.listv($P.arg_entry) =
   $L.list_vt_cons(arg_text("git"),
   $L.list_vt_cons(arg_text("clone"),
   $L.list_vt_cons(arg_text("--quiet"),
   $L.list_vt_cons(arg_text("--depth"),
   $L.list_vt_cons(arg_text("1"),
   $L.list_vt_cons(arg_text("--"),
-  $L.list_vt_cons(arg_range("https://github.com/bats-lang/", nb, s, e, ".git"),
-  $L.list_vt_cons(arg_range("audit-clones/", nb, s, e, ""),
+  $L.list_vt_cons(arg_range("https://github.com/bats-lang/", repository_text, repository_start, repository_end, ".git"),
+  $L.list_vt_cons(arg_range("audit-clones/", repository_text, repository_start, repository_end, ""),
     $L.list_vt_nil()))))))))
 
 (* The records of the listing of .github/workflows in the clone *)
-fn _tree_argv {ln:agz}{s,e:nat | s <= e; e - s <= 255; e <= 524288}
-  (nb: !$A.borrow(byte, ln, 524288), s: int s, e: int e): $L.listv($P.arg_entry) =
+fn _tree_argv {repository_loc:agz}{repository_start,repository_end:nat | repository_start <= repository_end; repository_end - repository_start <= 255; repository_end <= 524288}
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end): $L.listv($P.arg_entry) =
   $L.list_vt_cons(arg_text("git"),
   $L.list_vt_cons(arg_text("-C"),
-  $L.list_vt_cons(arg_range("audit-clones/", nb, s, e, ""),
+  $L.list_vt_cons(arg_range("audit-clones/", repository_text, repository_start, repository_end, ""),
   $L.list_vt_cons(arg_text("ls-tree"),
   $L.list_vt_cons(arg_text("-z"),
   $L.list_vt_cons(arg_text("HEAD"),
   $L.list_vt_cons(arg_text(".github/workflows/"),
     $L.list_vt_nil())))))))
 
-fn _nothing (): $L.listv($P.arg_entry) = $L.list_vt_nil()
-
-(* Every record of ob[0, ok) from i, `<mode> <type> <object>\t<path>` and a
+(* Every record of listing_text[0, listing_len) from i, `<mode> <type> <object>\t<path>` and a
    zero byte (git ls-tree -z): a blob whose path ends in .yml or .yaml is a
    workflow file. A record not of that form is an error of the repository. *)
-fun _records {ln,lo,la:agz}{s,e,ok,ak:nat | s <= e; e - s <= 255; e <= 524288; ok <= 524288; ak <= 524288}{i:nat | i <= ok} .<ok - i>.
-  (nb: !$A.borrow(byte, ln, 524288), s: int s, e: int e,
-   ob: !$A.borrow(byte, lo, 524288), ok: int ok, i: int i,
-   ab: !$A.borrow(byte, la, 524288), ak: int ak, t: tally): tally = let
-  val j = find_byte(ob, ok, i, 0)
-  val tab = find_byte(ob, j, i, 9)
-  val sp1 = find_byte(ob, tab, i, 32)
-  val t2 =
-    (if j <= i then t
-     else if tab >= j then let
-       val () = _repository_error(nb, s, e)
-     in (println! ("a record of the workflow listing has no tab"); _bump(t, 6)) end
-     else if sp1 + 1 > tab then let
-       val () = _repository_error(nb, s, e)
-     in (println! ("a record of the workflow listing has no type"); _bump(t, 6)) end
+fun _records {repository_loc,listing_loc,allowlist_loc:agz}{repository_start,repository_end,listing_len,allowlist_len:nat | repository_start <= repository_end; repository_end - repository_start <= 255; repository_end <= 524288; listing_len <= 524288; allowlist_len <= 524288}{i:nat | i <= listing_len} .<listing_len - i>.
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
+   listing_text: !$A.borrow(byte, listing_loc, 524288), listing_len: int listing_len, i: int i,
+   allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len, counts: tally): tally = let
+  val j = find_byte(listing_text, listing_len, i, 0)
+  val tab_at = find_byte(listing_text, j, i, 9)
+  val first_space = find_byte(listing_text, tab_at, i, 32)
+  val counts_after =
+    (if j <= i then counts
+     else if tab_at >= j then let
+       val () = _repository_error(repository_text, repository_start, repository_end)
+     in (println! ("a record of the workflow listing has no tab"); _bump(counts, Column_repository())) end
+     else if first_space + 1 > tab_at then let
+       val () = _repository_error(repository_text, repository_start, repository_end)
+     in (println! ("a record of the workflow listing has no type"); _bump(counts, Column_repository())) end
      else let
-       val sp2 = find_byte(ob, tab, sp1 + 1, 32)
-       val blob = line_is(ob, sp1 + 1, sp2, "blob")
-       val ps = tab + 1
-       val yml = (if j - 4 >= ps then lit_step(ob, j, j - 4, ".yml") >= 0 else false): bool
-       val yaml = (if j - 5 >= ps then lit_step(ob, j, j - 5, ".yaml") >= 0 else false): bool
+       val second_space = find_byte(listing_text, tab_at, first_space + 1, 32)
+       val blob = line_is(listing_text, first_space + 1, second_space, "blob")
+       val path_at = tab_at + 1
+       val yml = (if j - 4 >= path_at then lit_step(listing_text, j, j - 4, ".yml") >= 0 else false): bool
+       val yaml = (if j - 5 >= path_at then lit_step(listing_text, j, j - 5, ".yaml") >= 0 else false): bool
      in
-       if blob && (yml || yaml) then _audit_file(nb, s, e, ob, ps, j, line_is(ob, i, sp1, "120000"), ab, ak, t)
-       else t
+       if blob && (yml || yaml) then _audit_file(repository_text, repository_start, repository_end, listing_text, path_at, j, line_is(listing_text, i, first_space, "120000"), allowlist_text, allowlist_len, counts)
+       else counts
      end): tally
 in
-  if j >= ok then t2 else _records(nb, s, e, ob, ok, j + 1, ab, ak, t2)
+  if j >= listing_len then counts_after else _records(repository_text, repository_start, repository_end, listing_text, listing_len, j + 1, allowlist_text, allowlist_len, counts_after)
 end
 
-(* The clone of nb[s, e) and its files *)
-fn _audit_clone {ln,la:agz}{s,e,ak:nat | s <= e; e - s <= 255; e <= 524288; ak <= 524288}
-  (nb: !$A.borrow(byte, ln, 524288), s: int s, e: int e,
-   ab: !$A.borrow(byte, la, 524288), ak: int ak, t: tally): tally = let
+(* The clone of repository_text[repository_start, repository_end) and its files *)
+fn _audit_clone {repository_loc,allowlist_loc:agz}{repository_start,repository_end,allowlist_len:nat | repository_start <= repository_end; repository_end - repository_start <= 255; repository_end <= 524288; allowlist_len <= 524288}
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
+   allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len, counts: tally): tally = let
   var listing : $B.builder(0) = $B.create()
-  val @(status, ended) = capture_with("git", _tree_argv(nb, s, e), _nothing(), listing)
-  val @(larr, lk) = $B.to_arr(listing)
-  val @(lfz, lbv) = $A.freeze<byte>(larr)
-  val t2 =
+  val @(status, ended) = capture_with("git", _tree_argv(repository_text, repository_start, repository_end), no_arguments(), listing)
+  val @(listing_array, listing_len) = $B.to_arr(listing)
+  val @(listing_frozen, listing_view) = $A.freeze<byte>(listing_array)
+  val counts_after =
     (case+ ended of
      | Read_whole() =>
-         if status = 0 then _records(nb, s, e, lbv, lk, 0, ab, ak, t)
+         if status = 0 then _records(repository_text, repository_start, repository_end, listing_view, listing_len, 0, allowlist_text, allowlist_len, counts)
          else let
-           val () = _repository_error(nb, s, e)
-         in (println! ("git ls-tree could not list .github/workflows (status ", status, ")"); _bump(t, 6)) end
+           val () = _repository_error(repository_text, repository_start, repository_end)
+         in (println! ("git ls-tree could not list .github/workflows (status ", status, ")"); _bump(counts, Column_repository())) end
      | Read_too_long() => let
-         val () = _repository_error(nb, s, e)
-       in (println! ("over the bound: the list of workflow files is longer than the 524288 bytes the audit reads"); _bump(t, 4)) end
+         val () = _repository_error(repository_text, repository_start, repository_end)
+       in (println! ("over the bound: the list of workflow files is longer than the 524288 bytes the audit reads"); _bump(counts, Column_over_bound())) end
      | Read_failed() => let
-         val () = _repository_error(nb, s, e)
-       in (println! ("the list of workflow files could not be read"); _bump(t, 6)) end): tally
-  val () = $A.drop<byte>(lfz, lbv)
-  val () = $A.free<byte>($A.thaw<byte>(lfz))
-in t2 end
+         val () = _repository_error(repository_text, repository_start, repository_end)
+       in (println! ("the list of workflow files could not be read"); _bump(counts, Column_repository())) end): tally
+  val () = $A.drop<byte>(listing_frozen, listing_view)
+  val () = $A.free<byte>($A.thaw<byte>(listing_frozen))
+in counts_after end
 
-(* Audits nb[s, e): its files from the counts t *)
-fn _audit_one {ln,la:agz}{s,e,ak:nat | s <= e; e - s <= 255; e <= 524288; ak <= 524288}
-  (nb: !$A.borrow(byte, ln, 524288), s: int s, e: int e,
-   ab: !$A.borrow(byte, la, 524288), ak: int ak, t: tally): tally =
-  if ~_name_ok(nb, s, e) then let
-    val () = _repository_error(nb, s, e)
-  in (println! ("the repository's name is not one the audit will put in a path"); _bump(t, 6)) end
+(* Audits repository_text[repository_start, repository_end): its files counted into counts *)
+fn _audit_one {repository_loc,allowlist_loc:agz}{repository_start,repository_end,allowlist_len:nat | repository_start <= repository_end; repository_end - repository_start <= 255; repository_end <= 524288; allowlist_len <= 524288}
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
+   allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len, counts: tally): tally =
+  if ~_name_ok(repository_text, repository_start, repository_end) then let
+    val () = _repository_error(repository_text, repository_start, repository_end)
+  in (println! ("the repository's name is not one the audit will put in a path"); _bump(counts, Column_repository())) end
   else let
-    val cloned = run_with("git", _clone_argv(nb, s, e), _nothing())
+    val cloned = run_with("git", _clone_argv(repository_text, repository_start, repository_end), no_arguments())
   in
     if cloned != 0 then let
-      val () = _repository_error(nb, s, e)
-    in (println! ("cannot be cloned (git status ", cloned, ")"); _bump(t, 6)) end
+      val () = _repository_error(repository_text, repository_start, repository_end)
+    in (println! ("cannot be cloned (git status ", cloned, ")"); _bump(counts, Column_repository())) end
     else let
-      val @(files_before, _, _, _, _, _, _) = t
-      val t2 = _audit_clone(nb, s, e, ab, ak, t)
-      val @(files_after, _, _, _, _, _, _) = t2
+      val @(files_before, _, _, _, _, _, _) = counts
+      val counts_after = _audit_clone(repository_text, repository_start, repository_end, allowlist_text, allowlist_len, counts)
+      val @(files_after, _, _, _, _, _, _) = counts_after
       val () = if files_after = files_before then println! ("   no workflow files") else ()
-    in t2 end
+    in counts_after end
   end
 
 (* The failing names, in order, to standard output *)
@@ -442,38 +454,38 @@ fun _print_chunks {n:nat} .<n>. (chunks: $B.rope_sized_list(n)): void =
   case+ chunks of
   | ~$B.rope_sized_nil() => ()
   | ~$B.rope_sized_cons(chunk, used, rest) => let
-      val @(fz, bv) = $A.freeze<byte>(chunk)
-      val () = print_range(bv, 0, used)
-      val () = $A.drop<byte>(fz, bv)
-      val () = $A.free<byte>($A.thaw<byte>(fz))
+      val @(chunk_frozen, chunk_view) = $A.freeze<byte>(chunk)
+      val () = print_range(chunk_view, 0, used)
+      val () = $A.drop<byte>(chunk_frozen, chunk_view)
+      val () = $A.free<byte>($A.thaw<byte>(chunk_frozen))
     in _print_chunks(rest) end
 
-(* Every name in nb[0, nk) from i, one on each line: audited with the counts
-   going on from t, the failing ones going into failing. A name over 255
+(* Every name in names_text[0, names_len) from i, one on each line: audited with the counts
+   going on from counts, the failing ones going into failing. A name over 255
    bytes is a failure of its own, said and counted. *)
-fun _audit_names {ln,la:agz}{nk,ak:nat | nk <= 524288; ak <= 524288}{i:nat | i <= nk} .<nk - i>.
-  (nb: !$A.borrow(byte, ln, 524288), nk: int nk, i: int i,
-   ab: !$A.borrow(byte, la, 524288), ak: int ak,
-   failing: !$B.sized_rope, audited: int, t: tally): @(int, tally) = let
-  val j = line_end(nb, nk, i)
-  val @(audited2, t2) =
-    (if j <= i then @(audited, t)
+fun _audit_names {names_loc,allowlist_loc:agz}{names_len,allowlist_len:nat | names_len <= 524288; allowlist_len <= 524288}{i:nat | i <= names_len} .<names_len - i>.
+  (names_text: !$A.borrow(byte, names_loc, 524288), names_len: int names_len, i: int i,
+   allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len,
+   failing: !$B.sized_rope, audited: int, counts: tally): @(int, tally) = let
+  val j = line_end(names_text, names_len, i)
+  val @(audited2, counts_after) =
+    (if j <= i then @(audited, counts)
      else let
-       val () = (print! ("== "); print_range(nb, i, j); println! ())
-       val before = _failures(t)
-       val t3 =
-         (if j - i <= 255 then _audit_one(nb, i, j, ab, ak, t)
+       val () = (print! ("== "); print_range(names_text, i, j); println! ())
+       val before = _failures(counts)
+       val counts_audited =
+         (if j - i <= 255 then _audit_one(names_text, i, j, allowlist_text, allowlist_len, counts)
           else let
-            val () = _repository_error(nb, i, j)
-          in (println! ("the repository's name is ", j - i, " bytes, longer than the 255 the audit will put in a path"); _bump(t, 6)) end): tally
+            val () = _repository_error(names_text, i, j)
+          in (println! ("the repository's name is ", j - i, " bytes, longer than the 255 the audit will put in a path"); _bump(counts, Column_repository())) end): tally
        val () =
-         if _failures(t3) > before then let
+         if _failures(counts_audited) > before then let
            val () = $B.sized_rope_put(failing, 32)
-         in $B.sized_rope_copy(failing, nb, i, j) end
+         in $B.sized_rope_copy(failing, names_text, i, j) end
          else ()
-     in @(audited + 1, t3) end): @(int, tally)
+     in @(audited + 1, counts_audited) end): @(int, tally)
 in
-  if j >= nk then @(audited2, t2) else _audit_names(nb, nk, j + 1, ab, ak, failing, audited2, t2)
+  if j >= names_len then @(audited2, counts_after) else _audit_names(names_text, names_len, j + 1, allowlist_text, allowlist_len, failing, audited2, counts_after)
 end
 
 (* ============================================================
@@ -490,23 +502,23 @@ fn _list_argv (): $L.listv($P.arg_entry) =
   $L.list_vt_cons(arg_text(".[] | select(.archived == false) | .name"),
     $L.list_vt_nil()))))))
 
-(* The audit of the names in nb[0, nk) with the allowlist ab[0, ak): the
+(* The audit of the names in names_text[0, names_len) with the allowlist allowlist_text[0, allowlist_len): the
    status of the run *)
-fn _audit_all {ln,la:agz}{nk,ak:nat | nk <= 524288; ak <= 524288}
-  (nb: !$A.borrow(byte, ln, 524288), nk: int nk,
-   ab: !$A.borrow(byte, la, 524288), ak: int ak,
+fn _audit_all {names_loc,allowlist_loc:agz}{names_len,allowlist_len:nat | names_len <= 524288; allowlist_len <= 524288}
+  (names_text: !$A.borrow(byte, names_loc, 524288), names_len: int names_len,
+   allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len,
    entries: int, bad_entries: int, templates: int, bad_templates: int): int = let
   var failing : $B.sized_rope = $B.sized_rope_create()
-  val @(audited, t) = _audit_names(nb, nk, 0, ab, ak, failing, 0, @(0, 0, 0, 0, 0, 0, 0))
-  val @(files, hashed, templated, not_canonical, over_bound, unreadable, repository_errors) = t
+  val @(audited, counts) = _audit_names(names_text, names_len, 0, allowlist_text, allowlist_len, failing, 0, @(0, 0, 0, 0, 0, 0, 0))
+  val @(files, hashed, templated, not_canonical, over_bound, unreadable, repository_errors) = counts
   val () = println! ("== ", audited, " repositories, ", files, " workflow files: ", hashed, " passed by an allowlisted hash, ",
                      templated, " passed by a template, ", not_canonical, " not canonical, ", over_bound, " over the bound, ",
                      unreadable, " unreadable; ", repository_errors, " repository errors")
   val () = println! ("== allowlist: ", entries, " entries, ", bad_entries, " failing; templates: ", templates, " read, ", bad_templates, " failing")
   val chunks = $B.sized_rope_chunks(failing)
-  val failed = _failures(t) > 0 || bad_entries > 0 || bad_templates > 0 || audited = 0 || templates = 0: bool
+  val failed = _failures(counts) > 0 || bad_entries > 0 || bad_templates > 0 || audited = 0 || templates = 0: bool
   val () =
-    if _failures(t) > 0 then let
+    if _failures(counts) > 0 then let
       val () = print! ("== failing repositories:")
       val () = _print_chunks(chunks)
     in println! () end
@@ -536,10 +548,10 @@ implement pin_audit_run () = let
   val allow_usable = (case+ allow_end of | Read_whole() => true | Read_too_long() => false | Read_failed() => false): bool
   val @(templates, bad_templates) = _templates_check()
   var names : $B.builder(0) = $B.create()
-  val @(status, listed) = capture_with("gh", _list_argv(), _nothing(), names)
+  val @(status, listed) = capture_with("gh", _list_argv(), no_arguments(), names)
   val @(names_arr, names_len) = $B.to_arr(names)
   val @(names_fz, names_bv) = $A.freeze<byte>(names_arr)
-  val ok =
+  val names_listed =
     (case+ listed of
      | Read_whole() =>
          if status = 0 then true
@@ -553,7 +565,7 @@ implement pin_audit_run () = let
          val () = println! ("::error title=pin audit::the list of the organisation's repositories could not be read")
        in false end): bool
   val result =
-    (if ok && allow_usable then _audit_all(names_bv, names_len, allow_bv, allow_len, entries, bad_entries, templates, bad_templates)
+    (if names_listed && allow_usable then _audit_all(names_bv, names_len, allow_bv, allow_len, entries, bad_entries, templates, bad_templates)
      else 1): int
   val () = $A.drop<byte>(names_fz, names_bv)
   val () = $A.free<byte>($A.thaw<byte>(names_fz))

@@ -1,0 +1,15 @@
+[package]
+name = "verify-archives-test"
+kind = "bin"
+unsafe = false
+
+[dependencies]
+"array" = ""
+"arith" = ""
+"builder" = ""
+"file" = ""
+"list" = ""
+"process" = ""
+"result" = ""
+"sha256" = ""
+"env" = ""

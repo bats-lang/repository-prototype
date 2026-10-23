@@ -4,7 +4,7 @@
 # package's directory, or in a namespace's package directory
 # (wasm.bats-packages.dev/bridge/); a .bats source file deeper in the tree
 # (tools/pin-audit/src/audit.bats, tests/...) is not an archive and is not
-# looked at (tests/verify-archives/test.sh):
+# looked at (the bats test in tests/verify-archives):
 # - published archives and sidecars are only ever added, never modified
 #   or removed (a published version never changes);
 # - every added archive has its .sha256 sidecar, and the sidecar matches;
