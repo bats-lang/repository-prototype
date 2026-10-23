@@ -1,0 +1,42 @@
+# The workflow files that are neither a caller nor a template, by hash
+# (bats-lang/repository-prototype#396, keyword: pin-audit allowlist).
+#
+# One entry on each line:
+#   <repository>/<path> <sha256> [<next sha256>] # <comment>
+# The sha256 is of the file on the repository's default branch. A second
+# hash is the next one: a repository that changes a file first adds the new
+# hash here beside the old (a pull request here), then changes the file,
+# then a later pull request here drops the old hash. A third hash is not an
+# entry. The comment is the ticket that says to fix the file
+# (<repository>#<number>), so no exception is permanent. An entry with no
+# such comment, a malformed entry or a repeated file fails the audit. A file
+# that is listed and also equals a template fails too: drop its entry.
+#
+bats/.github/workflows/check.yml b15dbd7deb06d36dde0a6bb2320d21756393504afb3a260632ed912af5869728 # bats#482
+bats/.github/workflows/relock.yml 61b48c446859acc9ed99f61bc9d1c2d3ba42c62b96836a6eea19c076f3d993af # bats#482
+quire/.github/workflows/check.yml 27ea9f5173a33999a006f01c717aa2a4ba5816da54ce86eda66a0d8077f475da # quire#815
+quire/.github/workflows/deploy.yml 3cca7f646947df71fad64089472b84abeb16a46b727770a379451b2c0a68a32c # quire#815
+quire/.github/workflows/mutation.yml 0c329d28c3882350f28b5b05a516210bcddcec4bb2a8faa0174fc4f7b94f40c9 # quire#815
+quire/.github/workflows/relock.yml dcfffb1c14b0dc509a2891ef9439cdde9aa283756bb03d54356a124cbf2b7ec3 # quire#815
+quire/.github/workflows/supersede.yml 48099ff84eaf66cae1cbe4945ee8576954471bb2acc31e78d3e8e8504ee4f430 # quire#815
+quire/.github/workflows/sync-identity.yml d9c863258a94f8b87b38db5079c1973d18c03aad6f61f2c3b310edafe569c0ce # quire#815
+quire/.github/workflows/sync-providers.yml 430357c0bb07eb06c5a03f78a4a4a78deb68c08bc231652c9b768890fcfce049 # quire#815
+quire/.github/workflows/text-lint.yml 6a0a10d3cfd1831e24fb37aa07e923c79b3cbd0e83776af48f58b29535a039f8 # quire#815
+pwa/.github/workflows/android.yml f0ec46c5494646aac6a87fabf44aef99b99b90ef756fe07d80fcb7c876beb4ff # pwa#168
+pwa/.github/workflows/check.yml bb05da2677cf669367a2a95b84732efcdcb768bcb2d1a7bdd02f564afc39a16e # pwa#168
+pwa/.github/workflows/play-release.yml c5c83aedfbce8c3f9ae8b9e3b61f5e15cbfcff45625872d488909fa45a16162d # pwa#168
+pwa/.github/workflows/review-gate.yml 323af6624dfd0026f47e18e46cb743ba9d8f782debb22fa01ec4fe7bcb7ba55c # pwa#170
+pwa/.github/workflows/review-gate-relay.yml 3909d2fd6cf9ab263f98e5a8dbb200bcc7ed7e172cc195fe6afaae5aa9fd0cc9 # pwa#170
+capacitor-plugins/.github/workflows/check.yml c86571eb37e4fa32b74704178a1fc889683fde111675cebeedaccab07cabfb27 # capacitor-plugins#31
+capacitor-plugins/.github/workflows/demo-apk.yml cedf77af672f97d459a0f44bd2ae68ccb5f21cdab110675eac15970dd8e41af9 # capacitor-plugins#31
+capacitor-plugins/.github/workflows/review-gate.yml c1595e949417989054653e1d2071893e24cef2456cd93384d3f720ef1233dfcb # capacitor-plugins#32
+capacitor-plugins/.github/workflows/review-gate-relay.yml 4ff6964784e6a99a80b2e56de8fb8b5d592b39d1537474661b49534ed53bc9dd # capacitor-plugins#32
+repository-prototype/.github/workflows/check-aggregate-test.yml e27174f32c44395d688e5eefa4f56e78523ad82a4265dcbaef75336198d078fd # repository-prototype#397
+repository-prototype/.github/workflows/package-check.yml eeb8e971790c2b9c6673708b8a22941a45d4f1aa4d168a286cd2492a6ca64e63 # repository-prototype#397
+repository-prototype/.github/workflows/publish.yml 50ebb500e16336a6255d1923c79a9545d844c44e69e331f240e64c0d0eaa8290 # repository-prototype#397
+repository-prototype/.github/workflows/relock-pins.yml 1ae7b13ec2363153a4e98a1a62476e607f7531ae02bcc8b400aa0a22baf1553d # repository-prototype#397
+repository-prototype/.github/workflows/relock-pins-test.yml d8f837b72fc25dfcd9df01469612bf8b36876b0b32f489acca2d4b93b42577ad # repository-prototype#397
+repository-prototype/.github/workflows/tools-test.yml 53be68d5d3a95fafa20ee299e3d11228cf8716ff858aba948439055d28cdcb24 # repository-prototype#397
+repository-prototype/.github/workflows/verify.yml 1a5c9600d9d3c6d6a5beaeefd3f386154eed17665b9caf3a921f25ca58c35290 # repository-prototype#397
+bridge/.github/workflows/review-gate.yml b15a17acc60004f27d6318fb62b234928b6bdaff437c644b941813cdbc7dfd10 # bridge#207
+bridge/.github/workflows/review-gate-relay.yml 3909d2fd6cf9ab263f98e5a8dbb200bcc7ed7e172cc195fe6afaae5aa9fd0cc9 # bridge#207
