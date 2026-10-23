@@ -5,7 +5,13 @@
 # hands on is read. Every `uses:` line it moved must be
 # `uses: <pin>@<new commit> # <repo> main <first 7 hex>` and nothing else.
 # A step then plays that rule against three bad patches (no comment, two
-# comments, the wrong 7 hex) and each must fail it.
+# comments, the wrong 7 hex) and each must fail it. The `rewrite` job runs the
+# very awk program of relock-pins.yml (between its pin-rewrite markers) on the
+# fixtures of tests/relock-pins/rewrite: pins already at the newest commit with
+# another comment are rewritten to the one form, a line already in it is left
+# byte-identical, and a quoted value, flow style, a commented-out `uses:` line
+# and text after the token are refused with the file, the line number and the
+# line, and nothing is written.
 name: relock-pins test
 
 on:
@@ -90,4 +96,46 @@ jobs:
               echo "::error::the rule accepted the $bad patch"; exit 1
             fi
             echo "the $bad patch is refused"
+          done
+
+  rewrite:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: The pin lines are healed, kept or refused
+        run: |
+          set -eu
+          work="$RUNNER_TEMP/rewrite"
+          mkdir -p "$work"
+          # the program as relock-pins.yml has it, between its markers
+          awk '/# pin-rewrite end/ { on = 0 } on { print } /# pin-rewrite begin/ { on = 1 }' \
+            .github/workflows/relock-pins.yml > "$work/rewrite.awk"
+          [ -s "$work/rewrite.awk" ] || { echo "::error::no pin-rewrite program in relock-pins.yml"; exit 1; }
+          pin=bats-lang/repository-prototype/.github/workflows/publish.yml@
+          newest=1111111111111111111111111111111111111111
+          comment="repository-prototype main 1111111"
+          run_awk() {
+            awk -v pin="$pin" -v newest="$newest" -v comment="$comment" -v file="$1" -f "$work/rewrite.awk" "$1"
+          }
+          dir=tests/relock-pins/rewrite
+
+          run_awk "$dir/heal.yml" > "$work/heal.out"
+          cmp "$work/heal.out" "$dir/heal.expected.yml" \
+            || { echo "::error::a pin at the newest commit with another comment was not rewritten to the one form"; diff "$dir/heal.expected.yml" "$work/heal.out" || true; exit 1; }
+          echo "other comments (a wrong 7 hex, # v4, other words, none) are rewritten to the one form"
+
+          run_awk "$dir/keep.yml" > "$work/keep.out"
+          cmp "$work/keep.out" "$dir/keep.yml" \
+            || { echo "::error::a line already in the one form was changed"; exit 1; }
+          echo "a line in the one form is byte-identical"
+
+          for name in quoted flow commented comma; do
+            if run_awk "$dir/refuse-$name.yml" > "$work/$name.out" 2> "$work/$name.err"; then
+              echo "::error::the $name spelling was not refused"; exit 1
+            fi
+            cat "$work/$name.err"
+            # the refusal names the file, the line number and the line
+            grep -Fq "file=$dir/refuse-$name.yml,line=" "$work/$name.out" \
+              || { echo "::error::the $name refusal does not name the file and the line number"; cat "$work/$name.out"; exit 1; }
+            echo "the $name spelling is refused: $(grep -F '::error' "$work/$name.out")"
           done

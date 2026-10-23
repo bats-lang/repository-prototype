@@ -73,11 +73,12 @@
 # environment variable (128 KiB); a relock larger than that fails with a
 # message. The regenerated files are at most `regenerate-max-bytes`.
 #
-# Concurrency: one relock of a repository at a time (the group below, never
-# cancelled), so a scheduled run and a dispatch cannot interleave their
+# Concurrency: the group is `relock-pins-<repository>-<branch-prefix>` (never
+# cancelled), so one relock per repository and prefix runs at a time and a
+# scheduled run and a dispatch with the same prefix cannot interleave their
 # pushes. `branch-prefix` (default `relock/`) names the branch and the pull
-# requests this run supersedes: a test run uses another prefix, and cannot
-# touch the day's real relock.
+# requests this run supersedes: a test run uses another prefix, so it runs
+# beside, and cannot touch, the day's real relock.
 #
 # Do not give `regenerate` to a repository that is not public (job 2 has no
 # permissions, so it cannot check out a private one), nor to one whose
@@ -101,7 +102,9 @@
 #   never carries two: `bats check-pins` fails a commit with no comment saying
 #   which version it is, and one form serves every repository (#395). It is
 #   written for every pin line, moved or not, so a line left with another
-#   comment is healed by the next relock.
+#   comment is healed by the next relock. A line holding the pin that is not
+#   `uses: <pin>@<token>` followed by nothing or a `#` comment (a quoted value,
+#   flow style, a commented-out line, text after the token) fails the step.
 #
 # Every input of this file is pinned (#332): actions/checkout by commit, and
 # the compiler, ATS2 and the package repository by bats's setup action
@@ -189,7 +192,7 @@ on:
         description: >-
           'false' stops after the relock (and regenerate): nothing is pushed
           and no pull request is opened, and the change is the outputs. A test
-          runs the relock so
+          runs the relock so and reads what it would have pushed
         type: string
         default: 'true'
     outputs:
@@ -300,8 +303,13 @@ jobs:
 
           # Each workflow pin, to its repository's newest main commit, with
           # the comment `# <repo> main <7 hex>` that bats check-pins requires
-          # (#395, area: relock comment). awk edits the lines, index() matching
-          # the pin as text, so no pattern and no sed.
+          # (#395, area: relock comment). Line-oriented rewriting of `uses:`
+          # lines (as the sed it replaced did): the pin is found as text with
+          # index(), the text around it is matched with patterns, and every
+          # spelling not recognised is refused (the step fails naming the file,
+          # the line number and the line, and nothing is written back). It
+          # decides nothing about pass or fail. relock-pins-test.yml runs this
+          # very awk program (between the pin-rewrite markers) on fixtures.
           case "$WORKFLOWS_DIRECTORY" in
             ''|-*|*[!A-Za-z0-9._/-]*) echo "::error::workflows-directory is refused: $WORKFLOWS_DIRECTORY"; exit 1 ;;
           esac
@@ -316,23 +324,22 @@ jobs:
             grep -rlF -- "$pin@" "$WORKFLOWS_DIRECTORY" > ~/relock/pin-files
             while IFS= read -r file; do
               awk -v pin="$pin@" -v newest="$newest" -v comment="$comment" -v file="$file" '
+                # pin-rewrite begin
                 {
                   i = index($0, pin)
                   if (!i) { print; next }
-                  rest = substr($0, i + length(pin))
-                  sub(/^[^ \t]*/, "", rest)
-                  head = substr($0, 1, i - 1) pin newest
-                  if (substr($0, 1, i - 1) ~ /uses:[ \t]*[^ \t]*$/) {
-                    if (rest !~ /^[ \t]*(#.*)?$/) {
-                      print "::error file=" file ",line=" NR "::text after the pin that is not a comment"
-                      bad = 1
-                    }
-                    print head " # " comment
-                  } else {
-                    print head rest
+                  before = substr($0, 1, i - 1)
+                  tail = substr($0, i + length(pin))
+                  match(tail, /^[A-Za-z0-9._-]*/)
+                  rest = substr(tail, RLENGTH + 1)
+                  if (before !~ /^[ \t]*(-[ \t]+)?uses:[ \t]+$/ || rest !~ /^[ \t]*(#.*)?$/) {
+                    print "::error file=" file ",line=" NR "::refused, not a plain uses line of the pin: " $0
+                    exit 1
                   }
+                  print before pin newest " # " comment
                 }
-                END { exit bad }' "$file" > ~/relock/pin-file.new
+                # pin-rewrite end
+              ' "$file" > ~/relock/pin-file.new || exit 1
               cat ~/relock/pin-file.new > "$file"
             done < ~/relock/pin-files
             if [ "$old" != "$newest" ]; then
