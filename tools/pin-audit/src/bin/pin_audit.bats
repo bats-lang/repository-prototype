@@ -14,29 +14,23 @@
    2. For each name, a shallow clone into audit-clones/<name> (git, one
       request for all of a repository's files, and the checker's own file
       discovery then reads them as it reads a checkout).
-   3. Each workflow of the clone (.github/workflows/*.yml and *.yaml) that
-      runs bats must have an enabled step that calls bats's setup action.
-      Runs bats: the file has a `steps:` and a line, not a comment, that has
-      the word bats as a command (bare, at the end of a path such as
-      seed/debug/bats or /tmp/bats-c/release/bats, after a wrapper such as
-      env, time, sudo or exec, or a variable whose name has bats in it, or
-      any variable in the position of a command) followed by a bats
-      subcommand (those of `bats --help`): `git grep -l --all-match`. It is
-      read widely on purpose, since a false positive is a failure that
-      names its workflow and is fixed in it and
-      a false negative is a workflow that skips the pin check. The setup
-      step: a key `uses:` of a step of the list under `steps:`, of
-      bats-lang/bats/.github/actions/setup at a full commit or of bats's own
-      ./.github/actions/setup, in a step with no `if:` that is false; the
-      text of a run block, a comment, and a `uses:` of another indentation
-      are not one (`grep -Pz`, one run for each such file). The setup action
-      is what runs the pin check, so a workflow that sets bats up by hand,
-      however it calls the compiler, skips it. A workflow with no steps of
-      its own (a `uses:` of a shared workflow, as relock.yml and publish.yml
-      are) or none that runs bats (review-gate*.yml, a Node or Gradle job)
-      is not asked to call the action. The rule is per file, not per job: a
-      file whose other job calls the action passes, and so does one whose
-      job is disabled by a job-level `if:`.
+   3. Every workflow of the clone (.github/workflows/*.yml and *.yaml) that
+      has steps calls bats's setup action. Has steps: a line, not a comment,
+      with `steps:` in it (`git grep -l`); the workflow runs jobs itself,
+      where a caller of a shared workflow (relock.yml, publish.yml) has none
+      and is not asked. Nothing has to be recognised as running bats: a
+      workflow with steps and no setup step fails, whatever its steps run,
+      and the rule has no exception. The setup step: a key `uses:` of a step
+      of the list under a job's `steps:`, of
+      bats-lang/bats/.github/actions/setup at a full commit; in the
+      repository bats alone, ./.github/actions/setup too (in any other
+      repository that path is the repository's own action). The step is
+      enabled only if neither it nor its job has a key `if:` at all (a
+      condition is not evidence that the step runs; such a workflow fails
+      with "conditional"). The text of a run block, a comment and a `uses:`
+      of another indentation are not a step (`grep -Pz`, one run for each
+      such file). The setup action is what runs the pin check, so a workflow
+      with steps that does not call it skips it.
    4. The checker itself: `bats check-pins --discover` inside the clone
       (env -C), its findings and the exceptions it lists
       (`# unpinned: <reason>`, listed and not failures) in the job log.
@@ -234,79 +228,67 @@ fn _clone_argv {l:agz}{s,e:nat | s <= e; e <= 524288; e - s <= 255}
   $L.list_vt_cons(_arg_name("audit-clones/", b, s, e, ""),
     $L.list_vt_nil())))))))
 
-(* The regular expressions of the two tests of the setup rule. Both are read
-   by tools (git grep -E, grep -P); the program only names them. Keyword:
-   setup rule (the research and the cases are on #365). *)
 
-(* bats's subcommands, as `bats --help` lists them (init, add, remove, lock,
-   build, run, test, check, tree, upload, clean, ats2, clone-repository,
-   record-commit, check-pins, completions, fixtures, with-env), after the
-   options that come before one (--quiet, --run-in <dir>), or a backslash
-   that ends the line (the subcommand is on the next one) *)
-val _bats_tail =
-  "( +--quiet| +--run-in +[^ ]+)*( +(init|add|remove|lock|build|run|test|check|tree|upload|clean|ats2|clone-repository|record-commit|check-pins|completions|fixtures|with-env)([ \"');&|`\\]|$)| *\\\\$)"
-
-(* the word bats as a command: bare, at the end of any path, or a variable
-   or an expression whose name has bats in it *)
-val _bats_word =
-  "(bats|[$]\\{?[A-Za-z_0-9]*[Bb][Aa][Tt][Ss][A-Za-z_0-9]*\\}?|[$]\\{\\{[^}]*[Bb][Aa][Tt][Ss][^}]*\\}\\})\"?"
-
-(* any variable, which is bats when it is in the position of a command *)
-val _any_variable = "\"?[$]\\{?[A-Za-z_][A-Za-z_0-9]*\\}?\"?"
-
-(* the positions of a command: after run:, a dash, &&, ||, a pipe, ;, (, $(,
-   a backtick, or a wrapper (env, time, sudo, exec, command, nohup, xargs)
-   with its assignments *)
-val _command_position =
-  "(run: *[|>]?-? *|(&&|[|;(`-]) *|[$]\\( *|(env|time|sudo|exec|command|nohup|xargs)( +[A-Za-z_]+=[^ ]*)* +)"
+(* The regular expressions of the setup rule. They are read by tools (git
+   grep -E, grep -P, grep -E); the program only names them. Keyword: setup
+   rule (the research and the cases are on #365). *)
 
 (* a blank line or a comment line *)
 val _blank_line = "[ ]*(?:#[^\\n]*)?\\r?\\n"
 
-(* a key uses: of the setup action at a full commit, or the local action, to
-   the end of its line (a quote, a comment after it are allowed) *)
-val _setup_uses_line =
-  "uses:[ ]*[\"']?(?:\\./\\.github/actions/setup|bats-lang/bats/\\.github/actions/setup@[0-9a-f]{40})[\"']?[ ]*(?:#[^\\n]*)?\\r?\\n"
+(* the header of a block scalar (a line ending in | or >, with its
+   indentation and chomping marks) *)
+val _block_header = "[^\\n]*[:-][ ]+[|>][-+0-9]*[ ]*(?:#[^\\n]*)?\\r?\\n"
 
-(* a key if: that is false (false, 'false', "false", ${{ false }}, any case) *)
-val _if_false_line =
-  "if:[ ]*(?:\\$\\{\\{[ ]*)?[\"']?(?i:false)[\"']?(?:[ ]*\\}\\})?[ ]*(?:#[^\\n]*)?\\r?\\n"
+(* a key if:, any value (a quote around the key is allowed) *)
+val _if_key = "[\"']?if[\"']?:"
+
+(* a key uses: of bats's setup action at a full commit, to the end of its
+   line (a quote and a comment after it are allowed); the local path
+   ./.github/actions/setup is taken only in the repository bats, where it is
+   bats's own action *)
+val _uses_head = "uses:[ ]*[\"']?(?:"
+val _uses_path_local = "\\./\\.github/actions/setup|"
+val _uses_tail =
+  "bats-lang/bats/\\.github/actions/setup@[0-9a-f]{40})[\"']?[ ]*(?:#[^\\n]*)?\\r?\\n"
 
 (* from the first line of a step to the column of its key uses: (resp. if:)
    with the lines of the step between, the first such key and no earlier *)
 val _skip_to_uses =
   "[^\\n]*+\\n(?:(?!\\g{d}[ ]\\g{p}uses:)(?:\\g{d}[ ]++[^\\n]*+\\n|[ ]*(?:#[^\\n]*)?\\r?\\n))*+\\g{d}[ ]\\g{p}"
 val _skip_to_if =
-  "[^\\n]*+\\n(?:(?!\\g{d}[ ]\\g{p}if:)(?:\\g{d}[ ]++[^\\n]*+\\n|[ ]*(?:#[^\\n]*)?\\r?\\n))*+\\g{d}[ ]\\g{p}"
+  "[^\\n]*+\\n(?:(?!\\g{d}[ ]\\g{p}[\"']?if[\"']?:)(?:\\g{d}[ ]++[^\\n]*+\\n|[ ]*(?:#[^\\n]*)?\\r?\\n))*+\\g{d}[ ]\\g{p}"
 
-(* A line that is not a comment and runs bats: the word bats (a path before
-   it, a wrapper, a variable) and a subcommand of bats *)
-fn _runs_bats_regex (): $P.arg_entry = let
-  var out : $B.builder(0) = $B.create()
-  val () = $B.bput(out, "^ *")
-  val () = $B.bput(out, _bats_word)
-  val () = $B.bput(out, _bats_tail)
-  val () = $B.bput(out, "|^ *[^# ].*[^A-Za-z0-9_.-]")
-  val () = $B.bput(out, _bats_word)
-  val () = $B.bput(out, _bats_tail)
-  val () = $B.bput(out, "|^ *")
-  val () = $B.bput(out, _any_variable)
-  val () = $B.bput(out, _bats_tail)
-  val () = $B.bput(out, "|^ *[^# ].*")
-  val () = $B.bput(out, _command_position)
-  val () = $B.bput(out, _any_variable)
-  val () = $B.bput(out, _bats_tail)
-  val @(a, k) = $B.to_arr(out)
-in @(a, k) end
+(* The regular expression held by a rope, as an argument. A regular
+   expression is a few kilobytes, so it is one chunk; a rope of more is not
+   cut: the argument is the pattern `(`, which grep rejects with status 2,
+   and the audit says so. *)
+fn _rope_arg (r: $B.sized_rope): $P.arg_entry = let
+  val chunks = $B.sized_rope_chunks(r)
+in
+  case+ chunks of
+  | ~$B.rope_sized_nil() => _arg_s("")
+  | ~$B.rope_sized_cons(chunk, used, rest) =>
+    (case+ rest of
+     | ~$B.rope_sized_nil() => @(chunk, used)
+     | ~$B.rope_sized_cons(chunk2, _, rest2) => let
+         val () = $A.free<byte>(chunk2)
+         val () = $B.rope_sized_list_free(rest2)
+         val () = $A.free<byte>(chunk)
+       in _arg_s("(") end)
+end
 
-(* The workflows of the clone that run bats: a file with a `steps:` and a
-   line (not a comment) that runs bats, one path on each line. Read as
-   widely as a line can be: a false positive is a failure that names its
-   workflow and is fixed in it, a false negative
-   is a workflow that skips the check. git grep's status is 0 for some, 1
-   for none. A workflow whose jobs only `uses:` a shared workflow has no
-   `steps:`, and its inputs that hold bats commands (relock.yml's
-   `regenerate:`) are run by that workflow's own setup. *)
+(* A line that is not a comment with `steps:` in it, not as the end of a
+   longer word: a flow-style `steps: [...]` and a `steps:` after other keys
+   on a line count, so a workflow that has steps is never taken for a caller
+   of a shared workflow *)
+val _steps_line = "^([^#]*[^#A-Za-z0-9_.-])?steps:"
+
+(* The workflows of the clone that have steps: a file with a line that has
+   `steps:` in it (a job of its own, so the file runs jobs itself). One path
+   on each line; git grep's status is 0 for some, 1 for none. A workflow
+   whose jobs only `uses:` a shared workflow (relock.yml, publish.yml) has
+   none. *)
 fn _workflows_argv {l:agz}{s,e:nat | s <= e; e <= 524288; e - s <= 255}
   (b: !$A.borrow(byte, l, 524288), s: int s, e: int e): $L.listv($P.arg_entry) =
   $L.list_vt_cons(_arg_s("git"),
@@ -314,64 +296,112 @@ fn _workflows_argv {l:agz}{s,e:nat | s <= e; e <= 524288; e - s <= 255}
   $L.list_vt_cons(_arg_name("audit-clones/", b, s, e, ""),
   $L.list_vt_cons(_arg_s("grep"),
   $L.list_vt_cons(_arg_s("-l"),
-  $L.list_vt_cons(_arg_s("-i"),
-  $L.list_vt_cons(_arg_s("--all-match"),
   $L.list_vt_cons(_arg_s("-E"),
   $L.list_vt_cons(_arg_s("-e"),
-  $L.list_vt_cons(_arg_s("^ +steps:"),
-  $L.list_vt_cons(_arg_s("-e"),
-  $L.list_vt_cons(_runs_bats_regex(),
+  $L.list_vt_cons(_arg_s(_steps_line),
   $L.list_vt_cons(_arg_s("--"),
   $L.list_vt_cons(_arg_s(":(glob).github/workflows/*.yml"),
   $L.list_vt_cons(_arg_s(":(glob).github/workflows/*.yaml"),
-    $L.list_vt_nil())))))))))))))))
+    $L.list_vt_nil())))))))))))
 
-(* A step of the file that is enabled and has, as its own key, a `uses:` of
-   the setup action at a full commit or by the local path. grep -P over the
-   whole file (-z); the steps are the list under a `steps:` that is not
-   inside a block scalar, at the indentation of its first dash, and a key of
-   a step is at the column of the first key. So the text of a run block, a
-   comment, a `uses:` of another indentation, and a step whose `if:` is
-   false (false, 'false', ${{ false }}) are not it. *)
-fn _setup_regex (): $P.arg_entry = let
-  var out : $B.builder(0) = $B.create()
-  val () = $B.bput(out, "(?m)")
-  (* the start of the file to a `steps:` line, a block scalar (a header that
-     ends in | or >, and the lines indented under it) taken whole *)
-  val () = $B.bput(out, "\\A(?:(?>(?<h>[ ]*)[^\\n]*[:-][ ]+[|>][-+0-9]*[ ]*(?:#[^\\n]*)?\\r?\\n(?:\\g{h}[ ]+[^\\n]*+\\n|[ ]*\\r?\\n)*|[^\\n]*+\\n))*?")
-  val () = $B.bput(out, "(?<s>[ ]*)steps:[ ]*(?:#[^\\n]*)?\\r?\\n")
+(* A step of the file that calls bats's setup action. grep -P over the whole
+   file (-z). The steps are the list under a `steps:` that is not inside a
+   block scalar, at the indentation of its first dash, and a key of a step
+   is at the column of the first key; the job is the mapping that holds the
+   `steps:` key, whose keys are at its column. So the text of a run block, a
+   comment and a `uses:` of another indentation are not a step. With
+   enabled, the step must have no key `if:` and neither must its job (any
+   value: a condition is not evidence that the step runs); without it, the
+   same test with the `if:` keys ignored, which says a step is there and is
+   conditional. in_bats says the local path counts too. *)
+fn _setup_regex (in_bats: bool, enabled: bool): $P.arg_entry = let
+  var out : $B.sized_rope = $B.sized_rope_create()
+  val () = $B.sized_rope_bput(out, "(?m)")
+  (* the start of the file to a job header (a line that ends in a colon), a
+     block scalar (a header that ends in | or >, and the lines indented under
+     it) taken whole and never entered *)
+  val () = $B.sized_rope_bput(out, "\\A(?:(?>(?<h>[ ]*)")
+  val () = $B.sized_rope_bput(out, _block_header)
+  val () = $B.sized_rope_bput(out, "(?:\\g{h}[ ]+[^\\n]*+\\n|[ ]*\\r?\\n)*)|(?!")
+  val () = $B.sized_rope_bput(out, _block_header)
+  val () = $B.sized_rope_bput(out, ")[^\\n]*+\\n)*?")
+  val () = $B.sized_rope_bput(out, "(?<j>[ ]*+)[^\\s#][^\\n]*:[ ]*(?:#[^\\n]*)?\\r?\\n")
+  (* s: the column of the keys of the job, which is the column of its steps: *)
+  val () = $B.sized_rope_bput(out, "(?:")
+  val () = $B.sized_rope_bput(out, _blank_line)
+  val () = $B.sized_rope_bput(out, ")*+(?=(?<s>\\g{j}[ ]++))")
+  (* the keys of the job before steps:, none of them an if: when enabled *)
+  val () = $B.sized_rope_bput(out, "(?:")
+  val () = $B.sized_rope_bput(out, _blank_line)
+  val () = $B.sized_rope_bput(out, "|\\g{s}(?!")
+  val () = (if enabled then $B.sized_rope_bput(out, _if_key) else $B.sized_rope_bput(out, "(?!)"))
+  val () = $B.sized_rope_bput(out, "|steps:)[^\\n]*+\\n)*+")
+  val () = $B.sized_rope_bput(out, "\\g{s}steps:[ ]*(?:#[^\\n]*)?\\r?\\n")
+  (* and none after it *)
+  val () =
+    if enabled then let
+      val () = $B.sized_rope_bput(out, "(?!(?:")
+      val () = $B.sized_rope_bput(out, _blank_line)
+      val () = $B.sized_rope_bput(out, "|\\g{s}(?!")
+      val () = $B.sized_rope_bput(out, _if_key)
+      val () = $B.sized_rope_bput(out, ")[^\\n]*+\\n)*+\\g{s}")
+      val () = $B.sized_rope_bput(out, _if_key)
+      val () = $B.sized_rope_bput(out, ")")
+    in () end
+    else ()
   (* d: the indentation of the list's dashes *)
-  val () = $B.bput(out, "(?=(?:")
-  val () = $B.bput(out, _blank_line)
-  val () = $B.bput(out, ")*(?<d>\\g{s}[ ]*)-)")
+  val () = $B.sized_rope_bput(out, "(?=(?:")
+  val () = $B.sized_rope_bput(out, _blank_line)
+  val () = $B.sized_rope_bput(out, ")*(?<d>\\g{s}[ ]*)-)")
   (* the list, up to the step this test looks at; p: the spaces after its dash *)
-  val () = $B.bput(out, "(?:\\g{d}-[^\\n]*+\\n|\\g{d}[ ]++[^\\n]*+\\n|")
-  val () = $B.bput(out, _blank_line)
-  val () = $B.bput(out, ")*?\\g{d}-(?<p>[ ]+)")
+  val () = $B.sized_rope_bput(out, "(?:\\g{d}-[^\\n]*+\\n|\\g{d}[ ]++[^\\n]*+\\n|")
+  val () = $B.sized_rope_bput(out, _blank_line)
+  val () = $B.sized_rope_bput(out, ")*?\\g{d}-(?<p>[ ]+)")
   (* it has the key uses: as the first key or later *)
-  val () = $B.bput(out, "(?=")
-  val () = $B.bput(out, _setup_uses_line)
-  val () = $B.bput(out, "|")
-  val () = $B.bput(out, _skip_to_uses)
-  val () = $B.bput(out, _setup_uses_line)
-  val () = $B.bput(out, ")")
-  (* and no key if: false *)
-  val () = $B.bput(out, "(?!")
-  val () = $B.bput(out, _if_false_line)
-  val () = $B.bput(out, "|")
-  val () = $B.bput(out, _skip_to_if)
-  val () = $B.bput(out, _if_false_line)
-  val () = $B.bput(out, ")")
-  val @(a, k) = $B.to_arr(out)
-in @(a, k) end
+  val () = $B.sized_rope_bput(out, "(?=")
+  val () = $B.sized_rope_bput(out, _uses_head)
+  val () = (if in_bats then $B.sized_rope_bput(out, _uses_path_local) else ())
+  val () = $B.sized_rope_bput(out, _uses_tail)
+  val () = $B.sized_rope_bput(out, "|")
+  val () = $B.sized_rope_bput(out, _skip_to_uses)
+  val () = $B.sized_rope_bput(out, _uses_head)
+  val () = (if in_bats then $B.sized_rope_bput(out, _uses_path_local) else ())
+  val () = $B.sized_rope_bput(out, _uses_tail)
+  val () = $B.sized_rope_bput(out, ")")
+  (* and, when enabled, no key if: in the step *)
+  val () =
+    if enabled then let
+      val () = $B.sized_rope_bput(out, "(?!")
+      val () = $B.sized_rope_bput(out, _if_key)
+      val () = $B.sized_rope_bput(out, "|")
+      val () = $B.sized_rope_bput(out, _skip_to_if)
+      val () = $B.sized_rope_bput(out, _if_key)
+      val () = $B.sized_rope_bput(out, ")")
+    in () end
+    else ()
+in _rope_arg(out) end
 
-(* Whether one workflow of the clone has an enabled step that calls the
-   setup action at a full commit (or bats's own, by path): grep's status, 0
-   for found, 1 for none, 2 for an error *)
+(* Whether the repository b[s, e) is bats itself: the local path
+   ./.github/actions/setup is bats's setup action there and that
+   repository's own action in any other *)
+fn _is_bats {l:agz}{s,e:nat | s <= e; e <= 524288}
+  (b: !$A.borrow(byte, l, 524288), s: int s, e: int e): bool =
+  if e - s = 4 then
+    (if byte2int0($A.read<byte>(b, s)) = 98 then
+      (if byte2int0($A.read<byte>(b, s + 1)) = 97 then
+        (if byte2int0($A.read<byte>(b, s + 2)) = 116 then byte2int0($A.read<byte>(b, s + 3)) = 115
+        else false)
+      else false)
+    else false)
+  else false
+
+(* Whether one workflow of the clone has a step that calls the setup action
+   (enabled, or just conditional): grep's status, 0 for found, 1 for none,
+   2 for an error *)
 fn _setup_argv {l,l2:agz}{s,e,fs,fe:nat | s <= e; e <= 524288; e - s <= 255;
                                            fs <= fe; fe <= 524288; fe - fs <= 255}
   (b: !$A.borrow(byte, l, 524288), s: int s, e: int e,
-   fb: !$A.borrow(byte, l2, 524288), fs: int fs, fe: int fe): $L.listv($P.arg_entry) =
+   fb: !$A.borrow(byte, l2, 524288), fs: int fs, fe: int fe, enabled: bool): $L.listv($P.arg_entry) =
   $L.list_vt_cons(_arg_s("env"),
   $L.list_vt_cons(_arg_s("-C"),
   $L.list_vt_cons(_arg_name("audit-clones/", b, s, e, ""),
@@ -380,7 +410,7 @@ fn _setup_argv {l,l2:agz}{s,e,fs,fe:nat | s <= e; e <= 524288; e - s <= 255;
   $L.list_vt_cons(_arg_s("-z"),
   $L.list_vt_cons(_arg_s("-q"),
   $L.list_vt_cons(_arg_s("-e"),
-  $L.list_vt_cons(_setup_regex(),
+  $L.list_vt_cons(_setup_regex(_is_bats(b, s, e), enabled),
   $L.list_vt_cons(_arg_s("--"),
   $L.list_vt_cons(_arg_name("", fb, fs, fe, ""),
     $L.list_vt_nil())))))))))))
@@ -417,20 +447,33 @@ fn _error_line {l:agz}{s,e:nat | s <= e; e <= 524288}
   val () = _print_range(b, s, e)
 in print! (": ") end
 
-(* One workflow, fb[fs, fe), of the repository b[s, e): 0 when it calls the
-   setup action, else 1 and the error that says so *)
+
+(* The counts of the workflows that have steps, over a repository or the whole
+   run: how many there are, how many call bats's setup action and how many
+   fail *)
+typedef tally = @(int, int, int)
+
+(* One workflow, fb[fs, fe), of the repository b[s, e): 0 when it has an
+   enabled step that calls the setup action, else 1 and the error that says
+   why *)
 fn _audit_file {l,l2:agz}{s,e,fs,fe:nat | s <= e; e <= 524288; e - s <= 255; fs <= fe; fe <= 524288}
   (b: !$A.borrow(byte, l, 524288), s: int s, e: int e,
    fb: !$A.borrow(byte, l2, 524288), fs: int fs, fe: int fe): int =
   if fe - fs <= 255 then let
-    val setup = _run("env", _setup_argv(b, s, e, fb, fs, fe))
+    val setup = _run("env", _setup_argv(b, s, e, fb, fs, fe, true))
   in
     if setup = 0 then 0
     else if setup = 1 then let
+      val conditional = _run("env", _setup_argv(b, s, e, fb, fs, fe, false))
       val () = _error_line(b, s, e)
       val () = print! ("workflow ")
       val () = _print_range(fb, fs, fe)
-    in (println! (" runs bats but has no enabled step that calls bats's setup action (bats-lang/bats/.github/actions/setup at a full commit), so the pin check never runs in it"); 1) end
+    in
+      if conditional = 0 then
+        (println! (" has steps, and its step that calls bats's setup action is conditional (an if: on the step or on its job), so the pin check may never run in it"); 1)
+      else
+        (println! (" has steps and no enabled step that calls bats's setup action (bats-lang/bats/.github/actions/setup at a full commit; ./.github/actions/setup in bats itself), so the pin check never runs in it"); 1)
+    end
     else let
       val () = _error_line(b, s, e)
       val () = print! ("grep could not look for a step of the setup action in ")
@@ -442,67 +485,78 @@ fn _audit_file {l,l2:agz}{s,e,fs,fe:nat | s <= e; e <= 524288; e - s <= 255; fs 
   in (println! ("a workflow path of ", fe - fs, " bytes is longer than the ", 255, " the audit will put in an argument"); 1) end
 
 (* Every workflow in fb[i, k), one on each line, of the repository b[s, e):
-   how many did not call the setup action, added to missing *)
+   the counts go on from t *)
 fun _audit_files {l,l2:agz}{s,e:nat | s <= e; e <= 524288; e - s <= 255}{k:nat | k <= 524288}{i:nat | i <= k} .<k - i>.
   (b: !$A.borrow(byte, l, 524288), s: int s, e: int e,
-   fb: !$A.borrow(byte, l2, 524288), k: int k, i: int i, missing: int): int = let
+   fb: !$A.borrow(byte, l2, 524288), k: int k, i: int i, t: tally): tally = let
   val j = _line_end(fb, k, i)
-  val missing2 = (if j > i then missing + _audit_file(b, s, e, fb, i, j) else missing): int
+  val t2 =
+    (if j > i then let
+       val code = _audit_file(b, s, e, fb, i, j)
+       val @(with_steps, calling, failing) = t
+     in
+       (if code = 0 then @(with_steps + 1, calling + 1, failing)
+        else @(with_steps + 1, calling, failing + 1))
+     end
+     else t): tally
 in
-  if j >= k then missing2 else _audit_files(b, s, e, fb, k, j + 1, missing2)
+  if j >= k then t2 else _audit_files(b, s, e, fb, k, j + 1, t2)
 end
 
 (* What the setup rule finds in the clone of b[s, e), from the run of the
-   workflows listing: the number of failures (0 for none) *)
+   workflows listing: the counts go on from t *)
 fn _without_setup {l:agz}{s,e:nat | s <= e; e <= 524288; e - s <= 255}
   (b: !$A.borrow(byte, l, 524288), s: int s, e: int e,
-   status: int, read_end: drained, files: $B.builder_v): int = let
+   status: int, read_end: drained, files: $B.builder_v, t: tally): tally = let
   val @(files_arr, files_len) = $B.to_arr(files)
   val @(fz, fb) = $A.freeze<byte>(files_arr)
-  val missing =
+  val @(with_steps, calling, failing) = t
+  val t2 =
     (case+ read_end of
      | Drained_whole() =>
-         if status = 0 then _audit_files(b, s, e, fb, files_len, 0, 0)
-         else if status = 1 then 0
+         if status = 0 then _audit_files(b, s, e, fb, files_len, 0, t)
+         else if status = 1 then t
          else let
            val () = _error_line(b, s, e)
-         in (println! ("git grep could not list the workflows that run bats (status ", status, ")"); 1) end
+         in (println! ("git grep could not list the workflows that have steps (status ", status, ")"); @(with_steps, calling, failing + 1)) end
      | Drained_too_long() => let
          val () = _error_line(b, s, e)
-       in (println! ("the list of workflows that run bats does not fit the 524288-byte buffer, so the audit would see part of it"); 1) end
+       in (println! ("the list of workflows that have steps does not fit the 524288-byte buffer, so the audit would see part of it"); @(with_steps, calling, failing + 1)) end
      | Drained_failed() => let
          val () = _error_line(b, s, e)
-       in (println! ("the list of workflows that run bats could not be read"); 1) end): int
+       in (println! ("the list of workflows that have steps could not be read"); @(with_steps, calling, failing + 1)) end): tally
   val () = $A.drop<byte>(fz, fb)
   val () = $A.free<byte>($A.thaw<byte>(fz))
-in missing end
+in t2 end
 
-(* Audits the clone of b[s, e): whether it failed *)
+(* Audits the clone of b[s, e): whether it failed, and the counts from t *)
 fn _audit_clone {l:agz}{s,e:nat | s <= e; e <= 524288; e - s <= 255}
-  (b: !$A.borrow(byte, l, 524288), s: int s, e: int e, failing: !$B.sized_rope): bool = let
+  (b: !$A.borrow(byte, l, 524288), s: int s, e: int e, failing: !$B.sized_rope, t: tally): @(bool, tally) = let
   var files : $B.builder(0) = $B.create()
   val @(status, read_end) = _capture("git", _workflows_argv(b, s, e), files)
-  val missing = _without_setup(b, s, e, status, read_end, files)
+  val t2 = _without_setup(b, s, e, status, read_end, files, t)
+  val @(_, _, failing_before) = t
+  val @(_, _, failing_after) = t2
   val pins = _run("env", _check_argv(b, s, e))
   val () =
     if pins = 0 then ()
     else let
       val () = _error_line(b, s, e)
     in println! ("bats check-pins --discover reports floating inputs, or could not run (status ", pins, "); its lines are above") end
-  val failed = missing != 0 || pins != 0: bool
+  val failed = failing_after != failing_before || pins != 0: bool
   val () = if failed then _fail(b, s, e, failing) else ()
-in failed end
+in @(failed, t2) end
 
-(* Audits b[s, e): whether it failed *)
+(* Audits b[s, e): whether it failed, and the counts from t *)
 fn _audit_one {l:agz}{s,e:nat | s <= e; e <= 524288; e - s <= 255}
-  (b: !$A.borrow(byte, l, 524288), s: int s, e: int e, failing: !$B.sized_rope): bool = let
+  (b: !$A.borrow(byte, l, 524288), s: int s, e: int e, failing: !$B.sized_rope, t: tally): @(bool, tally) = let
   val () = _header(b, s, e)
 in
   if ~_name_ok(b, s, e, false) then let
     val () = _error_line(b, s, e)
     val () = println! ("the repository's name is not one the audit will put in a path")
     val () = _fail(b, s, e, failing)
-  in true end
+  in @(true, t) end
   else let
     val cloned = _run("git", _clone_argv(b, s, e))
   in
@@ -510,8 +564,8 @@ in
       val () = _error_line(b, s, e)
       val () = println! ("cannot be cloned (git status ", cloned, ")")
       val () = _fail(b, s, e, failing)
-    in true end
-    else _audit_clone(b, s, e, failing)
+    in @(true, t) end
+    else _audit_clone(b, s, e, failing, t)
   end
 end
 
@@ -520,25 +574,26 @@ end
    ============================================================ *)
 
 (* Audits every name in b[i, k), one on each line: how many were audited and
-   how many failed go on from audited and failed. A name over 255 bytes
-   is a failure of its own, said and counted. *)
+   how many failed go on from audited and failed, and the counts of the
+   workflows from t. A name over 255 bytes is a failure of its own, said and
+   counted. *)
 fun _audit_names {l:agz}{k:nat | k <= 524288}{i:nat | i <= k} .<k - i>.
   (b: !$A.borrow(byte, l, 524288), k: int k, i: int i,
-   failing: !$B.sized_rope, audited: int, failed: int): @(int, int) = let
+   failing: !$B.sized_rope, audited: int, failed: int, t: tally): @(int, int, tally) = let
   val j = _line_end(b, k, i)
-  val @(audited2, failed2) =
-    (if j <= i then @(audited, failed)
+  val @(audited2, failed2, t2) =
+    (if j <= i then @(audited, failed, t)
      else if j - i <= 255 then let
-       val bad = _audit_one(b, i, j, failing)
-     in @(audited + 1, (if bad then failed + 1 else failed)) end
+       val @(bad, t3) = _audit_one(b, i, j, failing, t)
+     in @(audited + 1, (if bad then failed + 1 else failed), t3) end
      else let
        val () = _header(b, i, j)
        val () = _error_line(b, i, j)
        val () = println! ("the repository's name is ", j - i, " bytes, longer than the ", 255, " the audit will put in a path")
        val () = _fail(b, i, j, failing)
-     in @(audited + 1, failed + 1) end): @(int, int)
+     in @(audited + 1, failed + 1, t) end): @(int, int, tally)
 in
-  if j >= k then @(audited2, failed2) else _audit_names(b, k, j + 1, failing, audited2, failed2)
+  if j >= k then @(audited2, failed2, t2) else _audit_names(b, k, j + 1, failing, audited2, failed2, t2)
 end
 
 (* The chunks of the failing names, in order, to stdout *)
@@ -583,15 +638,22 @@ implement main0 () = let
   val @(names_arr, names_len) = $B.to_arr(names)
   val @(names_fz, names_bv) = $A.freeze<byte>(names_arr)
   var failing : $B.sized_rope = $B.sized_rope_create()
-  val @(audited, failed) =
-    (if listed then _audit_names(names_bv, names_len, 0, failing, 0, 0) else @(0, 0)): @(int, int)
+  val @(audited, failed, with_steps, calling, failing_workflows) =
+    (if listed then let
+       val @(audited0, failed0, counts) = _audit_names(names_bv, names_len, 0, failing, 0, 0, @(0, 0, 0))
+       val @(a, b, c) = counts
+     in @(audited0, failed0, a, b, c) end
+     else @(0, 0, 0, 0, 0)): @(int, int, int, int, int)
   val () = $A.drop<byte>(names_fz, names_bv)
   val () = $A.free<byte>($A.thaw<byte>(names_fz))
   val () =
     if ~listed then ()
     else if audited = 0 then
       println! ("::error title=pin audit::the list held no repository")
-    else println! ("== ", audited, " repositories audited, ", failed, " failing")
+    else let
+      val () = println! ("== ", with_steps, " workflows with steps: ", calling, " call the setup action, ",
+                         failing_workflows, " failing")
+    in println! ("== ", audited, " repositories audited, ", failed, " failing") end
   val chunks = $B.sized_rope_chunks(failing)
   val () =
     if failed > 0 then let
