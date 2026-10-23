@@ -36,7 +36,7 @@ repository-prototype/.github/workflows/package-check.yml eeb8e971790c2b9c6673708
 repository-prototype/.github/workflows/publish.yml 50ebb500e16336a6255d1923c79a9545d844c44e69e331f240e64c0d0eaa8290 # repository-prototype#397
 repository-prototype/.github/workflows/relock-pins.yml 1ae7b13ec2363153a4e98a1a62476e607f7531ae02bcc8b400aa0a22baf1553d # repository-prototype#397
 repository-prototype/.github/workflows/relock-pins-test.yml d8f837b72fc25dfcd9df01469612bf8b36876b0b32f489acca2d4b93b42577ad # repository-prototype#397
-repository-prototype/.github/workflows/tools-test.yml 53be68d5d3a95fafa20ee299e3d11228cf8716ff858aba948439055d28cdcb24 # repository-prototype#397
+repository-prototype/.github/workflows/tools-test.yml 53be68d5d3a95fafa20ee299e3d11228cf8716ff858aba948439055d28cdcb24 20571f686f9de59f7ce69a2252cb913f456b57b939500bd9d6afb61271d27425 # repository-prototype#397
 repository-prototype/.github/workflows/verify.yml 1a5c9600d9d3c6d6a5beaeefd3f386154eed17665b9caf3a921f25ca58c35290 # repository-prototype#397
 bridge/.github/workflows/review-gate.yml b15a17acc60004f27d6318fb62b234928b6bdaff437c644b941813cdbc7dfd10 # bridge#207
 bridge/.github/workflows/review-gate-relay.yml 3909d2fd6cf9ab263f98e5a8dbb200bcc7ed7e172cc195fe6afaae5aa9fd0cc9 # bridge#207
