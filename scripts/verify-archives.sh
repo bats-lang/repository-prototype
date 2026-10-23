@@ -21,7 +21,14 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 fail=0
 
-git diff --no-renames --name-status "$BASE" HEAD -- '*.bats' '*.bats.sha256' > "$TMP/changes"
+# An archive is a .bats file at the root, in a package's directory, or in a
+# namespace's package directory (wasm.bats-packages.dev/bridge/): one, two or
+# three path components. A git pathspec '*' crosses '/', so a bare '*.bats'
+# would also take a package's source (tools/pin-audit/src/bin/pin_audit.bats)
+# for an archive without a sidecar; ':(glob)' stops each '*' at a '/'.
+git diff --no-renames --name-status "$BASE" HEAD -- \
+  ':(glob)*.bats' ':(glob)*/*.bats' ':(glob)*/*/*.bats' \
+  ':(glob)*.bats.sha256' ':(glob)*/*.bats.sha256' ':(glob)*/*/*.bats.sha256' > "$TMP/changes"
 while read -r st path; do
   [ "$st" = "A" ] || { echo "FAIL: $path is $st: published archives are never modified or removed"; fail=1; }
 done < "$TMP/changes"
@@ -53,7 +60,7 @@ passes() {
 
 if [ "$n" -gt 0 ]; then
   git worktree add -q --detach "$TMP/base" "$BASE"
-  for dir in $(git ls-files '*.bats' | grep / | xargs -n1 dirname | sort -u); do
+  for dir in $(git ls-files ':(glob)*/*.bats' ':(glob)*/*/*.bats' | xargs -n1 dirname | sort -u); do
     head_arc=$(latest "$ROOT" "$dir")
     [ -n "$head_arc" ] || continue
     grep -qx "A	${head_arc#$ROOT/}" "$TMP/changes" && continue
