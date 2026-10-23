@@ -1,5 +1,6 @@
 # Runs the tests of this repository's own tools (#396): `bats test` of the pin
-# audit (tools/pin-audit, planted git repositories) and of the script that
+# audit (tools/pin-audit, planted git repositories), of the relock's pin mover
+# (tools/repin, #410: the age rule and the table, in memory) and of the script that
 # verifies added archives (tests/verify-archives: scripts/verify-archives.sh on
 # planted git repositories, with a stand-in bats). Each test package is built
 # first, since its tests run the binaries it builds.
@@ -46,6 +47,18 @@ jobs:
 
       - name: Test the pin audit
         working-directory: tools/pin-audit
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats test --repository "$REPOSITORY"
+
+      - name: Build the relock's pin mover
+        working-directory: tools/repin
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
+
+      - name: Test the relock's pin mover
+        working-directory: tools/repin
         env:
           REPOSITORY: ${{ github.workspace }}
         run: bats test --repository "$REPOSITORY"

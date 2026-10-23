@@ -70,6 +70,18 @@ the same CI.
 
 * **The audit:** `tools/pin-audit` (a bats program, `unsafe = false`; run it at the root of this checkout after `bats build`) clones the default branch of every non-archived repository of the organisation (`gh api --paginate orgs/bats-lang/repos`, then `git clone --depth 1` into `audit-clones/<name>`) and passes each workflow file when exactly one of these holds, and fails it as "not canonical" otherwise: its sha256 is listed with its repository and path in `tools/pin-audit/allowlist.txt`, or its bytes are one of `tools/pin-audit/templates/*.yml` with the holes filled (the template is split at its markers and each segment is compared byte for byte; `@@COMMIT@@` is 40 lowercase hex digits, `@@COMMENT@@` printable ASCII to the end of the line, `@@MINUTE@@` one or two digits). It reads no YAML, and has no line rule or per-job rule. A file that is both listed and a template fails, so an entry is dropped when its file becomes a caller. An allowlist entry is `<repository>/<path> <sha256> [<next sha256>] # <comment>`: the second hash is the next one, so a repository that changes a bespoke file first adds the new hash here, then changes the file, then a later pull request drops the old hash; every entry's comment names the ticket that says to fix the file (`<repository>#<number>`), so no exception is permanent. An entry with no such comment, a malformed entry and a repeated file fail the audit. A path over 255 bytes, a file over 524288 bytes and a failing clone are failures of their own, said and counted; the exit status is 1 when anything fails. `bats test` in `tools/pin-audit` plants repositories with `git init` and runs the built `dist/debug/pin_audit` against them, and `bats test` in `tests/verify-archives` does the same for `scripts/verify-archives.sh` with a stand-in `bats`; `.github/workflows/tools-test.yml` runs both.
 
+* **The pin mover:** `tools/repin` (a bats program, `unsafe = false`) holds what every kind of pin
+  move shares: the move record (one tab-separated line for each pin examined: kind, name, old,
+  new, release age in whole days, status `moved`, `major, not moved`, `too new` or `current`; the
+  kind is a plain word, so a new kind adds rows and no field), the release age rule (a release is
+  a candidate only when it was published at least 7 days, 604800 seconds, before `now`, which is
+  always an argument and never the clock, so a fixture is exact) and the Markdown table of the
+  relock pull request body. `repin table RECORDS` prints the table of a records file and names the
+  first bad line; `repin age NOW PUBLISHED` says whether a release is a candidate. It reads the
+  files it is given, makes no network call, reads no YAML and no file's time. Its tests are `bats
+  test` in `tools/repin`, run by `.github/workflows/tools-test.yml`; a record or time the tests
+  take as text is plain bytes, so they build their input in memory.
+
 This repository's own `verify` is the exception: it checks a new archive
 against every package's newest version, which is the point of it.
 
