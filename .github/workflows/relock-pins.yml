@@ -336,7 +336,7 @@ jobs:
                     print "::error file=" file ",line=" NR "::refused, not a plain uses line of the pin: " $0
                     exit 1
                   }
-                  print before pin newest " # " comment
+                  print before pin newest
                 }
                 # pin-rewrite end
               ' "$file" > ~/relock/pin-file.new || exit 1
