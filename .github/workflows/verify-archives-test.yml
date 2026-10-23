@@ -1,0 +1,22 @@
+# Tests scripts/verify-archives.sh (tests/verify-archives/test.sh): a .bats
+# source deep in the tree is not an archive; an archive without a sidecar and
+# a modified archive still fail.
+name: verify-archives test
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/verify-archives.sh'
+      - 'tests/verify-archives/**'
+      - '.github/workflows/verify-archives-test.yml'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: The script on scratch repositories
+        run: tests/verify-archives/test.sh
