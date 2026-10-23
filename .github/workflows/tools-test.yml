@@ -21,6 +21,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # the setup action names a pull request's head, the merge's second parent (bats#283)
+          fetch-depth: 2
 
       # bats's setup action, pinned by commit as verify.yml does: the compiler built
       # from the bootstrap C of the commit named, ATS2 installed by `bats ats2
