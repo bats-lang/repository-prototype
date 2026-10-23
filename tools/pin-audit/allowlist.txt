@@ -1,0 +1,97 @@
+# The allowlist of tools/pin-audit: the exact text a workflow file may have.
+# The audit never reads YAML; it compares bytes with the entries below
+# (allowlist rule, #365). One entry on each line, `kind:text`; the text is
+# exact, spaces included (what follows the first colon is the text), with
+# three marks: a backquote and H is forty lowercase hexadecimal digits, a
+# backquote and N is one or two digits, and a backquote and C at the end of
+# an entry is nothing or " # " and any text. A line that begins with # is not
+# an entry. A change here is a reviewed pull request: it is the only way a
+# workflow gains a spelling the audit rejects.
+#
+# file:      sha256, two spaces, repository/path, two spaces, the reason: a
+#            workflow file that is fine as it is, byte for byte
+# key:       the indentation, a key and its colon: a line indented under six
+#            spaces that is this and then nothing, or a space and a value
+#            (letters, digits, . , / - : @ ( ) = + * $ _ and spaces, quotes
+#            in pairs, brackets and braces in balance, a comment after " #")
+# line:      a whole line indented under six spaces
+# caller:    a whole line indented six spaces or more in a caller of a shared workflow
+# prologue:  a line that may come between "    steps:" and the setup step
+# setup-name, setup-id, setup-uses, setup-uses-bats (the repository bats
+# only), setup-with (its header), setup-input (a line under it): the setup
+# step, in the order name, id, uses, with
+# review gates: copied whole, run no bats
+file:3909d2fd6cf9ab263f98e5a8dbb200bcc7ed7e172cc195fe6afaae5aa9fd0cc9  bridge/.github/workflows/review-gate-relay.yml  the relay that passes formal reviews to the review gate, no permissions, does nothing
+file:b15a17acc60004f27d6318fb62b234928b6bdaff437c644b941813cdbc7dfd10  bridge/.github/workflows/review-gate.yml  the review gate of the pull request flow (bridge CLAUDE.md), run on the default branch only, no bats
+file:4ff6964784e6a99a80b2e56de8fb8b5d592b39d1537474661b49534ed53bc9dd  capacitor-plugins/.github/workflows/review-gate-relay.yml  the relay that passes formal reviews to the review gate, no permissions, does nothing
+file:c1595e949417989054653e1d2071893e24cef2456cd93384d3f720ef1233dfcb  capacitor-plugins/.github/workflows/review-gate.yml  the review gate of the pull request flow (bridge CLAUDE.md), run on the default branch only, no bats
+file:3909d2fd6cf9ab263f98e5a8dbb200bcc7ed7e172cc195fe6afaae5aa9fd0cc9  pwa/.github/workflows/review-gate-relay.yml  the relay that passes formal reviews to the review gate, no permissions, does nothing
+file:323af6624dfd0026f47e18e46cb743ba9d8f782debb22fa01ec4fe7bcb7ba55c  pwa/.github/workflows/review-gate.yml  the review gate of the pull request flow (bridge CLAUDE.md), run on the default branch only, no bats
+
+# keys of the lines indented under six spaces
+key:name:
+key:on:
+key:permissions:
+key:concurrency:
+key:jobs:
+key:  contents:
+key:  pull-requests:
+key:  id-token:
+key:  pages:
+key:  statuses:
+key:  issues:
+key:  actions:
+key:  group:
+key:  cancel-in-progress:
+key:    branches:
+key:    env:
+key:    environment:
+key:    inputs:
+key:    name:
+key:    needs:
+key:    outputs:
+key:    paths:
+key:    permissions:
+key:    runs-on:
+key:    secrets:
+key:    timeout-minutes:
+key:    types:
+key:    with:
+key:    workflows:
+key:    concurrency:
+key:    - cron:
+
+# whole lines indented under six spaces
+line:    steps:
+line:    uses: bats-lang/repository-prototype/.github/workflows/relock-pins.yml@`H`C
+line:    uses: bats-lang/repository-prototype/.github/workflows/publish.yml@`H`C
+line:    uses: ./.github/workflows/android.yml
+line:    uses: bats-lang/pwa/.github/workflows/android.yml@`H`C
+line:    uses: bats-lang/pwa/.github/workflows/play-release.yml@`H`C
+
+# a caller of a shared workflow
+caller:      workflow-pins: |
+caller:        bats-lang/repository-prototype/.github/workflows/relock-pins.yml
+caller:        bats-lang/repository-prototype/.github/workflows/publish.yml
+caller:        bats-lang/pwa/.github/workflows/android.yml
+caller:        bats-lang/pwa/.github/actions/e2e-setup
+caller:        bats-lang/bats/.github/actions/setup
+caller:        bats-lang/repository-prototype/.github/actions/check-aggregate
+caller:      regenerate: |
+caller:      regenerate-paths: |
+caller:        bats build --repository "$BATS_REPOSITORY"
+caller:        scripts/bootstrap-c.sh dist/debug/bats "$BATS_REPOSITORY"
+caller:        bootstrap/c
+
+# before the setup step
+prologue:      - uses: actions/checkout@`H`C
+
+# the setup step
+setup-name:      - name: Set up bats
+setup-id:        id: bats
+setup-uses:        uses: bats-lang/bats/.github/actions/setup@`H`C
+setup-uses-bats:        uses: ./.github/actions/setup
+setup-with:        with:
+setup-input:          require-lock: 'false'
+prologue:        with:
+prologue:          fetch-depth: 2

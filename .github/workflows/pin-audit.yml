@@ -1,14 +1,17 @@
 # The weekly pin audit (#365, piece 3 of #353; the audit #352 was): every
 # non-archived repository of the organisation is cloned and run through
-# `bats check-pins --discover`, and every workflow of it that has `steps:`
-# must call bats's setup action (the step that runs the checker in a
-# repository's own CI); one that does not fails its repository, named with
-# the workflow. A red run names the failing repositories (`::error` lines and
-# the last line of the log); the checker's own `# unpinned: <reason>`
-# exceptions for floating inputs are listed in the log, not failures. The
-# audit is tools/pin-audit (bats, quire#646), and the choice of gh for the
-# repository list and git for the files, and what "a workflow that does not
-# call the setup action" means, are in its header.
+# `bats check-pins --discover`, and every workflow file of it must be in the
+# allowlist, tools/pin-audit/allowlist.txt, in exact text: a file listed by
+# its hash, a caller of a shared workflow with no job of its own, or a file
+# that runs jobs whose setup step is bats's setup action in its canonical
+# lines (the step that runs the checker in a repository's own CI). The audit
+# never reads YAML; text it was not told is fine fails, named with the
+# workflow and why. A red run names the failing repositories (`::error`
+# lines and the last line of the log); the checker's own `# unpinned:
+# <reason>` exceptions for floating inputs are listed in the log, not
+# failures. The audit is tools/pin-audit (bats, quire#646), and its header
+# has the rule and the choice of gh for the list and git for the files. It
+# runs at the root of this checkout, where it reads the allowlist.
 name: pin-audit
 
 on:
