@@ -66,6 +66,8 @@ the same CI.
   `.github/workflows`, so without a `RELOCK_TOKEN` secret a workflow pin
   that would move is listed in the pull request, to move by hand.
 
+* **The weekly audit:** `.github/workflows/pin-audit.yml` (Mondays, or by hand) runs `tools/pin-audit`, a bats program, over every non-archived repository of the organisation (#365): the list is `gh api`'s and each repository is a shallow `git clone`, because bats has no HTTP client; each clone goes through `bats check-pins --discover`, and a repository in which no workflow or action calls bats's setup action (the step that runs the checker) fails too. `# unpinned: <reason>` exceptions are listed in the log. The run is red, naming the failing repositories, until each has repinned. The compiler and package repository it uses are `.github/bats-version` and `.github/repository-version`, moved by hand until a relock covers them.
+
 This repository's own `verify` is the exception: it checks a new archive
 against every package's newest version, which is the point of it.
 

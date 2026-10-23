@@ -1,0 +1,13 @@
+[package]
+name = "pin-audit"
+kind = "bin"
+unsafe = false
+
+[dependencies]
+"array" = ""
+"arith" = ""
+"builder" = ""
+"file" = ""
+"list" = ""
+"process" = ""
+"result" = ""

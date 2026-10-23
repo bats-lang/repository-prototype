@@ -1,0 +1,48 @@
+# The weekly pin audit (#365, piece 3 of #353; the audit #352 was): every
+# non-archived repository of the organisation is cloned and run through
+# `bats check-pins --discover`, and one that never calls bats's setup action
+# (the step that runs the checker in a repository's own CI) fails too. A red
+# run names the failing repositories (`::error` lines and the last line of
+# the log); `# unpinned: <reason>` exceptions are listed in the log, not
+# failures. The audit is tools/pin-audit (bats, quire#646), and the choice of
+# gh for the repository list and git for the files is in its header.
+name: pin-audit
+
+on:
+  schedule:
+    # weekly, Monday, at a minute that is not the hour's (runs at :00 are delayed)
+    - cron: '43 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # bats's setup action, by commit (#334): the compiler of
+      # .github/bats-version, the package repository of
+      # .github/repository-version (both pin files are read from the
+      # project's directory, hence the paths), and this repository's own pin
+      # check (bats#391).
+      - name: Set up bats
+        uses: bats-lang/bats/.github/actions/setup@a74e02786ca5e591fc660ad1b6e59ac246fcb7e2 # bats main, PR #440 and after (bats has no version tags)
+        with:
+          working-directory: tools/pin-audit
+          bats-version-file: ../../.github/bats-version
+          repository-version-file: ../../.github/repository-version
+
+      - name: Build the audit
+        working-directory: tools/pin-audit
+        run: bats build
+
+      # GH_TOKEN is the job's own token, read-only: the organisation's public
+      # repositories are listed and cloned without more
+      - name: Audit the organisation's repositories
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/pin-audit/dist/debug/pin_audit
