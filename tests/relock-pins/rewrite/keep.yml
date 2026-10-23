@@ -1,0 +1,7 @@
+# a pin already at the newest commit, in the one form: left byte-identical
+jobs:
+  publish:
+    uses: bats-lang/repository-prototype/.github/workflows/publish.yml@1111111111111111111111111111111111111111 # repository-prototype main 1111111
+  steps:
+    - uses: bats-lang/repository-prototype/.github/workflows/publish.yml@1111111111111111111111111111111111111111 # repository-prototype main 1111111
+    - run: echo unrelated

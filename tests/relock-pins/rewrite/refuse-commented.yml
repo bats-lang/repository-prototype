@@ -1,0 +1,4 @@
+jobs:
+  publish:
+    # uses: bats-lang/repository-prototype/.github/workflows/publish.yml@2222222222222222222222222222222222222222
+    uses: bats-lang/repository-prototype/.github/workflows/publish.yml@2222222222222222222222222222222222222222 # v1

@@ -1,0 +1,141 @@
+# Tests relock-pins.yml (#395, area: relock comment) as check-aggregate-test.yml
+# tests its action: the workflow in the checked-out head (a local path) relocks
+# a scratch caller (tests/relock-pins/workflows/scratch-caller.yml, named by
+# `workflows-directory`; `publish: 'false'` pushes nothing) and the change it
+# hands on is read. Every `uses:` line it moved must be
+# `uses: <pin>@<new commit> # <repo> main <first 7 hex>` and nothing else.
+# A step then plays that rule against three bad patches (no comment, two
+# comments, the wrong 7 hex) and each must fail it. The `rewrite` job runs the
+# very awk program of relock-pins.yml (between its pin-rewrite markers) on the
+# fixtures of tests/relock-pins/rewrite: pins already at the newest commit with
+# another comment are rewritten to the one form, a line already in it is left
+# byte-identical, and a quoted value, flow style, a commented-out `uses:` line
+# and text after the token are refused with the file, the line number and the
+# line, and nothing is written.
+name: relock-pins test
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/relock-pins.yml'
+      - '.github/workflows/relock-pins-test.yml'
+      - 'tests/relock-pins/**'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  relock:
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      workflow-pins: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml
+        bats-lang/bats/.github/actions/setup
+      publish: 'false'
+      branch-prefix: relock-test/
+
+  check:
+    needs: relock
+    runs-on: ubuntu-24.04
+    env:
+      CHANGED: ${{ needs.relock.outputs.changed }}
+      PATCH: ${{ needs.relock.outputs.patch }}
+    steps:
+      - name: The moved pin lines carry the comment
+        run: |
+          set -eu
+          [ "$CHANGED" = yes ] || { echo "::error::the scratch caller's pins did not move (changed=$CHANGED)"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/t"
+          printf '%s' "$PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/t/good.patch"
+          cat "$RUNNER_TEMP/t/good.patch"
+
+          # The rule: each added line with `uses:` is exactly
+          # `uses: <owner>/<repo>/<path>@<40 hex> # <repo> main <7 hex>`, the
+          # 7 hex are the first of the 40, and the commit is not the old one.
+          # Three lines are expected: the scratch caller's.
+          cat > "$RUNNER_TEMP/t/rule.sh" <<'RULE'
+          set -eu
+          count=0
+          while IFS= read -r line; do
+            case "$line" in
+              +*uses:*) ;;
+              *) continue ;;
+            esac
+            count=$((count + 1))
+            if ! printf '%s\n' "$line" | grep -Eq '^\+ *(- )?uses: [A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[A-Za-z0-9._/-]+@[0-9a-f]{40} # [A-Za-z0-9._-]+ main [0-9a-f]{7}$'; then
+              echo "refused: $line"; exit 1
+            fi
+            use=${line#*uses: }
+            pin=${use%%@*}
+            rest=${use#*@}
+            commit=${rest%% *}
+            repo=$(printf '%s' "$pin" | cut -d/ -f2)
+            [ "${rest#"$commit # $repo main "}" = "$(printf '%.7s' "$commit")" ] \
+              || { echo "refused (comment is not '$repo main <first 7 of the commit>'): $line"; exit 1; }
+            case "$commit" in
+              67ebbf0c4744edce26584eef60ea26438945bab7|678ecb3*) echo "refused (not moved): $line"; exit 1 ;;
+            esac
+          done < "$1"
+          [ "$count" -eq 3 ] || { echo "refused: $count added uses lines, expected 3"; exit 1; }
+          RULE
+          sh "$RUNNER_TEMP/t/rule.sh" "$RUNNER_TEMP/t/good.patch"
+          echo "the moved lines carry the comment"
+
+      - name: A missing, a doubled and a wrong comment are refused
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP/t"
+          # rewrite the added uses lines of the good patch, one way per patch
+          awk '/^\+.*uses:/ { sub(/ # .*/, "") } { print }' good.patch > missing.patch
+          awk '/^\+.*uses:/ { $0 = $0 " # v1" } { print }' good.patch > doubled.patch
+          awk '/^\+.*uses:/ { sub(/ main [0-9a-f][0-9a-f]*$/, " main 0000000") } { print }' good.patch > wrong.patch
+          for bad in missing doubled wrong; do
+            if sh rule.sh "$bad.patch"; then
+              echo "::error::the rule accepted the $bad patch"; exit 1
+            fi
+            echo "the $bad patch is refused"
+          done
+
+  rewrite:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: The pin lines are healed, kept or refused
+        run: |
+          set -eu
+          work="$RUNNER_TEMP/rewrite"
+          mkdir -p "$work"
+          # the program as relock-pins.yml has it, between its markers
+          awk '/# pin-rewrite end/ { on = 0 } on { print } /# pin-rewrite begin/ { on = 1 }' \
+            .github/workflows/relock-pins.yml > "$work/rewrite.awk"
+          [ -s "$work/rewrite.awk" ] || { echo "::error::no pin-rewrite program in relock-pins.yml"; exit 1; }
+          pin=bats-lang/repository-prototype/.github/workflows/publish.yml@
+          newest=1111111111111111111111111111111111111111
+          comment="repository-prototype main 1111111"
+          run_awk() {
+            awk -v pin="$pin" -v newest="$newest" -v comment="$comment" -v file="$1" -f "$work/rewrite.awk" "$1"
+          }
+          dir=tests/relock-pins/rewrite
+
+          run_awk "$dir/heal.yml" > "$work/heal.out"
+          cmp "$work/heal.out" "$dir/heal.expected.yml" \
+            || { echo "::error::a pin at the newest commit with another comment was not rewritten to the one form"; diff "$dir/heal.expected.yml" "$work/heal.out" || true; exit 1; }
+          echo "other comments (a wrong 7 hex, # v4, other words, none) are rewritten to the one form"
+
+          run_awk "$dir/keep.yml" > "$work/keep.out"
+          cmp "$work/keep.out" "$dir/keep.yml" \
+            || { echo "::error::a line already in the one form was changed"; exit 1; }
+          echo "a line in the one form is byte-identical"
+
+          for name in quoted flow commented comma; do
+            if run_awk "$dir/refuse-$name.yml" > "$work/$name.out" 2> "$work/$name.err"; then
+              echo "::error::the $name spelling was not refused"; exit 1
+            fi
+            cat "$work/$name.err"
+            # the refusal names the file, the line number and the line
+            grep -Fq "file=$dir/refuse-$name.yml,line=" "$work/$name.out" \
+              || { echo "::error::the $name refusal does not name the file and the line number"; cat "$work/$name.out"; exit 1; }
+            echo "the $name spelling is refused: $(grep -F '::error' "$work/$name.out")"
+          done

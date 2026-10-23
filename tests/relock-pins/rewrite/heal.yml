@@ -1,0 +1,13 @@
+# a pin already at the newest commit with another comment, or none: rewritten
+jobs:
+  wrong-hex:
+    uses: bats-lang/repository-prototype/.github/workflows/publish.yml@1111111111111111111111111111111111111111 # repository-prototype main 0000000
+  older-style:
+    uses: bats-lang/repository-prototype/.github/workflows/publish.yml@1111111111111111111111111111111111111111 # v4
+  other-words:
+    uses: bats-lang/repository-prototype/.github/workflows/publish.yml@1111111111111111111111111111111111111111 # bats 8e978df (#287)
+  no-comment:
+    uses: bats-lang/repository-prototype/.github/workflows/publish.yml@1111111111111111111111111111111111111111
+  list-item:
+    steps:
+      - uses: bats-lang/repository-prototype/.github/workflows/publish.yml@1111111111111111111111111111111111111111   # v1

@@ -66,6 +66,8 @@ the same CI.
   `.github/workflows`, so without a `RELOCK_TOKEN` secret a workflow pin
   that would move is listed in the pull request, to move by hand.
 
+* **The version comment:** `relock-pins.yml` writes `uses: <pin>@<commit> # <repo> main <first 7 hex of the commit>` (`<repo>` of `<owner>/<repo>`) for every workflow pin line, replacing the comment the line had (a line holding the pin that is not a plain `uses:` line, as a quoted value, flow style or a commented-out line, fails the step and is never written back), because `bats check-pins` fails a commit with no comment saying which version it is; the caller templates' `@@COMMENT@@` takes that text (#395). `.github/workflows/relock-pins-test.yml` relocks a scratch caller (`tests/relock-pins/workflows`, `publish: 'false'`) and fails when a moved line lacks the comment, and runs the step's awk on `tests/relock-pins/rewrite` (a wrong comment healed, the one form kept, other spellings refused).
+
 This repository's own `verify` is the exception: it checks a new archive
 against every package's newest version, which is the point of it.
 
