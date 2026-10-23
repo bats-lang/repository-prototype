@@ -46,7 +46,7 @@ keeps passing; pins move only through a reviewed pull request that runs
 the same CI.
 
 * **The lock:** `bats.lock` is committed (a package with no dependencies
-  has none). CI never runs `bats lock` for the package: `bats check` and
+  commits the empty one `bats lock` writes). CI never runs `bats lock` for the package: `bats check` and
   `bats build` fetch exactly the locked versions, and fail when the lock
   is missing or does not match `bats.toml`. A library's lock pins only
   its own CI and tests; its dependents still resolve their own.
@@ -68,6 +68,16 @@ the same CI.
 
 This repository's own `verify` is the exception: it checks a new archive
 against every package's newest version, which is the point of it.
+
+## A library's check.yml is a caller of package-check.yml
+
+A library's `.github/workflows/check.yml` only calls `.github/workflows/package-check.yml` here, by commit (`uses: bats-lang/repository-prototype/.github/workflows/package-check.yml@<40 hex> # <version>`), on push to main, pull request to main and `workflow_dispatch`. It has no inputs: the library chooses what runs by which test directories it has, never by editing a workflow.
+
+* Always: the bats setup action, `bats check`, `bats test` (unit tests live in `src/`; a package with none prints "no tests found" and passes).
+* `tests/static/` exists: `tests/static/run.sh "$REPOSITORY"`. `tests/dynamic/` exists: valgrind is installed and `tests/dynamic/run.sh "$REPOSITORY"` runs; when `tests/dynamic/package.json` exists too, Node (`.nvmrc`) and `npm ci` run first. `tests/c/` exists: `tests/c/run.sh` on ubuntu-24.04 and macos-26. A directory that exists must hold its `run.sh`; the step fails otherwise.
+* The existence tests are `hashFiles('<dir>/**') != ''` expressions, so no shell decides anything.
+* The lock is always required (the setup action's default `require-lock: 'true'`). `bats check` does not fail on a missing `bats.lock` (without one it fetches the newest of each package), and it refuses a `#use` the lock does not name only when a lock exists. So a package with no dependencies commits the empty `bats.lock` that `bats lock --repository <dir>` writes ("wrote bats.lock (no dependencies)"); adding a dependency without relocking then fails `bats check`.
+* The job shows in a caller as `check / check` (caller job / called job).
 
 ## Branches
 
