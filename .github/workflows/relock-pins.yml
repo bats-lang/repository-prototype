@@ -30,48 +30,40 @@
 # directories it writes, one per line, which are committed with the pins.
 # Both default to off, and then the run is the same relock as before.
 #
-# The command runs the code of the newest published packages (it builds them
-# and runs the result), while the relock holds RELOCK_TOKEN, which can push and
-# change workflow files. So privilege is separated by job, not guarded by a
-# list of what the command must not touch:
+# The command is trusted as the compiler is (area: relock regenerate,
+# repository-prototype#344): it builds and runs the newest published packages,
+# which we published through reviewed pull requests, into the same compiler
+# that builds everything else. So it is one job, and the command is not
+# guarded by a list of what it may write or by a validator of the listed
+# paths (the Python and the shell that checked them were code in languages we
+# do not write, and are gone). What the job does:
 #
-#  1. relock: finds the newest, relocks, moves the pins, decides the branch
-#     name (once, so a run that crosses midnight is one date) and hands the
-#     change on as job outputs (a patch and the pull request's text). It
-#     never runs the caller's command, and it has no token of its own (only
-#     the repository's default GITHUB_TOKEN to check out, and whether a
-#     RELOCK_TOKEN exists).
-#  2. regenerate (permissions: {}, no secrets, a checkout with no
-#     credentials, a timeout): applies the patch, runs the command, and
-#     uploads one tar of the listed paths. It is a different runner from job
-#     3, so whatever the command writes (GITHUB_ENV, GITHUB_PATH, .git/hooks,
-#     the runner's tools, ~/relock) is gone with it.
-#  3. publish (the only job with RELOCK_TOKEN): in its own clean checkout
-#     applies the same patch, takes the tar as data only (the path rule
-#     below; every member must be a regular file or directory under a listed
-#     path, a size cap; the files are written by this job's own code, never
-#     extracted by tar), commits, pushes and opens the pull request. The
-#     command's only influence on it is the bytes of the listed regular files.
+#  - the relock (the lock, the pins, the action pins, npm, Gradle) and the
+#    pull request's text are made first, and what they changed is staged;
+#  - the command runs in a step of its own with no token in its environment
+#    (GH_TOKEN, GITHUB_TOKEN and RELOCK_TOKEN are emptied; the checkout keeps
+#    no credentials, persist-credentials: false), after the relock and before
+#    anything is pushed, and has `regenerate-timeout-minutes`;
+#  - then the listed `regenerate-paths` are staged as they are (deletions
+#    included), the change is handed on as the outputs, and the branch is
+#    committed from the index, so a file the command wrote anywhere else is
+#    not in the commit, and pushed with the token, which only that step reads.
 #
-# What happens when the command goes wrong: if it fails (job 2 fails), or
-# writes a link or anything else that is not a regular file or a directory,
-# or too much, or a path outside the listed ones, or job 3 refuses its tar,
-# the run is red and NOTHING is pushed: an existing relock branch of the day
-# (a good one from an earlier run) is never replaced by one without the
-# files, and the pins are not pushed without them either.
+# If the command fails, the run is red and NOTHING is pushed: an existing
+# relock branch of the day (a good one from an earlier run) is never replaced
+# by one without the files, and the pins are not pushed without them either.
 #
-# The path rule, the same text in job 2's shell and job 3's Python, tested
-# with the same cases: a path is refused when it is empty, starts with `/` or
-# `-`, ends with `/`, has an empty, `.` or `..` component, has a character
-# other than letters, digits and `._/@+=,-` (a newline included), or has a
-# component that is, in any case, `.git`, `.github`, `.gitmodules` or
-# `.gitattributes`, at any depth.
-#
-# Limits, a change from before regenerate existed: the change handed on
-# (the patch, gzipped and base64) is under 800000 characters, in pieces of
-# 100000, and the pull request's text under 20000, because a job output goes
-# to a step as an environment variable (128 KiB); a relock larger than that
-# fails with a message. The regenerated files are at most `regenerate-max-bytes`.
+# The change handed on as outputs (the patch, gzipped and base64, in pieces of
+# 100000 characters) is written to a file of the runner, not to an
+# environment variable, so the pull request's text and the pushed change have
+# no size limit of ours. The outputs of a job together may not exceed 1,048,576
+# bytes (GitHub fails the job at its end, after the push: bats's regenerated
+# bootstrap/c made a patch under 800000 characters that did; the cap below is
+# set well under that, by what was seen, not by a documented count), so a patch of
+# 400000 characters or more is not an output: a run that does not publish fails
+# with a message (its outputs are what a caller reads), and a run that publishes
+# leaves `patch` and its parts empty, since the push does not read them. `regenerate-max-bytes` is
+# kept for callers that pass it and no longer limits anything.
 #
 # Concurrency: the group is `relock-pins-<repository>-<branch-prefix>` (never
 # cancelled), so one relock per repository and prefix runs at a time and a
@@ -80,11 +72,10 @@
 # requests this run supersedes: a test run uses another prefix, so it runs
 # beside, and cannot touch, the day's real relock.
 #
-# Do not give `regenerate` to a repository that is not public (job 2 has no
-# permissions, so it cannot check out a private one), nor to one whose
-# workflows use actions/cache or other state that a later run trusts: the
-# command's job can write the cache for the caller's ref through the runner's
-# cache token, which no permission setting takes away.
+# Do not give `regenerate` to a repository whose workflows use actions/cache or
+# other state that a later run trusts: the command can write the cache for the
+# caller's ref through the runner's cache token, which no token setting of the
+# step takes away.
 #
 # The action pins (#414, area: repin actions, piece 5 of 7 of #392): every
 # third-party `uses: <owner>/<repo>[/<path>]@<40 hex> # <version tag>` line of
@@ -125,21 +116,31 @@
 #    or holds a link or anything that is not a regular file or a directory.
 #    It uploads one tar of the listed paths and the records file.
 #  - job `relock` takes the tar as data (nothing is extracted by tar: each
-#    member is checked and written by this job's own code, the path rule
-#    below), before the pins move, so the files count in "anything changed?"
+#    member is checked and written by this job's own code, the repin path
+#    rule below), before the pins move, so the files count in "anything changed?"
 #    and travel in the patch with the pins, and renders the records with
 #    tools/repin's `table` (built from the package repository the setup step
 #    cloned): a line that is not a record fails the run. The table is the
 #    section "Moved by the repin command" of the pull request body.
 #  - a run where the command moved no file and no pin moved opens no pull
 #    request and says so in the step summary. A failed `repin` job skips
-#    `relock` and `publish`, so nothing is pushed.
+#    `relock`, so nothing is pushed.
 #
-# The command has no RELOCK_TOKEN: like `regenerate`, it runs the code of
-# packages that are not this repository's, in a job that is a different runner
-# from the one that pushes. The `# repin-check` markers below delimit the
-# script relock-pins-test.yml runs on fixtures (a write outside the paths, a
-# link, a failing command, a path the rule refuses).
+# The command has no RELOCK_TOKEN: it runs the code of packages that are not
+# this repository's, in a job that is a different runner from the one that
+# pushes. The `# repin-check` markers below delimit the script
+# relock-pins-test.yml runs on fixtures (a write outside the paths, a link, a
+# failing command, a path the rule refuses).
+#
+# The repin path rule (this one is #420's, not the regenerate command's, and
+# is stated twice: in the shell of job `repin` and in the Python of the
+# `repin-take` markers of job `relock`, tested with the same cases; the
+# repository-prototype#344 change removed the regenerate command's two copies
+# and left these, which is a follow-up): a path is refused when it is empty,
+# starts with `/` or `-`, ends with `/`, has an empty, `.` or `..` component,
+# has a character other than letters, digits and `._/@+=,-` (a newline
+# included), or has a component that is, in any case, `.git`, `.github`,
+# `.gitmodules` or `.gitattributes`, at any depth.
 #
 # The npm dependencies (#415, area: repin npm, piece 6 of 7 of #392): each
 # directory holding a `package.json` and a `pnpm-lock.yaml` (found with `find`,
@@ -192,8 +193,8 @@
 # characters once gzipped and base64 (the diff holds it in both directions).
 # So the patch travels in up to 8 pieces of 100000 characters, the first as
 # `patch` (the whole patch when it is under 100000, as before) and the others as
-# `patch-part-2` to `patch-part-8`; a change over 800000 characters fails with a
-# message, as one over the old limit did.
+# `patch-part-2` to `patch-part-8`; a change of 400000 characters or more is not an
+# output (see the regenerate paragraph above).
 #
 # The caller's pins, each moved only when the caller has it:
 #
@@ -298,7 +299,10 @@ on:
         type: string
         default: ''
       regenerate-max-bytes:
-        description: The most bytes of the regenerated files the publish job accepts
+        description: >-
+          No longer limits anything (repository-prototype#344): the regenerated
+          files are committed as they are. Kept so a caller that passes it still
+          calls this workflow
         type: string
         default: '67108864'
       repin-command:
@@ -397,7 +401,7 @@ on:
         type: string
         default: relock/
       regenerate-timeout-minutes:
-        description: Minutes the caller's command and its job may take
+        description: Minutes the caller's command (its step) may take
         type: string
         default: '60'
       base:
@@ -420,7 +424,7 @@ on:
         description: yes when a pin or the lock moved, else no
         value: ${{ jobs.relock.outputs.changed }}
       patch:
-        description: The change as a patch, gzipped and base64 (empty when nothing moved); its first 100000 characters when it is longer, the rest in patch-part-2 to patch-part-8
+        description: The change as a patch, gzipped and base64, the regenerated files included (empty when nothing moved, and when a run that publishes has a patch of 400000 characters or more); its first 100000 characters when it is longer, the rest in patch-part-2 to patch-part-8
         value: ${{ jobs.relock.outputs.patch }}
       patch-part-2:
         description: Piece 2 of the patch (the next 100000 characters; empty when the patch is shorter)
@@ -514,7 +518,7 @@ jobs:
           export LC_ALL=C
           [ -n "$REPIN_PATHS" ] \
             || { echo "::error::repin-command is given without repin-paths: nothing would be committed"; exit 1; }
-          # the path rule, as relock's Python states it (see the header)
+          # the repin path rule, as relock's repin-take Python states it (see the header)
           refused() {
             case "$1" in
               ''|-*|/*|*/|*//*|*[!A-Za-z0-9._/@+=,-]*) return 0 ;;
@@ -599,14 +603,11 @@ jobs:
     if: >-
       always() && (needs.repin.result == 'success' || needs.repin.result == 'skipped')
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # 30 minutes for the relock itself; with a regenerate command the step has
+    # its own timeout (regenerate-timeout-minutes) and the job the most a job may have
+    timeout-minutes: ${{ inputs.regenerate == '' && 30 || 360 }}
     outputs:
-      branch: ${{ steps.hand.outputs.branch }}
-      date: ${{ steps.hand.outputs.date }}
       changed: ${{ steps.hand.outputs.changed }}
-      head: ${{ steps.newest.outputs.head }}
-      compiler: ${{ steps.newest.outputs.compiler }}
-      repository: ${{ steps.newest.outputs.repository }}
       patch: ${{ steps.hand.outputs.patch }}
       patch-part-2: ${{ steps.hand.outputs.patch-part-2 }}
       patch-part-3: ${{ steps.hand.outputs.patch-part-3 }}
@@ -640,8 +641,9 @@ jobs:
       COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
       HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
     steps:
-      # The repository's default token reads it (a private one too); this job
-      # makes no authenticated call and never sees RELOCK_TOKEN's value
+      # The repository's default token reads it (a private one too). The
+      # checkout keeps no credentials: the one step that pushes passes its
+      # token to git by itself, and no other step has RELOCK_TOKEN's value
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.base }}
@@ -752,7 +754,7 @@ jobs:
 
       # Nothing is extracted by tar: each member is checked and its bytes are
       # written by this script, as a regular file under a listed path (the
-      # same rule as publish's, which takes the regenerated files)
+      # repin path rule of the header, as job repin's shell states it)
       - name: Take the repinned files, as data
         if: inputs.repin-command != ''
         run: |
@@ -1232,254 +1234,99 @@ jobs:
           } > ~/relock/body.md
           cat ~/relock/body.md >> "$GITHUB_STEP_SUMMARY"
 
-      # What job 2 and job 3 take from this one: the change as a patch (the
-      # pins, the lock and any workflow pin this job moved) and the pull
-      # request's text, as job outputs, which no later job can alter
+      # What the relock changed is staged BEFORE the caller's command runs, so
+      # the command's own writes are in the commit only where
+      # `regenerate-paths` lists them
+      - name: Stage the relock
+        run: |
+          set -eu
+          grep -q '^changed=yes$' ~/relock/state || exit 0
+          git add -A .github "$WORKFLOWS_DIRECTORY"
+          if [ -f bats.lock ]; then git add bats.lock; fi
+          # The npm files pnpm rewrote and the Gradle wrapper's files: the tracked
+          # ones only (area: repin npm, repin gradle). `git add -u -- <pathspec>`
+          # fails ("did not match any files") for a pathspec nothing tracked
+          # matches, as in a repository with no package.json, so the tracked
+          # files are listed first and only those are staged (git ls-files
+          # answers an unmatched pathspec with nothing, and xargs -r runs nothing)
+          git ls-files -z -- ':(glob)**/package.json' ':(glob)**/pnpm-lock.yaml' \
+            ':(glob)**/gradle/wrapper/gradle-wrapper.properties' ':(glob)**/gradle/wrapper/gradle-wrapper.jar' ':(glob)**/gradlew' ':(glob)**/gradlew.bat' \
+            | xargs -0 -r git add -u --
+          # the repin command's paths: one path per line, never split or expanded
+          printf '%s\n' "$REPIN_PATHS" | while IFS= read -r path; do
+            [ -z "$path" ] || git add -A -- ":(literal)$path"
+          done
+
+      # The caller's command (area: relock regenerate, repository-prototype#344):
+      # trusted as the compiler is, with no token in its environment and no
+      # credentials in the checkout; a failure ends the run here, before
+      # anything is pushed
+      - name: Regenerate what the caller derives from the lock
+        if: inputs.regenerate != ''
+        timeout-minutes: ${{ fromJSON(inputs.regenerate-timeout-minutes) }}
+        env:
+          GH_TOKEN: ''
+          GITHUB_TOKEN: ''
+          RELOCK_TOKEN: ''
+          REGENERATE: ${{ inputs.regenerate }}
+          REGENERATE_PATHS: ${{ inputs.regenerate-paths }}
+        run: |
+          set -eu
+          grep -q '^changed=yes$' ~/relock/state || exit 0
+          [ -n "$REGENERATE_PATHS" ] \
+            || { echo "::error::regenerate is given without regenerate-paths: nothing would be committed"; exit 1; }
+          sh -eu -c "$REGENERATE"
+
+      # The change, as the outputs and as the index the push commits: the
+      # relock's staged files and the listed regenerated paths as they are
+      # (deletions included)
       - name: Hand the change on
         id: hand
+        env:
+          REGENERATE_PATHS: ${{ inputs.regenerate-paths }}
         run: |
           set -eu
           state=$(sed 's/^changed=//' ~/relock/state)
           echo "changed=$state" >> "$GITHUB_OUTPUT"
           [ "$state" = yes ] || exit 0
-          # the day's branch, decided once here and passed on
+          # the day's branch, decided once here and used by the push
           case "$BRANCH_PREFIX" in
             ''|-*|*[!A-Za-z0-9._/-]*) echo "::error::branch-prefix is refused: $BRANCH_PREFIX"; exit 1 ;;
           esac
           date=$(date -u +%Y-%m-%d)
           { echo "date=$date"; echo "branch=$BRANCH_PREFIX$date"; } >> "$GITHUB_OUTPUT"
-          git add -A .github "$WORKFLOWS_DIRECTORY"
-          if [ -f bats.lock ]; then git add bats.lock; fi
-          # the npm files pnpm rewrote (tracked ones only; area: repin npm)
-          git add -u -- ':(glob)**/package.json' ':(glob)**/pnpm-lock.yaml'
-          # the Gradle wrapper's files (tracked ones only; area: repin gradle)
-          git add -u -- ':(glob)**/gradle/wrapper/gradle-wrapper.properties' ':(glob)**/gradle/wrapper/gradle-wrapper.jar' ':(glob)**/gradlew' ':(glob)**/gradlew.bat'
           # one path per line, never split or expanded
-          printf '%s\n' "$REPIN_PATHS" | while IFS= read -r path; do
+          printf '%s\n' "$REGENERATE_PATHS" | while IFS= read -r path; do
             [ -z "$path" ] || git add -A -- ":(literal)$path"
           done
           patch=$(git diff --cached --binary | gzip -9n | base64 -w0)
           body=$(base64 -w0 ~/relock/body.md)
-          # an environment variable of a later step is limited to 128 KiB
-          [ ${#patch} -lt 800000 ] && [ ${#body} -lt 20000 ] \
-            || { echo "::error::the relock's change is larger than the jobs hand on (patch ${#patch}, text ${#body})"; exit 1; }
-          # the patch in pieces of 100000 characters (an environment variable holds 128 KiB)
+          # the outputs of a job together are under 1,048,576 bytes: a larger patch
+          # is not an output (a run that publishes does not read the outputs, so it goes on)
+          if [ ${#patch} -ge 400000 ]; then
+            [ "$PUBLISH" = true ] \
+              || { echo "::error::the relock's change is larger than the outputs hold (patch ${#patch} characters, the most is 399999)"; exit 1; }
+            echo "::notice::the patch is ${#patch} characters, more than the outputs hold: patch and its parts are empty; the branch has the change"
+            patch=''
+          fi
+          # the patch in pieces of 100000 characters
           { echo "patch=${patch:0:100000}"; echo "body=$body"; } >> "$GITHUB_OUTPUT"
           for piece in 2 3 4 5 6 7 8; do
             echo "patch-part-$piece=${patch:$(((piece - 1) * 100000)):100000}" >> "$GITHUB_OUTPUT"
           done
 
-  # Job 2: the caller's command, with nothing to steal and nothing later
-  # that trusts it (see the header)
-  regenerate:
-    needs: relock
-    if: inputs.regenerate != '' && needs.relock.outputs.changed == 'yes'
-    runs-on: ubuntu-24.04
-    timeout-minutes: ${{ fromJSON(inputs.regenerate-timeout-minutes) }}
-    permissions: {}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ needs.relock.outputs.head }}
-          persist-credentials: false
-
-      - name: Set up bats at its newest
-        uses: bats-lang/bats/.github/actions/setup@67ebbf0c4744edce26584eef60ea26438945bab7 # bats main
-        with:
-          bats-version: ${{ needs.relock.outputs.compiler }}
-          repository-version: ${{ needs.relock.outputs.repository }}
-          commit: ${{ needs.relock.outputs.head }}
-          require-lock: 'false'
-
-      - name: Apply the relock, run the command and pack the listed paths
-        env:
-          PATCH: ${{ needs.relock.outputs.patch }}
-          PATCH_PART_2: ${{ needs.relock.outputs.patch-part-2 }}
-          PATCH_PART_3: ${{ needs.relock.outputs.patch-part-3 }}
-          PATCH_PART_4: ${{ needs.relock.outputs.patch-part-4 }}
-          PATCH_PART_5: ${{ needs.relock.outputs.patch-part-5 }}
-          PATCH_PART_6: ${{ needs.relock.outputs.patch-part-6 }}
-          PATCH_PART_7: ${{ needs.relock.outputs.patch-part-7 }}
-          PATCH_PART_8: ${{ needs.relock.outputs.patch-part-8 }}
-          REGENERATE: ${{ inputs.regenerate }}
-          REGENERATE_PATHS: ${{ inputs.regenerate-paths }}
-          MAX_BYTES: ${{ inputs.regenerate-max-bytes }}
-        run: |
-          set -eu
-          [ -n "$REGENERATE_PATHS" ] \
-            || { echo "::error::regenerate is given without regenerate-paths: nothing would be committed"; exit 1; }
-          # the path rule, as job 3's Python states it (see the header)
-          refused() {
-            case "$1" in
-              ''|-*|/*|*/|*//*|*[!A-Za-z0-9._/@+=,-]*) return 0 ;;
-            esac
-            lower=$(printf '%s' "$1" | tr 'A-Z' 'a-z')
-            case "/$lower/" in
-              */./*|*/../*|*/.git/*|*/.github/*|*/.gitmodules/*|*/.gitattributes/*) return 0 ;;
-            esac
-            return 1
-          }
-          printf '%s\n' "$REGENERATE_PATHS" | while IFS= read -r path; do
-            [ -n "$path" ] || continue
-            if refused "$path"; then
-              echo "::error::regenerate-paths names a path that is refused: $path"; exit 1
-            fi
-          done
-          { printf '%s' "$PATCH"; printf '%s' "$PATCH_PART_2$PATCH_PART_3$PATCH_PART_4$PATCH_PART_5$PATCH_PART_6$PATCH_PART_7$PATCH_PART_8"; } | base64 -d | gunzip | git apply --binary
-          sh -eu -c "$REGENERATE"
-          printf '%s\n' "$REGENERATE_PATHS" | while IFS= read -r path; do
-            [ -n "$path" ] || continue
-            [ -e "$path" ] || { echo "::error::the command did not write $path"; exit 1; }
-            if [ -n "$(find "$path" ! -type f ! -type d -print -quit)" ] || [ -L "$path" ]; then
-              echo "::error::$path holds something that is not a regular file or a directory: $(find "$path" ! -type f ! -type d -print -quit)"; exit 1
-            fi
-          done
-          printf '%s\n' "$REGENERATE_PATHS" | grep -v '^$' \
-            | tar --verbatim-files-from -cf "$RUNNER_TEMP/regenerated.tar" -T -
-          size=$(stat -c %s "$RUNNER_TEMP/regenerated.tar")
-          [ "$size" -le "$MAX_BYTES" ] \
-            || { echo "::error::the regenerated files are $size bytes, over regenerate-max-bytes ($MAX_BYTES)"; exit 1; }
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: regenerated
-          path: ${{ runner.temp }}/regenerated.tar
-          retention-days: 1
-          if-no-files-found: error
-
-  # Job 3: the privileged half, from clean inputs only
-  publish:
-    needs: [relock, regenerate]
-    if: >-
-      always() && needs.relock.result == 'success'
-      && needs.relock.outputs.changed == 'yes'
-      && inputs.publish == 'true'
-      && (needs.regenerate.result == 'success' || needs.regenerate.result == 'skipped')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    env:
-      BRANCH: ${{ needs.relock.outputs.branch }}
-      DATE: ${{ needs.relock.outputs.date }}
-      BRANCH_PREFIX: ${{ inputs.branch-prefix }}
-      CHECK_WORKFLOW: ${{ inputs.check-workflow }}
-      BASE: ${{ inputs.base }}
-      REGENERATE_PATHS: ${{ inputs.regenerate-paths }}
-      MAX_BYTES: ${{ inputs.regenerate-max-bytes }}
-      PATCH: ${{ needs.relock.outputs.patch }}
-      PATCH_PART_2: ${{ needs.relock.outputs.patch-part-2 }}
-      PATCH_PART_3: ${{ needs.relock.outputs.patch-part-3 }}
-      PATCH_PART_4: ${{ needs.relock.outputs.patch-part-4 }}
-      PATCH_PART_5: ${{ needs.relock.outputs.patch-part-5 }}
-      PATCH_PART_6: ${{ needs.relock.outputs.patch-part-6 }}
-      PATCH_PART_7: ${{ needs.relock.outputs.patch-part-7 }}
-      PATCH_PART_8: ${{ needs.relock.outputs.patch-part-8 }}
-      BODY: ${{ needs.relock.outputs.body }}
-      HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
-      GH_TOKEN: ${{ secrets.RELOCK_TOKEN || github.token }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ needs.relock.outputs.head }}
-          token: ${{ secrets.RELOCK_TOKEN || github.token }}
-          persist-credentials: false
-
-      - name: Apply the relock
-        run: |
-          set -eu
-          { printf '%s' "$PATCH"; printf '%s' "$PATCH_PART_2$PATCH_PART_3$PATCH_PART_4$PATCH_PART_5$PATCH_PART_6$PATCH_PART_7$PATCH_PART_8"; } | base64 -d | gunzip | git apply --binary --index
-          mkdir -p ~/relock
-          printf '%s' "$BODY" | base64 -d > ~/relock/body.md
-
-      - name: Download what the command wrote
-        if: needs.regenerate.result == 'success'
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: regenerated
-          path: ${{ runner.temp }}/regenerated
-
-      # The artifact is data from a job that ran the newest packages' code.
-      # Nothing is extracted by tar: each member is checked and its bytes are
-      # written by this script, as a regular file under a listed path.
-      - name: Take the listed files, as data
-        if: needs.regenerate.result == 'success'
-        run: |
-          python3 -I - "$RUNNER_TEMP/regenerated/regenerated.tar" <<'PY'
-          import os, re, shutil, sys, tarfile
-          paths = [p for p in os.environ['REGENERATE_PATHS'].split('\n') if p]
-          cap = int(os.environ['MAX_BYTES'])
-          allowed = re.compile(r'^[A-Za-z0-9._/@+=,-]+$')
-          def refused(name):
-              # the path rule of the header, as job 2's shell states it
-              if (not allowed.fullmatch(name) or name.startswith('/')
-                      or name.startswith('-') or name.endswith('/')):
-                  return True
-              for part in name.split('/'):
-                  if part in ('', '.', '..') or part.lower() in ('.git', '.github', '.gitmodules', '.gitattributes'):
-                      return True
-              return False
-          def die(message):
-              print('::error::' + message)
-              sys.exit(1)
-          if not paths:
-              die('regenerate-paths is empty')
-          for path in paths:
-              if refused(path):
-                  die('regenerate-paths names a path that is refused: %r' % path)
-          directories, files, total = [], [], 0
-          with tarfile.open(sys.argv[1], 'r:') as archive:
-              members = archive.getmembers()
-              if len(members) > 100000:
-                  die('too many members in the regenerated files')
-              for member in members:
-                  name = member.name
-                  if refused(name) or not any(name == p or name.startswith(p + '/') for p in paths):
-                      die('a member outside the listed paths or with a refused name: %r' % name)
-                  if member.isdir():
-                      directories.append(name)
-                  elif member.isreg():
-                      total += member.size
-                      if total > cap:
-                          die('the regenerated files are over regenerate-max-bytes (%d)' % cap)
-                      files.append(member)
-                  else:
-                      die('a member that is not a regular file or a directory: %r' % name)
-              for path in paths:
-                  if not any(m.name == path for m in members):
-                      die('the regenerated files do not hold %s' % path)
-                  walked = ''
-                  for part in path.split('/')[:-1]:
-                      walked = os.path.join(walked, part)
-                      if os.path.islink(walked):
-                          die('%s is a link in the checkout' % walked)
-                  if os.path.islink(path) or os.path.isfile(path):
-                      os.remove(path)
-                  elif os.path.isdir(path):
-                      shutil.rmtree(path)
-              for name in directories:
-                  os.makedirs(name, exist_ok=True)
-              for member in files:
-                  os.makedirs(os.path.dirname(member.name) or '.', exist_ok=True)
-                  data = archive.extractfile(member).read()
-                  mode = 0o755 if member.mode & 0o100 else 0o644
-                  descriptor = os.open(member.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
-                  with os.fdopen(descriptor, 'wb') as out:
-                      out.write(data)
-                  os.chmod(member.name, mode)
-          print('took %d files (%d bytes) under %s' % (len(files), total, ', '.join(paths)))
-          PY
-
       - name: Push the branch, open the pull request and dispatch the check
+        if: steps.hand.outputs.changed == 'yes' && inputs.publish == 'true'
+        env:
+          BRANCH: ${{ steps.hand.outputs.branch }}
+          DATE: ${{ steps.hand.outputs.date }}
+          GH_TOKEN: ${{ secrets.RELOCK_TOKEN || github.token }}
         run: |
           set -eu
           branch="$BRANCH"
           repo="$GITHUB_REPOSITORY"
+          # everything is staged already: the index is the commit
           git checkout -q -B "$branch"
-          git add -A .github
-          if [ -f bats.lock ]; then git add bats.lock; fi
-          # one path per line, never split or expanded
-          printf '%s\n' "$REGENERATE_PATHS" | while IFS= read -r path; do
-            [ -z "$path" ] || git add -A -- ":(literal)$path"
-          done
           title="Relock packages and CI pins ($DATE)"
           { echo "$title"; echo; cat ~/relock/body.md; } > ~/relock/message
           git -c user.name="github-actions[bot]" \
