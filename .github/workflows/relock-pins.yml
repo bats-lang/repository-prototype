@@ -141,6 +141,29 @@
 # script relock-pins-test.yml runs on fixtures (a write outside the paths, a
 # link, a failing command, a path the rule refuses).
 #
+# The npm dependencies (#415, area: repin npm, piece 6 of 7 of #392): each
+# directory holding a `package.json` and a `pnpm-lock.yaml` (found with `find`,
+# `node_modules` and `.git` left out, `npm-ignore` directories left out) is
+# moved within the ranges of its dependencies, never to a new major. The
+# repository's pinned pnpm (`packageManager`, run through Node's corepack,
+# Node by `.nvmrc`, or the file `npm-node-version-file` names, when the
+# checkout has one) lists the projects of the directory (`pnpm -r ls`, so a
+# workspace's members are the ones pnpm names, no lock is read here), and for each project runs `pnpm outdated --format
+# json` and its `--compatible` form, writes the registry publish time of each
+# version of the major(s) in play (`pnpm view <name> time --json`) and runs
+# tools/repin's `npm` command (#412) at the clock's time, which prints the move
+# records and writes the `name@version` lines of the moves; `pnpm update
+# --lockfile-only --ignore-scripts` on exactly those lines regenerates the lock
+# (no `--latest`, so a major is never taken; no install, so no script of the
+# repository or of a package runs). The moved `package.json` and
+# `pnpm-lock.yaml` are in the relock patch, the records are the section
+# `### npm` of the pull request body (a newer major is `major, not moved`), and
+# a repository with no `pnpm-lock.yaml` is untouched. A directory whose
+# package.json has no `packageManager` of pnpm fails the run. `npm-now` (whole
+# seconds) replaces the clock for a test and `npm-ignore` (directories, one
+# per line) leaves fixtures out; both default to off. The step runs in the
+# `relock` job, which has no RELOCK_TOKEN: a lock needs none.
+#
 # The caller's pins, each moved only when the caller has it:
 #
 # - bats.lock: the packages, relocked against the newest package
@@ -268,6 +291,27 @@ on:
         description: >-
           Whole seconds since the epoch that the release age of an action pin
           is counted at; empty reads the clock. A test gives a fixed time (#414)
+        type: string
+        default: ''
+      npm-now:
+        description: >-
+          Whole seconds since the epoch that the release age of an npm
+          dependency is counted at; empty reads the clock. A test gives a
+          fixed time (#415)
+        type: string
+        default: ''
+      npm-node-version-file:
+        description: >-
+          The file whose Node version runs the pinned pnpm (setup-node's
+          node-version-file); when the checkout has no such file the runner's
+          Node is used (#415)
+        type: string
+        default: .nvmrc
+      npm-ignore:
+        description: >-
+          Directories (relative to the checkout, one per line, each with
+          everything under it) whose pnpm-lock.yaml the relock leaves alone;
+          a test's fixtures are such (#415)
         type: string
         default: ''
       branch-prefix:
@@ -482,6 +526,9 @@ jobs:
       REPIN_MAX_BYTES: ${{ inputs.repin-max-bytes }}
       ACTIONS_RELEASES: ${{ inputs.actions-releases }}
       ACTIONS_NOW: ${{ inputs.actions-now }}
+      NPM_NOW: ${{ inputs.npm-now }}
+      NPM_IGNORE: ${{ inputs.npm-ignore }}
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
       HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
     steps:
       # The repository's default token reads it (a private one too); this job
@@ -680,6 +727,78 @@ jobs:
           if [ -s "$RUNNER_TEMP/repin/records" ]; then
             "$BATS_REPOSITORY/tools/repin/dist/debug/repin" table "$RUNNER_TEMP/repin/records" > ~/relock/repin-table.md
           fi
+
+      # Node by .nvmrc when the checkout has one (else the runner's), for the
+      # pinned pnpm that corepack runs (area: repin npm)
+      - name: Set up Node for the npm dependencies
+        if: hashFiles(inputs.npm-node-version-file) != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ${{ inputs.npm-node-version-file }}
+          package-manager-cache: false
+
+      # The npm dependencies (area: repin npm): see the header. Nothing is
+      # installed and no script runs; only package.json and pnpm-lock.yaml move.
+      - name: Move the npm dependencies within their ranges
+        run: |
+          set -euo pipefail
+          repin=$BATS_REPOSITORY/tools/repin/dist/debug/repin
+          work=~/relock/npm
+          mkdir -p "$work"
+          : > ~/relock/npm-records
+          now=${NPM_NOW:-$(date -u +%s)}
+          root=$PWD
+          printf '%s\n' "$NPM_IGNORE" > "$work/ignored"
+          find . -name pnpm-lock.yaml -not -path '*/node_modules/*' -not -path './.git/*' | LC_ALL=C sort > "$work/locks"
+          count=0
+          while IFS= read -r lock; do
+            dir=${lock%/pnpm-lock.yaml}
+            case "$dir" in
+              *[!A-Za-z0-9._/-]*) echo "::error::a directory with a pnpm-lock.yaml has a name that is refused: $dir"; exit 1 ;;
+            esac
+            [ -f "$dir/package.json" ] || continue
+            skip=no
+            while IFS= read -r ignored; do
+              [ -n "$ignored" ] || continue
+              case "$dir" in "./$ignored"|"./$ignored"/*) skip=yes ;; esac
+            done < "$work/ignored"
+            if [ "$skip" = yes ]; then echo "left alone (npm-ignore): $dir"; continue; fi
+            case "$(jq -r '.packageManager // empty' "$dir/package.json")" in
+              pnpm@*) ;;
+              *) echo "::error::$dir/package.json has no packageManager that names pnpm: its lock cannot be updated with the pinned pnpm"; exit 1 ;;
+            esac
+            cd "$dir"
+            # the projects of the lock's directory, as pnpm names them
+            corepack pnpm -r ls --depth -1 --json | jq -r '.[].path' > "$work/projects"
+            while IFS= read -r project; do
+              count=$((count + 1))
+              outdated=$work/$count.outdated; compatible=$work/$count.compatible
+              times=$work/$count.times; updates=$work/$count.updates
+              # pnpm outdated exits 1 when something is outdated; no output is a failure
+              corepack pnpm -C "$project" outdated --format json > "$outdated" || [ -s "$outdated" ] \
+                || { echo "::error::pnpm outdated failed in $project"; exit 1; }
+              corepack pnpm -C "$project" outdated --format json --compatible > "$compatible" || [ -s "$compatible" ] \
+                || { echo "::error::pnpm outdated --compatible failed in $project"; exit 1; }
+              # the publish time of each version of the majors in play (the
+              # current and the latest of each dependency), name version seconds
+              : > "$times"
+              jq -r 'keys[]' "$outdated" "$compatible" | LC_ALL=C sort -u > "$work/names"
+              while IFS= read -r name; do
+                majors=$(jq -s -c --arg name "$name" '[.[] | .[$name] | select(. != null) | (.current, .latest) | split(".")[0]] | unique' "$outdated" "$compatible")
+                corepack pnpm -C "$project" view "$name" time --json \
+                  | jq -r --arg name "$name" --argjson majors "$majors" 'del(.created, .modified) | to_entries[] | select(.key | split(".")[0] | IN($majors[])) | "\($name) \(.key) \(.value | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601)"' >> "$times"
+              done < "$work/names"
+              "$repin" npm "$outdated" "$compatible" "$times" "$now" "$updates" >> ~/relock/npm-records
+              if [ -s "$updates" ]; then
+                set --
+                while IFS= read -r update; do set -- "$@" "$update"; done < "$updates"
+                echo "moving in $project: $*"
+                corepack pnpm -C "$project" update --lockfile-only --ignore-scripts "$@"
+              fi
+            done < "$work/projects"
+            cd "$root"
+          done < "$work/locks"
+          echo "looked at $count pnpm projects; $(wc -l < ~/relock/npm-records) records"
 
       - name: Relock and move the pins
         env:
@@ -891,6 +1010,12 @@ jobs:
                 # actions-bullet end
               ' ~/relock/actions-left
             fi
+            if [ -s ~/relock/npm-records ]; then
+              echo
+              echo "### npm"
+              echo
+              "$repin" table ~/relock/npm-records
+            fi
             if [ -s ~/relock/repin-table.md ]; then
               echo
               echo "### Moved by the repin command"
@@ -920,6 +1045,8 @@ jobs:
           { echo "date=$date"; echo "branch=$BRANCH_PREFIX$date"; } >> "$GITHUB_OUTPUT"
           git add -A .github "$WORKFLOWS_DIRECTORY"
           if [ -f bats.lock ]; then git add bats.lock; fi
+          # the npm files pnpm rewrote (tracked ones only; area: repin npm)
+          git add -u -- ':(glob)**/package.json' ':(glob)**/pnpm-lock.yaml'
           # one path per line, never split or expanded
           printf '%s\n' "$REPIN_PATHS" | while IFS= read -r path; do
             [ -z "$path" ] || git add -A -- ":(literal)$path"

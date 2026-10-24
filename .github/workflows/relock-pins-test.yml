@@ -38,6 +38,13 @@
 # through the whole workflow, which must end red with relock and publish not
 # run. `repin-compat` runs the workflow with none of the repin inputs and
 # reads the same outputs as before.
+# The npm dependencies (#415, area: repin npm): `npm` relocks the fixture
+# project tests/relock-pins/npm/project at a fixed time (`npm-now`) and `npm-check`
+# requires its package.json and lock to move semver within ^7 (the patch holds
+# those two files only), uuid's newer major not to move, and the `### npm` section
+# to list the move with its release age; `npm-current` relocks a fixture whose
+# dependencies are all current (changed is no); every other call gives
+# `npm-ignore`, so the fixtures are left alone.
 # A dispatch with `refusal` runs only that case: the calls of the other jobs
 # share concurrency groups with the pull request's run and would cancel each
 # other's pending jobs.
@@ -66,6 +73,7 @@ jobs:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      npm-ignore: tests/relock-pins/npm
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/workflows
       workflow-pins: |
@@ -215,6 +223,7 @@ jobs:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      npm-ignore: tests/relock-pins/npm
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/actions/workflows
       actions-releases: tests/relock-pins/actions/releases.txt
@@ -226,6 +235,7 @@ jobs:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      npm-ignore: tests/relock-pins/npm
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/actions/workflows-current
       actions-releases: tests/relock-pins/actions/releases.txt
@@ -320,6 +330,7 @@ jobs:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      npm-ignore: tests/relock-pins/npm
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/actions/fetch
       publish: 'false'
@@ -384,6 +395,7 @@ jobs:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      npm-ignore: tests/relock-pins/npm
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/workflows
       workflow-pins: |
@@ -395,6 +407,7 @@ jobs:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      npm-ignore: tests/relock-pins/npm
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/workflows
       repin-command: |
@@ -410,6 +423,7 @@ jobs:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      npm-ignore: tests/relock-pins/npm
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/actions/workflows
       actions-releases: tests/relock-pins/actions/releases.txt
@@ -426,6 +440,7 @@ jobs:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      npm-ignore: tests/relock-pins/npm
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/workflows
       repin-command: |
@@ -439,6 +454,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.refusal != ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      npm-ignore: tests/relock-pins/npm
       base: ${{ github.sha }}
       workflows-directory: tests/relock-pins/workflows
       repin-command: ${{ inputs.refusal == 'outside' && 'echo x > tests/relock-pins/outside.txt' || inputs.refusal == 'link' && 'ln -s /etc/passwd tests/relock-pins/repin/link' || inputs.refusal == 'bad-record' && 'echo not-a-record >> "$REPIN_RECORDS"' || 'exit 3' }}
@@ -655,3 +671,91 @@ jobs:
           take_case over-cap fail 6 "$paths" $good
           take_case path-missing fail 1000 "$(printf 'tests/relock-pins/repin\ntests/relock-pins/gone')" $good
           take_case path-refused fail 1000 ".github" dir:.github
+
+  # The npm dependencies (#415, area: repin npm): the fixture project locks
+  # semver 7.0.0 under ^7.0.0 and uuid 8.3.2 under ~8.3.2 with the repository's
+  # pinned pnpm (12.9.1, through corepack, Node by the fixture's .nvmrc). At the
+  # fixed time `npm-now` semver moves to 7.8.5, the newest 7.x published 7 days
+  # before it, and uuid's newer major does not move. `npm-current` is a fixture
+  # whose dependencies are all at the end of their ranges: no pull request.
+  npm:
+    if: inputs.refusal == ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      npm-now: '1792800000'
+      npm-node-version-file: tests/relock-pins/npm/project/.nvmrc
+      npm-ignore: tests/relock-pins/npm/current
+      publish: 'false'
+      branch-prefix: relock-test-npm/
+
+  npm-current:
+    if: inputs.refusal == ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      npm-now: '1792800000'
+      npm-node-version-file: tests/relock-pins/npm/current/.nvmrc
+      npm-ignore: tests/relock-pins/npm/project
+      publish: 'false'
+      branch-prefix: relock-test-npm-current/
+
+  npm-check:
+    needs: [relock, npm, npm-current]
+    runs-on: ubuntu-24.04
+    env:
+      MOVES_CHANGED: ${{ needs.npm.outputs.changed }}
+      MOVES_PATCH: ${{ needs.npm.outputs.patch }}
+      MOVES_BODY: ${{ needs.npm.outputs.body }}
+      CURRENT_CHANGED: ${{ needs.npm-current.outputs.changed }}
+      CURRENT_PATCH: ${{ needs.npm-current.outputs.patch }}
+      CURRENT_BODY: ${{ needs.npm-current.outputs.body }}
+      COMPAT_BODY: ${{ needs.relock.outputs.body }}
+    steps:
+      - name: The in-range dependency and its lock moved, the major did not
+        run: |
+          set -eu
+          [ "$MOVES_CHANGED" = yes ] || { echo "::error::the in-range dependency did not move (changed=$MOVES_CHANGED)"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/n"
+          printf '%s' "$MOVES_PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/n/moves.patch"
+          printf '%s' "$MOVES_BODY" | base64 -d > "$RUNNER_TEMP/n/moves.md"
+          cat "$RUNNER_TEMP/n/moves.patch" "$RUNNER_TEMP/n/moves.md"
+          # the files of the patch are the fixture's package.json and lock, and nothing else
+          files=$(grep '^diff --git' "$RUNNER_TEMP/n/moves.patch" | sort | tr '\n' ' ')
+          [ "$files" = "diff --git a/tests/relock-pins/npm/project/package.json b/tests/relock-pins/npm/project/package.json diff --git a/tests/relock-pins/npm/project/pnpm-lock.yaml b/tests/relock-pins/npm/project/pnpm-lock.yaml " ] \
+            || { echo "::error::the patch holds other files: $files"; exit 1; }
+          grep -Fxq -- '+    "semver": "^7.8.5",' "$RUNNER_TEMP/n/moves.patch"
+          grep -Fxq -- '-        version: 7.0.0' "$RUNNER_TEMP/n/moves.patch"
+          grep -Fxq -- '+        version: 7.8.5' "$RUNNER_TEMP/n/moves.patch"
+          if grep -q '^[-+].*uuid' "$RUNNER_TEMP/n/moves.patch"; then
+            echo "::error::uuid changed in the patch"; exit 1
+          fi
+          # the section lists the move with old, new and release age, and the major's row is not a move
+          grep -Fxq -- '### npm' "$RUNNER_TEMP/n/moves.md"
+          grep -Fxq -- '| npm | semver | 7.0.0 | 7.8.5 | 126 days | moved |' "$RUNNER_TEMP/n/moves.md"
+          grep -E -- '^\| npm \| uuid \| 8\.3\.2 \| ' "$RUNNER_TEMP/n/moves.md" > "$RUNNER_TEMP/n/uuid.row"
+          [ "$(wc -l < "$RUNNER_TEMP/n/uuid.row")" -eq 1 ]
+          if grep -q '| moved |$' "$RUNNER_TEMP/n/uuid.row"; then
+            echo "::error::the newer major of uuid moved"; exit 1
+          fi
+          cat "$RUNNER_TEMP/n/uuid.row"
+          echo "semver moved in package.json and the lock; uuid did not"
+
+      - name: A fixture whose dependencies are all current opens nothing
+        run: |
+          set -eu
+          [ "$CURRENT_CHANGED" = no ] || { echo "::error::changed is $CURRENT_CHANGED for a fixture with every dependency current"; exit 1; }
+          [ -z "$CURRENT_PATCH" ] && [ -z "$CURRENT_BODY" ] \
+            || { echo "::error::a patch or a body was handed on"; exit 1; }
+          echo "no change, no patch, no body"
+
+      - name: A caller that ignores the npm fixtures has no npm section
+        run: |
+          set -eu
+          printf '%s' "$COMPAT_BODY" | base64 -d > "$RUNNER_TEMP/compat.md"
+          if grep -q '^### npm' "$RUNNER_TEMP/compat.md"; then
+            echo "::error::an npm section where no npm project is looked at"; exit 1
+          fi
+          echo "no npm section"
