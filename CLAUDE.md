@@ -101,6 +101,16 @@ the same CI.
   its major, higher than the current one and inside the range, that is a candidate (7 days), the
   `name@version` lines of the moves are written to the file UPDATES, and a `latest` of a higher
   major is its own row, `major, not moved`, never a target (fixtures: `tools/repin/tests/npm`).
+  `repin gradle PROPERTIES VERSIONS CHECKSUM NOW UPDATES` decides the move of a
+  `gradle-wrapper.properties` (gradle.bats): PROPERTIES is read by line (`distributionUrl` must be exactly
+  `https\://services.gradle.org/distributions/gradle-<version>-bin.zip`, `distributionSha256Sum` 64 lowercase
+  hex digits; any other spelling of either key is refused, naming its line), VERSIONS is the body of
+  `https://services.gradle.org/versions/all` (a release is stable when it has no `snapshot`, no `nightly`, no
+  `rcFor` and a plain version tag; its `buildTime` is its published time, zone offset applied), CHECKSUM is the
+  `.sha256` body of the target (read only when the pin moves, copied as it is, never computed). The target is the
+  highest stable release of the wrapper's major that is higher than it and at least 7 days old; the version and the
+  checksum, a line each, are written to the file UPDATES (an empty file when nothing moves), and the highest stable
+  release of a higher major is its own row, `major, not moved` (fixtures: `tools/repin/tests/gradle`).
 
 This repository's own `verify` is the exception: it checks a new archive
 against every package's newest version, which is the point of it.
