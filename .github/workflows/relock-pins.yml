@@ -286,6 +286,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: ${{ fromJSON(inputs.repin-timeout-minutes) }}
     permissions: {}
+    outputs:
+      artifact: ${{ steps.artifact.outputs.name }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -395,9 +397,23 @@ jobs:
           echo "the command wrote $(wc -l < "$work/changed") entries, all under the listed paths; $(wc -l < "$out/records") records"
           # repin-check end
 
+      # an artifact's name is unique in a run, and a run may call this workflow
+      # more than once: the branch prefix is what tells the calls apart (the
+      # concurrency group is made of it)
+      - name: Name the artifact
+        id: artifact
+        env:
+          BRANCH_PREFIX: ${{ inputs.branch-prefix }}
+        run: |
+          set -eu
+          case "$BRANCH_PREFIX" in
+            ''|-*|*[!A-Za-z0-9._/-]*) echo "::error::branch-prefix is refused: $BRANCH_PREFIX"; exit 1 ;;
+          esac
+          echo "name=repin-$(printf '%s' "$BRANCH_PREFIX" | tr '/' '_')" >> "$GITHUB_OUTPUT"
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: repin
+          name: ${{ steps.artifact.outputs.name }}
           path: ${{ runner.temp }}/repin
           retention-days: 1
           if-no-files-found: error
@@ -486,7 +502,7 @@ jobs:
         if: inputs.repin-command != ''
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: repin
+          name: ${{ needs.repin.outputs.artifact }}
           path: ${{ runner.temp }}/repin
 
       # Nothing is extracted by tar: each member is checked and its bytes are
