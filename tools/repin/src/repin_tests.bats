@@ -2,11 +2,11 @@
    `bats test` in tools/repin. The cases of the age rule, the records and the action pins
    in a text build their input in memory and compare the output byte for byte with a
    literal; `now` is a constant of each case, never the clock. The directory cases of
-   `repin actions` make build/repin-tests/<case>, create and write the workflow and
-   releases files there, run the driver, read the files back and read their permission
-   bits (a file is made with chmod to the mode the case names). The records case writes
-   and reads build/repin-tests/records.tsv, outside a case directory, without running the
-   driver. Nothing else is created. Keyword: repin tests. *)
+   `repin actions` make a directory for each case inside build/repin-tests, create and write
+   the workflow and releases files there, run the driver, read the files back and read their
+   permission bits (a file is made with chmod to the mode the case names). The records case
+   writes and reads build/repin-tests/records.tsv, outside those directories, without
+   running the driver. Nothing else is created. Keyword: repin tests. *)
 
 #include "share/atspre_staload.hats"
 
