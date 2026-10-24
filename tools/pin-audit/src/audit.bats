@@ -29,6 +29,7 @@ staload "support.sats"
 staload "allowlist.sats"
 staload "template.sats"
 staload "ticket.sats"
+staload "skiplist.sats"
 
 (* ============================================================
    Constant paths
@@ -595,14 +596,20 @@ in filed end
    going on from counts, the failing ones going into failing. A name over 255
    bytes is a failure of its own, said and counted. With tickets, a repository that has a file
    not canonical gets its ticket (commit_text: the commit of this checkout). *)
-fun _audit_names {names_loc,allowlist_loc,commit_loc:agz}{names_len,allowlist_len:nat | names_len <= 524288; allowlist_len <= 524288}{i:nat | i <= names_len} .<names_len - i>.
+fun _audit_names {names_loc,allowlist_loc,skip_loc,commit_loc:agz}{names_len,allowlist_len,skip_len:nat | names_len <= 524288; allowlist_len <= 524288; skip_len <= 524288}{i:nat | i <= names_len} .<names_len - i>.
   (names_text: !$A.borrow(byte, names_loc, 524288), names_len: int names_len, i: int i,
    allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len,
+   skip_text: !$A.borrow(byte, skip_loc, 524288), skip_len: int skip_len,
    tickets: bool, commit_text: !$A.borrow(byte, commit_loc, 524288),
-   failing: !$B.sized_rope, audited: int, counts: tally): @(int, tally) = let
+   failing: !$B.sized_rope, skipped: !$B.sized_rope, audited: int, skipped_count: int, counts: tally): @(int, int, tally) = let
   val j = line_end(names_text, names_len, i)
-  val @(audited2, counts_after) =
-    (if j <= i then @(audited, counts)
+  val @(audited2, skipped_count2, counts_after) =
+    (if j <= i then @(audited, skipped_count, counts)
+     else if skiplist_has(skip_text, skip_len, names_text, i, j) then let
+       val () = (print! ("== "); print_range(names_text, i, j); println! (": skipped, listed in tools/pin-audit/skipped.txt (not cloned, no ticket)"))
+       val () = $B.sized_rope_put(skipped, 32)
+       val () = $B.sized_rope_copy(skipped, names_text, i, j)
+     in @(audited + 1, skipped_count + 1, counts) end
      else let
        val () = (print! ("== "); print_range(names_text, i, j); println! ())
        val before = _failures(counts)
@@ -630,9 +637,9 @@ fun _audit_names {names_loc,allowlist_loc,commit_loc:agz}{names_len,allowlist_le
            val () = $B.sized_rope_put(failing, 32)
          in $B.sized_rope_copy(failing, names_text, i, j) end
          else ()
-     in @(audited + 1, counts_filed) end): @(int, tally)
+     in @(audited + 1, skipped_count, counts_filed) end): @(int, int, tally)
 in
-  if j >= names_len then @(audited2, counts_after) else _audit_names(names_text, names_len, j + 1, allowlist_text, allowlist_len, tickets, commit_text, failing, audited2, counts_after)
+  if j >= names_len then @(audited2, skipped_count2, counts_after) else _audit_names(names_text, names_len, j + 1, allowlist_text, allowlist_len, skip_text, skip_len, tickets, commit_text, failing, skipped, audited2, skipped_count2, counts_after)
 end
 
 (* ============================================================
@@ -651,20 +658,25 @@ fn _list_argv (): $L.listv($P.arg_entry) =
 
 (* The audit of the names in names_text[0, names_len) with the allowlist allowlist_text[0, allowlist_len): the
    status of the run *)
-fn _audit_all {names_loc,allowlist_loc,commit_loc:agz}{names_len,allowlist_len:nat | names_len <= 524288; allowlist_len <= 524288}
+fn _audit_all {names_loc,allowlist_loc,skip_loc,commit_loc:agz}{names_len,allowlist_len,skip_len:nat | names_len <= 524288; allowlist_len <= 524288; skip_len <= 524288}
   (names_text: !$A.borrow(byte, names_loc, 524288), names_len: int names_len,
    allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len,
+   skip_text: !$A.borrow(byte, skip_loc, 524288), skip_len: int skip_len,
    tickets: bool, commit_text: !$A.borrow(byte, commit_loc, 524288),
-   entries: int, bad_entries: int, templates: int, bad_templates: int): int = let
+   entries: int, bad_entries: int, skip_entries: int, bad_skip_entries: int, templates: int, bad_templates: int): int = let
   var failing : $B.sized_rope = $B.sized_rope_create()
-  val @(audited, counts) = _audit_names(names_text, names_len, 0, allowlist_text, allowlist_len, tickets, commit_text, failing, 0, @(0, 0, 0, 0, 0, 0, 0))
+  var skipped : $B.sized_rope = $B.sized_rope_create()
+  val @(audited, skipped_count, counts) = _audit_names(names_text, names_len, 0, allowlist_text, allowlist_len, skip_text, skip_len, tickets, commit_text, failing, skipped, 0, 0, @(0, 0, 0, 0, 0, 0, 0))
   val @(files, hashed, templated, not_canonical, over_bound, unreadable, repository_errors) = counts
-  val () = println! ("== ", audited, " repositories, ", files, " workflow files: ", hashed, " passed by an allowlisted hash, ",
+  val () = print! ("== ", audited, " repositories, ", files, " workflow files: ", hashed, " passed by an allowlisted hash, ",
                      templated, " passed by a template, ", not_canonical, " not canonical, ", over_bound, " over the bound, ",
                      unreadable, " unreadable; ", repository_errors, " repository errors")
-  val () = println! ("== allowlist: ", entries, " entries, ", bad_entries, " failing; templates: ", templates, " read, ", bad_templates, " failing")
+  val () = print! ("; skipped (tools/pin-audit/skipped.txt): ", skipped_count)
+  val () = _print_chunks($B.sized_rope_chunks(skipped))
+  val () = println! ()
+  val () = println! ("== allowlist: ", entries, " entries, ", bad_entries, " failing; skip list: ", skip_entries, " entries, ", bad_skip_entries, " failing; templates: ", templates, " read, ", bad_templates, " failing")
   val chunks = $B.sized_rope_chunks(failing)
-  val failed = _failures(counts) > 0 || bad_entries > 0 || bad_templates > 0 || audited = 0 || templates = 0: bool
+  val failed = _failures(counts) > 0 || bad_entries > 0 || bad_skip_entries > 0 || bad_templates > 0 || audited = 0 || templates = 0: bool
   val () =
     if _failures(counts) > 0 then let
       val () = print! ("== failing repositories:")
@@ -757,6 +769,20 @@ fn _run_audit {arguments_loc,commit_loc:agz}{arguments_len,named_start,named_sto
          val () = println! ("::error title=pin audit::the allowlist tools/pin-audit/allowlist.txt could not be read: ", allow_why)
        in @(0, 1) end): @(int, int)
   val allow_usable = (case+ allow_end of | Read_whole() => true | Read_too_long() => false | Read_failed() => false): bool
+  var skip_list : $B.builder(0) = $B.create()
+  val @(skip_end, skip_why) = read_constant("tools/pin-audit/skipped.txt", skip_list)
+  val @(skip_arr, skip_len) = $B.to_arr(skip_list)
+  val @(skip_fz, skip_bv) = $A.freeze<byte>(skip_arr)
+  val @(skip_entries, bad_skip_entries) =
+    (case+ skip_end of
+     | Read_whole() => skiplist_validate(skip_bv, skip_len)
+     | Read_too_long() => let
+         val () = println! ("::error title=pin audit::the skip list tools/pin-audit/skipped.txt is longer than the 524288 bytes the audit reads")
+       in @(0, 1) end
+     | Read_failed() => let
+         val () = println! ("::error title=pin audit::the skip list tools/pin-audit/skipped.txt could not be read: ", skip_why)
+       in @(0, 1) end): @(int, int)
+  val skip_usable = (case+ skip_end of | Read_whole() => true | Read_too_long() => false | Read_failed() => false): bool
   val @(templates, bad_templates) = _templates_check()
   val @(names_arr, names_len, names_listed) =
     (if named then let
@@ -785,10 +811,12 @@ fn _run_audit {arguments_loc,commit_loc:agz}{arguments_len,named_start,named_sto
      in @(listed_array, listed_len, listed_whole) end): [names_loc:agz][names_len:nat | names_len <= 524288] @($A.arr(byte, names_loc, 524288), int names_len, bool)
   val @(names_fz, names_bv) = $A.freeze<byte>(names_arr)
   val result =
-    (if names_listed && allow_usable then _audit_all(names_bv, names_len, allow_bv, allow_len, tickets, commit_view, entries, bad_entries, templates, bad_templates)
+    (if names_listed && allow_usable && skip_usable then _audit_all(names_bv, names_len, allow_bv, allow_len, skip_bv, skip_len, tickets, commit_view, entries, bad_entries, skip_entries, bad_skip_entries, templates, bad_templates)
      else 1): int
   val () = $A.drop<byte>(names_fz, names_bv)
   val () = $A.free<byte>($A.thaw<byte>(names_fz))
+  val () = $A.drop<byte>(skip_fz, skip_bv)
+  val () = $A.free<byte>($A.thaw<byte>(skip_fz))
   val () = $A.drop<byte>(allow_fz, allow_bv)
   val () = $A.free<byte>($A.thaw<byte>(allow_fz))
 in result end

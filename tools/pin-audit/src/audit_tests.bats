@@ -88,8 +88,18 @@ fn _fresh {dir_len:nat | dir_len < 200} (dir: string dir_len): void = let
   var allowlist : $B.sized_rope = $B.sized_rope_create()
   val () = $B.sized_rope_bput(allowlist, "# no entries\n")
   val _ = write_rope(join_path3(dir, "/", "tools/pin-audit/allowlist.txt"), allowlist)
+  var skip_list : $B.sized_rope = $B.sized_rope_create()
+  val () = $B.sized_rope_bput(skip_list, "# no entries\n")
+  val _ = write_rope(join_path3(dir, "/", "tools/pin-audit/skipped.txt"), skip_list)
   var names : $B.sized_rope = $B.sized_rope_create()
   val _ = write_rope(join_path3(dir, "/", "gh-names.txt"), names)
+in () end
+
+(* The skip list of the case, as written *)
+fn _skip_raw {dir_len,content_len:nat | dir_len < 200; content_len < 100000} (dir: string dir_len, content: string content_len): void = let
+  var text : $B.sized_rope = $B.sized_rope_create()
+  val () = $B.sized_rope_bput(text, content)
+  val _ = write_rope(join_path3(dir, "/", "tools/pin-audit/skipped.txt"), text)
 in () end
 
 (* The repository dir/planted/name.git, a new one, with no commit *)
@@ -900,6 +910,57 @@ fn test_symbolic_link_section_says_delete (): bool = let
   val () = _expect_end(expected, "link")
   val body = _body_is(dir, "link", expected)
 in judged && body end
+
+(* ============================================================
+   The skip list (bats-lang/repository-prototype#430)
+   ============================================================ *)
+
+(* A repository named in tools/pin-audit/skipped.txt is not cloned and gets no ticket, though its file is not canonical; an
+   unlisted one with a non-canonical file still fails and gets its ticket; the summary line names the skipped one *)
+fn test_skipped_repository_is_neither_cloned_nor_ticketed (): bool = let
+  val dir = "build/pin-audit-tests/skip-listed"
+  val () = _fresh(dir)
+  val () = _plant_diverging(dir, "relock-scratch")
+  val () = _plant_diverging(dir, "bad")
+  val () = _names(dir, "relock-scratch\nbad\n")
+  val () = _skip_raw(dir, "# test\nrelock-scratch a fixture that is non-canonical on purpose\n")
+  val judged = _judge_run(dir, args1(arg_text("--file-tickets")), "GH_TOKEN=test-token", 1,
+    "== relock-scratch: skipped, listed in tools/pin-audit/skipped.txt (not cloned, no ticket)\n",
+    "bad: .github/workflows/check.yml: not canonical",
+    "1 not canonical, 0 over the bound, 0 unreadable; 0 repository errors; skipped (tools/pin-audit/skipped.txt): 1 relock-scratch\n== allowlist:",
+    "relock-scratch: .github")
+  val ticketed = _file_judge(dir, "gh-calls.txt", "issue create -R bats-lang/bad ", "relock-scratch")
+  val not_cloned = (~constant_exists("build/pin-audit-tests/skip-listed/audit-clones/relock-scratch/.git/HEAD")): bool
+  val cloned_other = constant_exists("build/pin-audit-tests/skip-listed/audit-clones/bad/.git/HEAD")
+in judged && ticketed && not_cloned && cloned_other end
+
+(* A skipped repository named by --repository is skipped too, and the run passes *)
+fn test_skipped_repository_named_alone_passes (): bool = let
+  val dir = "build/pin-audit-tests/skip-alone"
+  val () = _fresh(dir)
+  val () = _plant_diverging(dir, "relock-scratch")
+  val () = _skip_raw(dir, "relock-scratch a fixture that is non-canonical on purpose\n")
+  val judged = _judge_run(dir, _only("relock-scratch"), "GH_TOKEN=", 0, "== relock-scratch: skipped", "skipped (tools/pin-audit/skipped.txt): 1 relock-scratch", "skip list: 1 entries, 0 failing", ": not canonical")
+  val not_cloned = (~constant_exists("build/pin-audit-tests/skip-alone/audit-clones/relock-scratch/.git/HEAD")): bool
+in judged && not_cloned end
+
+(* Names are exact: an entry for a prefix skips nothing else, and a run that skips nothing says so *)
+fn test_skip_list_names_are_exact (): bool = let
+  val dir = "build/pin-audit-tests/skip-exact"
+  val () = _fresh(dir)
+  val () = _plant_diverging(dir, "relock-scratch")
+  val () = _names(dir, "relock-scratch\n")
+  val () = _skip_raw(dir, "relock a prefix is not the name\nrelock-scratch-2 nor is a longer name\n")
+in _judge(dir, 1, "relock-scratch: .github/workflows/check.yml: not canonical", "repository errors; skipped (tools/pin-audit/skipped.txt): 0\n", "2 entries, 0 failing", "skipped, listed") end
+
+(* A line of the skip list with no reason, or that is not an entry, fails the audit and skips nothing *)
+fn test_malformed_skip_list_fails (): bool = let
+  val dir = "build/pin-audit-tests/skip-malformed"
+  val () = _fresh(dir)
+  val () = _plant_diverging(dir, "relock-scratch")
+  val () = _names(dir, "relock-scratch\n")
+  val () = _skip_raw(dir, "relock-scratch\n/bad name\n")
+in _judge(dir, 1, "skipped.txt line 1: it has no reason after the name", "skipped.txt line 2: it does not start with a repository name", "skip list: 2 entries, 2 failing", "skipped, listed") end
 
 (* ============================================================
    .github/ISSUE_TEMPLATE (bats-lang/repository-prototype#406)
