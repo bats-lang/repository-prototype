@@ -107,6 +107,40 @@
 # split for the no-token case, the list of moves not made) are run on
 # fixtures by relock-pins-test.yml.
 #
+# A caller whose pins are not `uses:` lines (an Android SDK revision, a ref
+# in a file of its own) gives `repin-command` (#420, piece 2 of 3 of
+# bats-lang/pwa#173; area: repin command), a shell command run in its checkout
+# BEFORE the relock decides whether anything changed, and `repin-paths`, the
+# files and directories it may rewrite, one per line. It appends move records
+# (the tools/repin format: kind, name, old, new, age, status, tab separated,
+# one line for each pin examined, a kind word of its own) to the file named by
+# the environment variable REPIN_RECORDS. Both default to off, and then the
+# run is the same relock as before. What follows from it:
+#
+#  - job `repin` (permissions: {}, no secrets, no credentials, a timeout) runs
+#    the command on the base, with the newest bats on PATH, and refuses the
+#    run (red, nothing pushed) when it fails, when it wrote anything outside
+#    repin-paths (a tracked file changed, an untracked or ignored file made,
+#    compared with the checkout before it ran), or when a listed path is gone
+#    or holds a link or anything that is not a regular file or a directory.
+#    It uploads one tar of the listed paths and the records file.
+#  - job `relock` takes the tar as data (nothing is extracted by tar: each
+#    member is checked and written by this job's own code, the path rule
+#    below), before the pins move, so the files count in "anything changed?"
+#    and travel in the patch with the pins, and renders the records with
+#    tools/repin's `table` (built from the package repository the setup step
+#    cloned): a line that is not a record fails the run. The table is the
+#    section "Moved by the repin command" of the pull request body.
+#  - a run where the command moved no file and no pin moved opens no pull
+#    request and says so in the step summary. A failed `repin` job skips
+#    `relock` and `publish`, so nothing is pushed.
+#
+# The command has no RELOCK_TOKEN: like `regenerate`, it runs the code of
+# packages that are not this repository's, in a job that is a different runner
+# from the one that pushes. The `# repin-check` markers below delimit the
+# script relock-pins-test.yml runs on fixtures (a write outside the paths, a
+# link, a failing command, a path the rule refuses).
+#
 # The caller's pins, each moved only when the caller has it:
 #
 # - bats.lock: the packages, relocked against the newest package
@@ -199,6 +233,29 @@ on:
         description: The most bytes of the regenerated files the publish job accepts
         type: string
         default: '67108864'
+      repin-command:
+        description: >-
+          Shell command run in the caller's checkout before the relock decides
+          whether anything changed (the newest bats on PATH, BATS_REPOSITORY
+          set), to move pins that are not `uses:` lines; it appends move
+          records to the file named by REPIN_RECORDS and may rewrite files
+          under repin-paths only; empty runs nothing (#420)
+        type: string
+        default: ''
+      repin-paths:
+        description: >-
+          Paths the repin command may write, one per line, committed with the
+          pins; required when repin-command is given
+        type: string
+        default: ''
+      repin-max-bytes:
+        description: The most bytes of the repinned files the relock job accepts
+        type: string
+        default: '67108864'
+      repin-timeout-minutes:
+        description: Minutes the repin command and its job may take
+        type: string
+        default: '60'
       actions-releases:
         description: >-
           A file of the checkout holding the releases of the actions the
@@ -257,7 +314,149 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Job 0 (only with repin-command): the caller's command, with nothing to
+  # steal, before anything is relocked (see the header)
+  repin:
+    if: inputs.repin-command != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ fromJSON(inputs.repin-timeout-minutes) }}
+    permissions: {}
+    outputs:
+      artifact: ${{ steps.artifact.outputs.name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.base }}
+          persist-credentials: false
+
+      - name: Find the newest compiler and package repository
+        id: newest
+        env:
+          COMPILER_REPOSITORY: ${{ inputs.compiler-repository }}
+          PACKAGE_REPOSITORY: ${{ inputs.package-repository }}
+        run: |
+          set -eu
+          [ "$COMPILER_REPOSITORY" = bats-lang/bats ] \
+            || { echo "::error::compiler-repository is $COMPILER_REPOSITORY: bats's setup action builds bats-lang/bats only"; exit 1; }
+          [ "$PACKAGE_REPOSITORY" = bats-lang/repository-prototype ] \
+            || { echo "::error::package-repository is $PACKAGE_REPOSITORY: bats's setup action clones bats-lang/repository-prototype only"; exit 1; }
+          compiler=$(git ls-remote "https://github.com/$COMPILER_REPOSITORY.git" HEAD | cut -f1)
+          repository=$(git ls-remote "https://github.com/$PACKAGE_REPOSITORY.git" HEAD | cut -f1)
+          for sha in "$compiler" "$repository"; do
+            case $sha in
+              *[!0-9a-f]*|'') echo "::error::no commit found for a newest HEAD (got '$sha')"; exit 1 ;;
+            esac
+            [ ${#sha} -eq 40 ] || { echo "::error::not a full commit SHA: '$sha'"; exit 1; }
+          done
+          {
+            echo "compiler=$compiler"
+            echo "repository=$repository"
+            echo "head=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up bats at its newest
+        uses: bats-lang/bats/.github/actions/setup@67ebbf0c4744edce26584eef60ea26438945bab7 # bats main
+        with:
+          bats-version: ${{ steps.newest.outputs.compiler }}
+          repository-version: ${{ steps.newest.outputs.repository }}
+          commit: ${{ steps.newest.outputs.head }}
+          require-lock: 'false'
+
+      - name: Run the repin command and pack the listed paths
+        env:
+          REPIN_COMMAND: ${{ inputs.repin-command }}
+          REPIN_PATHS: ${{ inputs.repin-paths }}
+          MAX_BYTES: ${{ inputs.repin-max-bytes }}
+        run: |
+          # repin-check begin
+          set -eu
+          export LC_ALL=C
+          [ -n "$REPIN_PATHS" ] \
+            || { echo "::error::repin-command is given without repin-paths: nothing would be committed"; exit 1; }
+          # the path rule, as relock's Python states it (see the header)
+          refused() {
+            case "$1" in
+              ''|-*|/*|*/|*//*|*[!A-Za-z0-9._/@+=,-]*) return 0 ;;
+            esac
+            lower=$(printf '%s' "$1" | tr 'A-Z' 'a-z')
+            case "/$lower/" in
+              */./*|*/../*|*/.git/*|*/.github/*|*/.gitmodules/*|*/.gitattributes/*) return 0 ;;
+            esac
+            return 1
+          }
+          work="$RUNNER_TEMP/repin-work"
+          out="$RUNNER_TEMP/repin"
+          rm -rf "$work" "$out"
+          mkdir -p "$work" "$out"
+          printf '%s\n' "$REPIN_PATHS" > "$work/paths"
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            if refused "$path"; then
+              echo "::error::repin-paths names a path that is refused: $path"; exit 1
+            fi
+          done < "$work/paths"
+          # what the checkout holds before the command: changed, untracked and ignored files
+          snapshot() { git status --porcelain -z --ignored --untracked-files=all | tr '\0' '\n' | sort; }
+          snapshot > "$work/before"
+          : > "$out/records"
+          REPIN_RECORDS="$out/records" sh -eu -c "$REPIN_COMMAND"
+          [ -f "$out/records" ] && [ ! -L "$out/records" ] \
+            || { echo "::error::the command removed or replaced the file REPIN_RECORDS names"; exit 1; }
+          # anything the command changed, made or removed must be under a listed path
+          snapshot > "$work/after"
+          comm -13 "$work/before" "$work/after" > "$work/changed"
+          while IFS= read -r line; do
+            entry=${line#???}
+            inside=no
+            while IFS= read -r path; do
+              [ -n "$path" ] || continue
+              case "$entry" in "$path"|"$path"/*) inside=yes ;; esac
+            done < "$work/paths"
+            [ "$inside" = yes ] \
+              || { echo "::error::the command wrote outside repin-paths: $entry"; exit 1; }
+          done < "$work/changed"
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            if [ -L "$path" ]; then
+              echo "::error::$path is a link"; exit 1
+            fi
+            [ -e "$path" ] || { echo "::error::the command left no $path"; exit 1; }
+            if [ -n "$(find "$path" ! -type f ! -type d -print -quit)" ]; then
+              echo "::error::$path holds something that is not a regular file or a directory: $(find "$path" ! -type f ! -type d -print -quit)"; exit 1
+            fi
+          done < "$work/paths"
+          grep -v '^$' "$work/paths" | tar --verbatim-files-from -cf "$out/files.tar" -T -
+          size=$(stat -c %s "$out/files.tar")
+          [ "$size" -le "$MAX_BYTES" ] \
+            || { echo "::error::the repinned files are $size bytes, over repin-max-bytes ($MAX_BYTES)"; exit 1; }
+          echo "the command wrote $(wc -l < "$work/changed") entries, all under the listed paths; $(wc -l < "$out/records") records"
+          # repin-check end
+
+      # an artifact's name is unique in a run, and a run may call this workflow
+      # more than once: the branch prefix is what tells the calls apart (the
+      # concurrency group is made of it)
+      - name: Name the artifact
+        id: artifact
+        env:
+          BRANCH_PREFIX: ${{ inputs.branch-prefix }}
+        run: |
+          set -eu
+          case "$BRANCH_PREFIX" in
+            ''|-*|*[!A-Za-z0-9._/-]*) echo "::error::branch-prefix is refused: $BRANCH_PREFIX"; exit 1 ;;
+          esac
+          echo "name=repin-$(printf '%s' "$BRANCH_PREFIX" | tr '/' '_')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ runner.temp }}/repin
+          retention-days: 1
+          if-no-files-found: error
+
   relock:
+    needs: repin
+    if: >-
+      always() && (needs.repin.result == 'success' || needs.repin.result == 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
@@ -279,6 +478,8 @@ jobs:
       BRANCH_PREFIX: ${{ inputs.branch-prefix }}
       WORKFLOWS_DIRECTORY: ${{ inputs.workflows-directory }}
       PUBLISH: ${{ inputs.publish }}
+      REPIN_PATHS: ${{ inputs.repin-paths }}
+      REPIN_MAX_BYTES: ${{ inputs.repin-max-bytes }}
       ACTIONS_RELEASES: ${{ inputs.actions-releases }}
       ACTIONS_NOW: ${{ inputs.actions-now }}
       HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
@@ -383,6 +584,102 @@ jobs:
             done < ~/relock/published
           done < ~/relock/action-repositories
           echo "collected $(wc -l < ~/relock/releases) releases of $(wc -l < ~/relock/action-repositories) actions"
+
+      # The repin command's files and records, as data from a job that ran
+      # the newest packages' code (see the header)
+      - name: Download what the repin command wrote
+        if: inputs.repin-command != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.repin.outputs.artifact }}
+          path: ${{ runner.temp }}/repin
+
+      # Nothing is extracted by tar: each member is checked and its bytes are
+      # written by this script, as a regular file under a listed path (the
+      # same rule as publish's, which takes the regenerated files)
+      - name: Take the repinned files, as data
+        if: inputs.repin-command != ''
+        run: |
+          python3 -I - "$RUNNER_TEMP/repin/files.tar" <<'PY'
+          # repin-take begin
+          import os, re, shutil, sys, tarfile
+          paths = [p for p in os.environ['REPIN_PATHS'].split('\n') if p]
+          cap = int(os.environ['REPIN_MAX_BYTES'])
+          allowed = re.compile(r'^[A-Za-z0-9._/@+=,-]+$')
+          def refused(name):
+              if (not allowed.fullmatch(name) or name.startswith('/')
+                      or name.startswith('-') or name.endswith('/')):
+                  return True
+              for part in name.split('/'):
+                  if part in ('', '.', '..') or part.lower() in ('.git', '.github', '.gitmodules', '.gitattributes'):
+                      return True
+              return False
+          def die(message):
+              print('::error::' + message)
+              sys.exit(1)
+          if not paths:
+              die('repin-paths is empty')
+          for path in paths:
+              if refused(path):
+                  die('repin-paths names a path that is refused: %r' % path)
+          directories, files, total = [], [], 0
+          with tarfile.open(sys.argv[1], 'r:') as archive:
+              members = archive.getmembers()
+              if len(members) > 100000:
+                  die('too many members in the repinned files')
+              for member in members:
+                  name = member.name
+                  if refused(name) or not any(name == p or name.startswith(p + '/') for p in paths):
+                      die('a member outside the listed paths or with a refused name: %r' % name)
+                  if member.isdir():
+                      directories.append(name)
+                  elif member.isreg():
+                      total += member.size
+                      if total > cap:
+                          die('the repinned files are over repin-max-bytes (%d)' % cap)
+                      files.append(member)
+                  else:
+                      die('a member that is not a regular file or a directory: %r' % name)
+              for path in paths:
+                  if not any(m.name == path for m in members):
+                      die('the repinned files do not hold %s' % path)
+                  walked = ''
+                  for part in path.split('/')[:-1]:
+                      walked = os.path.join(walked, part)
+                      if os.path.islink(walked):
+                          die('%s is a link in the checkout' % walked)
+              # every check is done: only now is anything of the checkout replaced
+              for path in paths:
+                  if os.path.islink(path) or os.path.isfile(path):
+                      os.remove(path)
+                  elif os.path.isdir(path):
+                      shutil.rmtree(path)
+              for name in directories:
+                  os.makedirs(name, exist_ok=True)
+              for member in files:
+                  os.makedirs(os.path.dirname(member.name) or '.', exist_ok=True)
+                  data = archive.extractfile(member).read()
+                  mode = 0o755 if member.mode & 0o100 else 0o644
+                  descriptor = os.open(member.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+                  with os.fdopen(descriptor, 'wb') as out:
+                      out.write(data)
+                  os.chmod(member.name, mode)
+          print('took %d files (%d bytes) under %s' % (len(files), total, ', '.join(paths)))
+          # repin-take end
+          PY
+
+      # The records are rendered by tools/repin (built from the package
+      # repository the setup step cloned), which refuses a line that is not a
+      # record; no record, no table
+      - name: Render the repin records
+        if: inputs.repin-command != ''
+        run: |
+          set -eu
+          mkdir -p ~/relock
+          : > ~/relock/repin-table.md
+          if [ -s "$RUNNER_TEMP/repin/records" ]; then
+            "$BATS_REPOSITORY/tools/repin/dist/debug/repin" table "$RUNNER_TEMP/repin/records" > ~/relock/repin-table.md
+          fi
 
       - name: Relock and move the pins
         env:
@@ -520,6 +817,10 @@ jobs:
 
           if [ -z "$(git status --porcelain)" ]; then
             echo "Nothing to relock: every pin is the newest." | tee -a "$GITHUB_STEP_SUMMARY"
+            if [ -n "$REPIN_PATHS" ]; then
+              echo "The repin command moved nothing." | tee -a "$GITHUB_STEP_SUMMARY"
+              if [ -s ~/relock/repin-table.md ]; then cat ~/relock/repin-table.md >> "$GITHUB_STEP_SUMMARY"; fi
+            fi
             echo "changed=no" > ~/relock/state
             exit 0
           fi
@@ -590,6 +891,12 @@ jobs:
                 # actions-bullet end
               ' ~/relock/actions-left
             fi
+            if [ -s ~/relock/repin-table.md ]; then
+              echo
+              echo "### Moved by the repin command"
+              echo
+              cat ~/relock/repin-table.md
+            fi
             echo
             echo "If a check here fails, a newer version broke this project: fix it on this branch (or in a pull request of its own that commits the pins), and main stays green meanwhile."
           } > ~/relock/body.md
@@ -613,6 +920,10 @@ jobs:
           { echo "date=$date"; echo "branch=$BRANCH_PREFIX$date"; } >> "$GITHUB_OUTPUT"
           git add -A .github "$WORKFLOWS_DIRECTORY"
           if [ -f bats.lock ]; then git add bats.lock; fi
+          # one path per line, never split or expanded
+          printf '%s\n' "$REPIN_PATHS" | while IFS= read -r path; do
+            [ -z "$path" ] || git add -A -- ":(literal)$path"
+          done
           patch=$(git diff --cached --binary | gzip -9n | base64 -w0)
           body=$(base64 -w0 ~/relock/body.md)
           # an environment variable of a later step is limited to 128 KiB
