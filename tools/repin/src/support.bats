@@ -207,8 +207,9 @@ fun _contains {l:agz}{n:pos}{limit:nat | limit <= n}{at:nat | at <= limit}{liter
 (* Whether the text literal is somewhere in bytes[start, limit) *)
 #pub fn contains_text {l:agz}{n:pos}{limit:nat | limit <= n}{start:nat | start <= limit}
   {literal_len:pos}
-  (bytes: !$A.borrow(byte, l, n), limit: int limit, start: int start, literal: string
-      literal_len): bool
+  (bytes: !$A.borrow(byte, l, n), limit: int limit, start: int start,
+   literal: string literal_len)
+  : bool
 
 implement contains_text (bytes, limit, start, literal) =
   _contains(bytes, limit, start, literal, g1u2i(string1_length(literal)))

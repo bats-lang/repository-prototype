@@ -97,26 +97,28 @@ end
 (* The directory of workflows at args[dir_start, dir_stop) repinned by the releases file
    at args[releases_start, releases_stop) at the time args[now_start, now_stop) (whole
    seconds): the move records on standard output; 1 when it failed (nothing written) *)
-fn _actions {l:agz}{n:pos | n <= 4096}{dir_stop:nat | dir_stop <= n}{dir_start:nat | dir_start <=
-    dir_stop}
+fn _actions {l:agz}{n:pos | n <= 4096}
+  {dir_stop:nat | dir_stop <= n}{dir_start:nat | dir_start <= dir_stop}
   {now_stop:nat | now_stop <= n}{now_start:nat | now_start <= now_stop}
   {releases_stop:nat | releases_stop <= n}{releases_start:nat | releases_start <= releases_stop}
   (args: !$A.borrow(byte, l, n), dir_start: int dir_start, dir_stop: int dir_stop,
    now_start: int now_start, now_stop: int now_stop,
-   releases_start: int releases_start, releases_stop: int releases_stop): int = let
+   releases_start: int releases_start, releases_stop: int releases_stop)
+  : int = let
   val @(now_ok, now) = parse_seconds(args, now_start, now_stop)
 in
   if now_ok then let
     val records = $B.sized_rope_create()
-    val status = run_actions(args, dir_start, dir_stop, releases_start, releases_stop, now, records)
+    val status =
+      run_actions(args, dir_start, dir_stop, releases_start, releases_stop, now, records)
     val () = if status = 0 then print_rope(records) else discard_rope(records)
   in status end
   else let val () = prerrln! ("repin: NOW is 1 to 12 digits") in 1 end
 end
 
 fn _usage (): int = let
-  val () = prerrln!
-      ("usage: repin table RECORDS | repin age NOW PUBLISHED | repin actions DIR NOW RELEASES")
+  val () = prerrln! ("usage: repin table RECORDS | repin age NOW PUBLISHED")
+  val () = prerrln! ("       repin actions DIR NOW RELEASES")
 in 2 end
 
 (* The argument at index (the program is 0) of the NUL-separated arguments
@@ -146,8 +148,8 @@ in
      then _age(args, second_start, second_stop, third_start, third_stop) else _usage())
   else if span_is(args, command_start, command_stop, "actions") then
     (if fourth_start < args_len && fifth_start >= args_len
-     then _actions(args, second_start, second_stop, third_start, third_stop, fourth_start,
-         fourth_stop)
+     then _actions(args, second_start, second_stop, third_start, third_stop,
+       fourth_start, fourth_stop)
      else _usage())
   else _usage()
 end

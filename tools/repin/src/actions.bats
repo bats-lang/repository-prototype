@@ -61,8 +61,8 @@ fun _hex_bytes {l:agz}{n:pos}{i,j:nat | i <= j; j <= n} .<j - i>.
   else let
     val value = byte2int0($A.read<byte>(bytes, i))
   in
-    if (value >= 48 && value <= 57) || (value >= 97 && value <= 102) then _hex_bytes(bytes, i + 1,
-        j)
+    if (value >= 48 && value <= 57) || (value >= 97 && value <= 102) then
+      _hex_bytes(bytes, i + 1, j)
     else false
   end
 
@@ -171,15 +171,14 @@ implement validate_releases (releases, releases_len) = _validate_lines(releases,
    1 the highest version of a major higher than V's,
    2 the highest version of V's major that is higher than V and younger than 7 days,
    3 the release of V's own tag *)
-fn _matches {releases_loc,text_loc:agz}{releases_size,text_size:pos}{stop:nat | stop <=
-    releases_size}{start:nat | start <= stop}
+fn _matches {releases_loc,text_loc:agz}{releases_size,text_size:pos}
+  {stop:nat | stop <= releases_size}{start:nat | start <= stop}
   {repo_stop:nat | repo_stop <= text_size}{repo_start:nat | repo_start <= repo_stop}
   {tag_stop:nat | tag_stop <= text_size}{tag_start:nat | tag_start <= tag_stop}
   (releases: !$A.borrow(byte, releases_loc, releases_size), start: int start, stop: int stop,
-      category: int,
-   text: !$A.borrow(byte, text_loc, text_size), repo_start: int repo_start, repo_stop: int
-       repo_stop,
-   tag_start: int tag_start, tag_stop: int tag_stop, now: lint): bool = let
+   category: int, text: !$A.borrow(byte, text_loc, text_size), repo_start: int repo_start,
+   repo_stop: int repo_stop, tag_start: int tag_start, tag_stop: int tag_stop, now: lint)
+  : bool = let
   val @(first, second, third) = _fields(releases, start, stop)
 in
   if first >= second then false
@@ -193,7 +192,8 @@ in
   in
     if category = 1 then release_major > pin_major
     else if release_major <> pin_major then false
-    else if version_compare(releases, first + 1, second, text, tag_start, tag_stop) <= 0 then false
+    else if version_compare(releases, first + 1, second, text, tag_start, tag_stop) <= 0
+    then false
     else let
       val @(_, published) = parse_seconds(releases, third + 1, stop)
     in
@@ -228,25 +228,24 @@ end
 
 (* The line of the releases that a scan of the category chooses: whether there is one, and
    where it starts. Among the matching lines the highest version wins, the first of equals. *)
-fun _best {releases_loc,text_loc:agz}{releases_size:pos | releases_size <=
-    524288}{text_size:pos}{releases_len:nat | releases_len <= releases_size}{i:nat
-    | i <= releases_len}
+fun _best {releases_loc,text_loc:agz}{releases_size:pos | releases_size <= 524288}
+  {text_size:pos}{releases_len:nat | releases_len <= releases_size}
+  {i:nat | i <= releases_len}{best:nat | best <= releases_len}
   {repo_stop:nat | repo_stop <= text_size}{repo_start:nat | repo_start <= repo_stop}
   {tag_stop:nat | tag_stop <= text_size}{tag_start:nat | tag_start <= tag_stop}
-  {best:nat | best <= releases_len} .<releases_len - i>.
-  (releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len, i: int
-      i, category: int,
-   text: !$A.borrow(byte, text_loc, text_size), repo_start: int repo_start, repo_stop: int
-       repo_stop,
-   tag_start: int tag_start, tag_stop: int tag_stop, now: lint, found: bool, best: int best)
+  .<releases_len - i>.
+  (releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len,
+   i: int i, category: int, text: !$A.borrow(byte, text_loc, text_size),
+   repo_start: int repo_start, repo_stop: int repo_stop, tag_start: int tag_start,
+   tag_stop: int tag_stop, now: lint, found: bool, best: int best)
   : [chosen:nat | chosen <= releases_len] @(bool, int chosen) =
   if i >= releases_len then @(found, best)
   else let
     val stop = find_byte(releases, releases_len, i, 10)
+    val matched = _matches(releases, i, stop, category, text, repo_start, repo_stop,
+      tag_start, tag_stop, now)
     val take =
-      (if ~_matches(releases, i, stop, category, text, repo_start, repo_stop, tag_start, tag_stop,
-          now)
-       then false
+      (if ~matched then false
        else if found then _higher(releases, releases_len, i, stop, best)
        else true): bool
     val found2 = (if take then true else found): bool
@@ -257,88 +256,95 @@ fun _best {releases_loc,text_loc:agz}{releases_size:pos | releases_size <=
       tag_start, tag_stop, now, found2, best2)
   end
 
-(* The tag and the commit of the line that starts at start, and its published time *)
-fn _release_at {l:agz}{n:pos}{releases_len:nat | releases_len <= n}{start:nat | start <=
-    releases_len}
-  (releases: !$A.borrow(byte, l, n), releases_len: int releases_len, start: int start)
-  : [found_tag_start,found_tag_stop,found_commit_start,found_commit_stop:nat | found_tag_start <=
-      found_tag_stop; found_tag_stop <= releases_len;
-     found_commit_start <= found_commit_stop; found_commit_stop <= releases_len]
-    @(int found_tag_start, int found_tag_stop, int found_commit_start, int found_commit_stop,
-        lint) = let
-  val stop = find_byte(releases, releases_len, start, 10)
-  val @(first, second, third) = _fields(releases, start, stop)
-in
-  if first >= second then @(0, 0, 0, 0, 0L)
-  else if second >= third then @(0, 0, 0, 0, 0L)
-  else if third >= stop then @(0, 0, 0, 0, 0L)
-  else let
-    val @(_, published) = parse_seconds(releases, third + 1, stop)
-  in @(first + 1, second, second + 1, third, published) end
-end
-
-(* What becomes of the pin of the repository text[repo_start, repo_stop) at the version tag
-   text[tag_start, tag_stop) at the time now, by the releases: the status; whether the new
-   version is a release of the text (else it is the pin's own); the tag and the commit of
-   that release (places in the releases); and the age in days of the release it is about *)
-#pub fn pick_release {releases_loc,text_loc:agz}{releases_size:pos | releases_size <=
-    524288}{text_size:pos}{releases_len:nat | releases_len <=
-    releases_size}
+(* A scan of the category over all the lines of the releases *)
+fn _scan {releases_loc,text_loc:agz}{releases_size:pos | releases_size <= 524288}
+  {text_size:pos}{releases_len:nat | releases_len <= releases_size}
   {repo_stop:nat | repo_stop <= text_size}{repo_start:nat | repo_start <= repo_stop}
   {tag_stop:nat | tag_stop <= text_size}{tag_start:nat | tag_start <= tag_stop}
   (releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len,
-   text: !$A.borrow(byte, text_loc, text_size), repo_start: int repo_start, repo_stop: int
-       repo_stop,
-   tag_start: int tag_start, tag_stop: int tag_stop, now: lint)
-  : [found_tag_start,found_tag_stop,found_commit_start,found_commit_stop:nat | found_tag_start <=
-      found_tag_stop; found_tag_stop <= releases_len;
-     found_commit_start <= found_commit_stop; found_commit_stop <= releases_len]
-    @(move_status, bool, int found_tag_start, int found_tag_stop, int found_commit_start, int
-        found_commit_stop, int)
+   text: !$A.borrow(byte, text_loc, text_size), repo_start: int repo_start,
+   repo_stop: int repo_stop, tag_start: int tag_start, tag_stop: int tag_stop, now: lint,
+   category: int)
+  : [chosen:nat | chosen <= releases_len] @(bool, int chosen) =
+  _best(releases, releases_len, 0, category, text, repo_start, repo_stop, tag_start, tag_stop,
+    now, false, 0)
 
-implement pick_release (releases, releases_len, text, repo_start, repo_stop, tag_start, tag_stop,
-    now) = let
-  val @(target_found, target) =
-    _best(releases, releases_len, 0, 0, text, repo_start, repo_stop, tag_start, tag_stop, now,
-        false, 0)
+(* The tag of the line of the releases that starts at start (empty when it has none) *)
+fn _release_tag {releases_loc:agz}{releases_size:pos}
+  {releases_len:nat | releases_len <= releases_size}{start:nat | start <= releases_len}
+  (releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len,
+   start: int start)
+  : [tag_start,tag_stop:nat | tag_start <= tag_stop; tag_stop <= releases_len]
+    @(int tag_start, int tag_stop) = let
+  val stop = find_byte(releases, releases_len, start, 10)
+  val @(first, second, _) = _fields(releases, start, stop)
 in
-  if target_found then let
-    val @(found_tag_start, found_tag_stop, found_commit_start, found_commit_stop, published) =
-        _release_at(releases, releases_len, target)
-  in @(Status_moved(), true, found_tag_start, found_tag_stop, found_commit_start,
-      found_commit_stop, age_days(now, published)) end
+  if first >= second then @(0, 0) else @(first + 1, second)
+end
+
+(* The commit of the line of the releases that starts at start (empty when it has none) *)
+fn _release_commit {releases_loc:agz}{releases_size:pos}
+  {releases_len:nat | releases_len <= releases_size}{start:nat | start <= releases_len}
+  (releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len,
+   start: int start)
+  : [commit_start,commit_stop:nat | commit_start <= commit_stop; commit_stop <= releases_len]
+    @(int commit_start, int commit_stop) = let
+  val stop = find_byte(releases, releases_len, start, 10)
+  val @(_, second, third) = _fields(releases, start, stop)
+in
+  if second >= third then @(0, 0) else @(second + 1, third)
+end
+
+(* The published time of the line of the releases that starts at start (0 when it has none) *)
+fn _release_published {releases_loc:agz}{releases_size:pos}
+  {releases_len:nat | releases_len <= releases_size}{start:nat | start <= releases_len}
+  (releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len,
+   start: int start): lint = let
+  val stop = find_byte(releases, releases_len, start, 10)
+  val @(_, _, third) = _fields(releases, start, stop)
+in
+  if third >= stop then 0L
   else let
-    val @(major_found, major) =
-      _best(releases, releases_len, 0, 1, text, repo_start, repo_stop, tag_start, tag_stop, now,
-          false, 0)
+    val @(_, published) = parse_seconds(releases, third + 1, stop)
+  in published end
+end
+
+(* What becomes of the pin of the repository text[repo_start, repo_stop) at the version tag
+   text[tag_start, tag_stop) at the time now, by the releases: the status; whether a release
+   line is what it is about; and where that line starts. For moved, major not moved and too
+   new the line is the new version; for current it is the pin's own release, when the
+   releases have it. *)
+#pub fn pick_release {releases_loc,text_loc:agz}{releases_size:pos | releases_size <= 524288}
+  {text_size:pos}{releases_len:nat | releases_len <= releases_size}
+  {repo_stop:nat | repo_stop <= text_size}{repo_start:nat | repo_start <= repo_stop}
+  {tag_stop:nat | tag_stop <= text_size}{tag_start:nat | tag_start <= tag_stop}
+  (releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len,
+   text: !$A.borrow(byte, text_loc, text_size), repo_start: int repo_start,
+   repo_stop: int repo_stop, tag_start: int tag_start, tag_stop: int tag_stop, now: lint)
+  : [line:nat | line <= releases_len] @(move_status, bool, int line)
+
+implement pick_release
+  (releases, releases_len, text, repo_start, repo_stop, tag_start, tag_stop, now) = let
+  val @(moved, target) = _scan(releases, releases_len, text, repo_start, repo_stop,
+    tag_start, tag_stop, now, 0)
+in
+  if moved then @(Status_moved(), true, target)
+  else let
+    val @(major_found, major) = _scan(releases, releases_len, text, repo_start, repo_stop,
+      tag_start, tag_stop, now, 1)
   in
-    if major_found then let
-      val @(found_tag_start, found_tag_stop, found_commit_start, found_commit_stop, published) =
-          _release_at(releases, releases_len,
-          major)
-    in @(Status_major_not_moved(), true, found_tag_start, found_tag_stop, found_commit_start,
-        found_commit_stop, age_days(now,
-        published)) end
+    if major_found then @(Status_major_not_moved(), true, major)
     else let
-      val @(young_found, young) =
-        _best(releases, releases_len, 0, 2, text, repo_start, repo_stop, tag_start, tag_stop, now,
-            false, 0)
+      val @(young_found, young) = _scan(releases, releases_len, text, repo_start, repo_stop,
+        tag_start, tag_stop, now, 2)
     in
-      if young_found then let
-        val @(found_tag_start, found_tag_stop, found_commit_start, found_commit_stop, published) =
-            _release_at(releases, releases_len,
-            young)
-      in @(Status_too_new(), true, found_tag_start, found_tag_stop, found_commit_start,
-          found_commit_stop, age_days(now, published)) end
+      if young_found then @(Status_too_new(), true, young)
       else let
-        val @(own_found, own) =
-          _best(releases, releases_len, 0, 3, text, repo_start, repo_stop, tag_start, tag_stop,
-              now, false, 0)
+        val @(own_found, own) = _scan(releases, releases_len, text, repo_start, repo_stop,
+          tag_start, tag_stop, now, 3)
       in
-        if own_found then let
-          val @(_, _, _, _, published) = _release_at(releases, releases_len, own)
-        in @(Status_current(), false, 0, 0, 0, 0, age_days(now, published)) end
-        else @(Status_current(), false, 0, 0, 0, 0, 0)
+        if own_found then @(Status_current(), true, own)
+        else @(Status_current(), false, 0)
       end
     end
   end
@@ -352,12 +358,13 @@ end
 fn _token_byte (value: int): bool = _name_byte(value) || value = 47
 
 (* The start of the token that ends at stop, not before start *)
-fun _token_start {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop} .<stop - start>.
-  (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop): [k:nat | start <= k; k <=
-      stop] int k =
+fun _token_start {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
+  .<stop - start>.
+  (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop)
+  : [k:nat | start <= k; k <= stop] int k =
   if stop <= start then stop
-  else if _token_byte(byte2int0($A.read<byte>(bytes, stop - 1))) then _token_start(bytes, start,
-      stop - 1)
+  else if _token_byte(byte2int0($A.read<byte>(bytes, stop - 1))) then
+    _token_start(bytes, start, stop - 1)
   else stop
 
 (* Whether the 40 hex digits and the end of the pin start at at + 1 of a '@' at at *)
@@ -370,18 +377,17 @@ fn _pin_tail_ok {l:agz}{n:pos}{stop:nat | stop <= n}{at:nat | at < stop}
 
 (* Whether a '@' at at, in the line bytes[start, stop), ends a token holding a '/' and
    starts 40 hex digits: a pin *)
-fn _is_pin_at {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}{at:nat | start <=
-    at; at < stop}
+fn _is_pin_at {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
+  {at:nat | start <= at; at < stop}
   (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop, at: int at): bool =
   if ~_pin_tail_ok(bytes, stop, at) then false
   else let
     val token = _token_start(bytes, start, at)
   in find_byte(bytes, at, token, 47) < at end
 
-(* The place of the first '@' of a pin in bytes[at, stop), else stop *)
-fun _find_pin {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}{from:nat | start <=
-    from; from <= stop}
-  .<stop - from>.
+(* The place of the first '@' of a pin in bytes[from, stop), else stop *)
+fun _find_pin {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
+  {from:nat | start <= from; from <= stop} .<stop - from>.
   (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop, from: int from)
   : [k:nat | from <= k; k <= stop] int k = let
   val at = find_byte(bytes, stop, from, 64)
@@ -392,8 +398,8 @@ in
 end
 
 (* Whether the token bytes[start, stop) has no empty part between its '/' *)
-fun _segments_ok {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}{i:nat | i <= stop}
-  .<stop - i>.
+fun _segments_ok {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
+  {i:nat | i <= stop} .<stop - i>.
   (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop, i: int i): bool =
   if i >= stop then true
   else if byte2int0($A.read<byte>(bytes, i)) <> 47 then _segments_ok(bytes, start, stop, i + 1)
@@ -402,7 +408,7 @@ fun _segments_ok {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
   else if byte2int0($A.read<byte>(bytes, i + 1)) = 47 then false
   else _segments_ok(bytes, start, stop, i + 1)
 
-(* Whether the ground before a token is `[spaces]uses:` and blanks, after an optional `- ` *)
+(* Whether the ground before a token is `uses:` and blanks, from the place from *)
 fn _uses_before {l:agz}{n:pos}{token:nat | token <= n}{from:nat | from <= token}
   (bytes: !$A.borrow(byte, l, n), token: int token, from: int from): bool =
   if from + 5 > token then false
@@ -411,6 +417,7 @@ fn _uses_before {l:agz}{n:pos}{token:nat | token <= n}{from:nat | from <= token}
     val after = _skip_blank(bytes, token, from + 5)
   in after > from + 5 && after = token end
 
+(* Whether the ground before a token is `[spaces]uses:` and blanks, after an optional `- ` *)
 fn _plain_before {l:agz}{n:pos}{token:nat | token <= n}{start:nat | start <= token}
   (bytes: !$A.borrow(byte, l, n), start: int start, token: int token): bool = let
   val first = _skip_blank(bytes, token, start)
@@ -430,24 +437,55 @@ datatype line_end =
   | Line_rewritten
   | Line_refused
 
-(* The line bytes[start, stop) of the workflow text appended to out as it is *)
-fn _copy_line {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
+(* The bytes[start, stop) of a text appended to out as they are *)
+fn _copy_span {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
   (text: !$A.borrow(byte, l, n), start: int start, stop: int stop, out: !$B.sized_rope): void =
   if stop > start then $B.sized_rope_copy(out, text, start, stop) else ()
 
-(* The pin line text[start, stop) with its pin at at (the '@'): the record of the pin
+(* The move record of a pin: kind, name, old and new version, age in days and status.
+   The new version is the release's tag, and the pin's own for current. *)
+fn _put_record {text_loc,releases_loc:agz}{text_size,releases_size:pos}
+  {token:nat | token <= text_size}{at:nat | token <= at; at <= text_size}
+  {tag_stop:nat | tag_stop <= text_size}{tag_start:nat | tag_start <= tag_stop}
+  {releases_len:nat | releases_len <= releases_size}{line:nat | line <= releases_len}
+  (records: !$B.sized_rope, text: !$A.borrow(byte, text_loc, text_size), token: int token,
+   at: int at, tag_start: int tag_start, tag_stop: int tag_stop,
+   releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len,
+   line: int line, status: move_status, has_release: bool, now: lint)
+  : void = let
+  val @(new_start, new_stop) = _release_tag(releases, releases_len, line)
+  val days = (if has_release then age_days(now, _release_published(releases, releases_len, line))
+              else 0): int
+  val () = $B.sized_rope_bput(records, "action\t")
+  val () = _copy_span(text, token, at, records)
+  val () = $B.sized_rope_bput(records, "\t")
+  val () = _copy_span(text, tag_start, tag_stop, records)
+  val () = $B.sized_rope_bput(records, "\t")
+  val () =
+    (case+ status of
+     | Status_current() => _copy_span(text, tag_start, tag_stop, records)
+     | _ => _copy_span(releases, new_start, new_stop, records))
+  val () = $B.sized_rope_bput(records, "\t")
+  val () = put_age(records, days)
+  val () = $B.sized_rope_bput(records, "\t")
+  val () = put_status(records, status)
+  val () = $B.sized_rope_bput(records, "\n")
+in () end
+
+(* The line text[start, stop) with its pin at at (the '@'): the record of the pin
    appended to records and the line, rewritten when the pin moves, to out *)
-fn _pin_line {text_loc,releases_loc:agz}{text_size,releases_size:pos | releases_size <=
-    524288}{stop:nat | stop <= text_size}{start:nat | start <= stop}
-  {at:nat | start <= at; at < stop}{releases_len:nat | releases_len <= releases_size}
+fn _pin_line {text_loc,releases_loc:agz}{text_size:pos}
+  {releases_size:pos | releases_size <= 524288}
+  {stop:nat | stop <= text_size}{start:nat | start <= stop}{at:nat | start <= at; at < stop}
+  {releases_len:nat | releases_len <= releases_size}
   (text: !$A.borrow(byte, text_loc, text_size), start: int start, stop: int stop, at: int at,
-   releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len, now:
-       lint,
-   out: !$B.sized_rope, records: !$B.sized_rope): line_end = let
+   releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len,
+   now: lint, out: !$B.sized_rope, records: !$B.sized_rope)
+  : line_end = let
   val [token_pos:int] token = _token_start(text, start, at)
 in
   if at - token >= 10 && span_is(text, token, token + 10, "bats-lang/") then let
-    val () = _copy_line(text, start, stop, out)
+    val () = _copy_span(text, start, stop, out)
   in Line_copied() end
   else if ~_plain_before(text, start, token) then Line_refused()
   else if ~_segments_ok(text, token, at, token) then Line_refused()
@@ -466,45 +504,33 @@ in
       else let
         val tag_stop = _name_end(text, stop, tag_start)
       in
-        if tag_stop = tag_start then Line_refused()
-        else if ~version_ok(text, tag_start, tag_stop) then Line_refused()
+        if ~version_ok(text, tag_start, tag_stop) then Line_refused()
         else if _skip_blank(text, stop, tag_stop) < stop then Line_refused()
         else let
           val owner_stop = find_byte(text, at, token, 47)
           val repo_stop =
             (if owner_stop + 1 > at then at
              else find_byte(text, at, owner_stop + 1, 47)): [k:nat | token_pos <= k; k <= at] int k
-          val @(status, has_release, new_tag_start, new_tag_stop, commit_start, commit_stop, days) =
+          val @(status, has_release, line) =
             pick_release(releases, releases_len, text, token, repo_stop, tag_start, tag_stop, now)
-          val () = $B.sized_rope_bput(records, "action\t")
-          val () = $B.sized_rope_copy(records, text, token, at)
-          val () = $B.sized_rope_bput(records, "\t")
-          val () = $B.sized_rope_copy(records, text, tag_start, tag_stop)
-          val () = $B.sized_rope_bput(records, "\t")
-          val () =
-            if has_release then
-              (if new_tag_stop > new_tag_start
-               then $B.sized_rope_copy(records, releases, new_tag_start, new_tag_stop) else ())
-            else $B.sized_rope_copy(records, text, tag_start, tag_stop)
-          val () = $B.sized_rope_bput(records, "\t")
-          val () = put_age(records, days)
-          val () = $B.sized_rope_bput(records, "\t")
-          val () = put_status(records, status)
-          val () = $B.sized_rope_bput(records, "\n")
+          val () = _put_record(records, text, token, at, tag_start, tag_stop, releases,
+            releases_len, line, status, has_release, now)
         in
           case+ status of
           | Status_moved() => let
-              val () = $B.sized_rope_copy(out, text, start, at + 1)
-              val () = if commit_stop > commit_start
-                       then $B.sized_rope_copy(out, releases, commit_start, commit_stop) else ()
+              val @(new_start, new_stop) = _release_tag(releases, releases_len, line)
+              val @(commit_start, commit_stop) = _release_commit(releases, releases_len, line)
+              val () = _copy_span(text, start, at + 1, out)
+              val () = _copy_span(releases, commit_start, commit_stop, out)
               val () = $B.sized_rope_bput(out, " # ")
-              val () = if new_tag_stop > new_tag_start
-                       then $B.sized_rope_copy(out, releases, new_tag_start, new_tag_stop) else ()
+              val () = _copy_span(releases, new_start, new_stop, out)
             in Line_rewritten() end
-          | Status_major_not_moved() => let val () = _copy_line(text, start, stop, out) in
-              Line_copied() end
-          | Status_too_new() => let val () = _copy_line(text, start, stop, out) in Line_copied() end
-          | Status_current() => let val () = _copy_line(text, start, stop, out) in Line_copied() end
+          | Status_major_not_moved() =>
+              let val () = _copy_span(text, start, stop, out) in Line_copied() end
+          | Status_too_new() =>
+              let val () = _copy_span(text, start, stop, out) in Line_copied() end
+          | Status_current() =>
+              let val () = _copy_span(text, start, stop, out) in Line_copied() end
         end
       end
     end
@@ -512,30 +538,31 @@ in
 end
 
 (* The line text[start, stop) dealt with; in_region is whether it is between the markers *)
-fn _line {text_loc,releases_loc:agz}{text_size,releases_size:pos | releases_size <=
-    524288}{stop:nat | stop <= text_size}{start:nat | start <= stop}
+fn _line {text_loc,releases_loc:agz}{text_size:pos}
+  {releases_size:pos | releases_size <= 524288}
+  {stop:nat | stop <= text_size}{start:nat | start <= stop}
   {releases_len:nat | releases_len <= releases_size}
-  (text: !$A.borrow(byte, text_loc, text_size), start: int start, stop: int stop, in_region: bool,
-   releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len, now:
-       lint,
-   out: !$B.sized_rope, records: !$B.sized_rope): line_end =
-  if in_region then let val () = _copy_line(text, start, stop, out) in Line_copied() end
+  (text: !$A.borrow(byte, text_loc, text_size), start: int start, stop: int stop,
+   in_region: bool, releases: !$A.borrow(byte, releases_loc, releases_size),
+   releases_len: int releases_len, now: lint, out: !$B.sized_rope, records: !$B.sized_rope)
+  : line_end =
+  if in_region then let val () = _copy_span(text, start, stop, out) in Line_copied() end
   else let
     val at = _find_pin(text, start, stop, start)
   in
-    if at >= stop then let val () = _copy_line(text, start, stop, out) in Line_copied() end
+    if at >= stop then let val () = _copy_span(text, start, stop, out) in Line_copied() end
     else _pin_line(text, start, stop, at, releases, releases_len, now, out, records)
   end
 
-fun _lines {text_loc,releases_loc:agz}{text_size,releases_size:pos | releases_size <=
-    524288}{text_len:nat | text_len <= text_size}{i:nat | i <=
-    text_len}
-  {releases_len:nat | releases_len <= releases_size} .<text_len - i>.
+fun _lines {text_loc,releases_loc:agz}{text_size:pos}
+  {releases_size:pos | releases_size <= 524288}{text_len:nat | text_len <= text_size}
+  {i:nat | i <= text_len}{releases_len:nat | releases_len <= releases_size}
+  .<text_len - i>.
   (text: !$A.borrow(byte, text_loc, text_size), text_len: int text_len, i: int i, number: int,
-      in_region: bool,
-   releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len, now:
-       lint,
-   out: !$B.sized_rope, records: !$B.sized_rope, changed: bool): @(int, bool) =
+   in_region: bool, releases: !$A.borrow(byte, releases_loc, releases_size),
+   releases_len: int releases_len, now: lint, out: !$B.sized_rope,
+   records: !$B.sized_rope, changed: bool)
+  : @(int, bool) =
   if i >= text_len then @(0, changed)
   else let
     val stop = find_byte(text, text_len, i, 10)
@@ -551,8 +578,8 @@ fun _lines {text_loc,releases_loc:agz}{text_size,releases_size:pos | releases_si
            else contains_text(text, stop, i, "pin-rewrite begin")): bool
       in
         if stop >= text_len then @(0, changed2)
-        else _lines(text, text_len, stop + 1, number + 1, region2, releases, releases_len, now,
-          out, records, changed2)
+        else _lines(text, text_len, stop + 1, number + 1, region2, releases, releases_len,
+          now, out, records, changed2)
       end
   end
 
@@ -561,13 +588,13 @@ fun _lines {text_loc,releases_loc:agz}{text_size,releases_size:pos | releases_si
    whether a line was rewritten. The new text is appended to out and a record for each pin
    examined to records; when a line is refused they hold what came before it and the caller
    discards them. *)
-#pub fn rewrite_actions {text_loc,releases_loc:agz}{text_size,releases_size:pos | releases_size <=
-    524288}{text_len:nat | text_len <= text_size}
+#pub fn rewrite_actions {text_loc,releases_loc:agz}{text_size:pos}
+  {releases_size:pos | releases_size <= 524288}{text_len:nat | text_len <= text_size}
   {releases_len:nat | releases_len <= releases_size}
   (text: !$A.borrow(byte, text_loc, text_size), text_len: int text_len,
-   releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len, now:
-       lint,
-   out: !$B.sized_rope, records: !$B.sized_rope): @(int, bool)
+   releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len,
+   now: lint, out: !$B.sized_rope, records: !$B.sized_rope)
+  : @(int, bool)
 
 implement rewrite_actions (text, text_len, releases, releases_len, now, out, records) =
   _lines(text, text_len, 0, 1, false, releases, releases_len, now, out, records, false)

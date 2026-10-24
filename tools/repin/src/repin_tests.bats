@@ -1,7 +1,12 @@
-(* repin_tests -- the tests of repin (bats-lang/repository-prototype#410), run
-   by `bats test` in tools/repin. Each case builds its input in memory and
-   compares the output byte for byte with a literal; `now` is a constant of
-   each case, never the clock, and no file is read. Keyword: repin tests. *)
+(* repin_tests -- the tests of repin (bats-lang/repository-prototype#410, #411), run by
+   `bats test` in tools/repin. The cases of the age rule, the records and the action pins
+   in a text build their input in memory and compare the output byte for byte with a
+   literal; `now` is a constant of each case, never the clock. The directory cases of
+   `repin actions` make build/repin-tests/<case>, create and write the workflow and
+   releases files there, run the driver, read the files back and read their permission
+   bits (a file is made with chmod to the mode the case names). The records case writes
+   and reads build/repin-tests/records.tsv, outside a case directory, without running the
+   driver. Nothing else is created. Keyword: repin tests. *)
 
 #include "share/atspre_staload.hats"
 
@@ -139,19 +144,20 @@ in $B.to_arr(builder) end
 
 (* The text rewritten (at now) by the releases: whether there is no refused line, the
    text out, the records and whether a line changed are the expected ones *)
-fn _rewrite_is {text_len,releases_len,out_len,records_len:nat | text_len < 4096; releases_len <
-    4096}
+fn _rewrite_is {text_len,releases_len:nat | text_len < 4096; releases_len < 4096}
+  {out_len,records_len:nat}
   (text: string text_len, releases: string releases_len, now: lint,
-   expected_text: string out_len, expected_records: string records_len, expected_changed: bool):
-       bool = let
+   expected_text: string out_len, expected_records: string records_len,
+   expected_changed: bool)
+  : bool = let
   val @(text_array, text_used) = _text_array(text)
   val @(text_frozen, text_view) = $A.freeze<byte>(text_array)
   val @(releases_array, releases_used) = _text_array(releases)
   val @(releases_frozen, releases_view) = $A.freeze<byte>(releases_array)
   val out = $B.sized_rope_create()
   val records = $B.sized_rope_create()
-  val @(bad, changed) = rewrite_actions(text_view, text_used, releases_view, releases_used, now,
-      out, records)
+  val @(bad, changed) =
+    rewrite_actions(text_view, text_used, releases_view, releases_used, now, out, records)
   val () = $A.drop<byte>(text_frozen, text_view)
   val () = $A.free<byte>($A.thaw<byte>(text_frozen))
   val () = $A.drop<byte>(releases_frozen, releases_view)
@@ -169,8 +175,8 @@ fn _refused_line {text_len,releases_len:nat | text_len < 4096; releases_len < 40
   val @(releases_frozen, releases_view) = $A.freeze<byte>(releases_array)
   val out = $B.sized_rope_create()
   val records = $B.sized_rope_create()
-  val @(bad, _) = rewrite_actions(text_view, text_used, releases_view, releases_used, _now(), out,
-      records)
+  val @(bad, _) =
+    rewrite_actions(text_view, text_used, releases_view, releases_used, _now(), out, records)
   val () = $A.drop<byte>(text_frozen, text_view)
   val () = $A.free<byte>($A.thaw<byte>(text_frozen))
   val () = $A.drop<byte>(releases_frozen, releases_view)
@@ -214,10 +220,11 @@ in order end
    The action pins: files
    ============================================================ *)
 
-fun _copy_view {l,other_loc:agz}{n:pos}{m:nat | m <= n}{capacity:pos | m <= capacity}{i:nat | i <=
-    m} .<m - i>.
-  (source: !$A.borrow(byte, l, n), m: int m, destination: !$A.arr(byte, other_loc, capacity), i:
-      int i): void =
+fun _copy_view {l,other_loc:agz}{n:pos}{m:nat | m <= n}{capacity:pos | m <= capacity}
+  {i:nat | i <= m} .<m - i>.
+  (source: !$A.borrow(byte, l, n), m: int m, destination: !$A.arr(byte, other_loc, capacity),
+   i: int i)
+  : void =
   if i >= m then ()
   else let
     val () = $A.set<byte>(destination, i, $A.read<byte>(source, i))
@@ -239,7 +246,8 @@ in destination end
 fn _mkdir {path_len:nat | path_len < 300} (path: string path_len): void = let
   val array = _exact_array(path, 1)
   val @(frozen, view) = $A.freeze<byte>(array)
-  val () = $R.discard<int><$F.io_error>($F.file_mkdir(view, g1u2i(string1_length(path)) + 1, 493))
+  val size = g1u2i(string1_length(path)) + 1
+  val () = $R.discard<int><$F.io_error>($F.file_mkdir(view, size, 493))
   val () = $A.drop<byte>(frozen, view)
   val () = $A.free<byte>($A.thaw<byte>(frozen))
 in () end
@@ -321,8 +329,9 @@ in @(status, records) end
 
 (* The records, written to a file and read back as `repin table` reads them, are the
    table (#410) *)
-fn _records_table_is {table_len:nat | table_len < 4096} (records: $B.sized_rope, table: string
-    table_len): bool = let
+fn _records_table_is {table_len:nat | table_len < 4096}
+  (records: $B.sized_rope, table: string table_len)
+  : bool = let
   val () = _mkdir("build/repin-tests")
   val () = _make_file("build/repin-tests/records.tsv", "", 420)
   val @(path_array, path_used) = _text_array("build/repin-tests/records.tsv")
@@ -693,63 +702,135 @@ fn test_actions_repository_with_no_release_is_current (): bool =
     "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n",
     "action\tactions/checkout\tv4.4.0\tv4.4.0\t0\tcurrent\n", false)
 
-(* 1 when the line number is 2, else 0 *)
-fn _two (number: int): int = if number = 2 then 1 else 0
+(* The releases of the refused-spelling tests *)
+fn _refused_two {text_len:nat | text_len < 4096} (text: string text_len): bool =
+  _refused_line(text,
+    "actions/checkout v4.4.0 11d5960a326750d5838078e36cf38b85af677262 1790208000\n") = 2
 
-(* A line that holds a pin in another spelling is refused, as line 2 of a text: the count of
-   refused lines is 14, one for each of these spellings (a double-quoted value, a
-   single-quoted value, flow style, text after the token, no comment, no space after the
-   hash, text after the tag, a comment that is not a version, a commented-out line, a
-   carriage return, another key before uses:, the hash against the pin, no space after the
-   dash, an empty part of the token). The test counts them together; it does not check one
-   spelling alone. *)
-fn test_actions_every_other_spelling_of_a_pin_line_is_refused (): bool = let
-  val checkout_releases =
-    "actions/checkout v4.4.0 11d5960a326750d5838078e36cf38b85af677262 1790208000\n"
-in
-  _two(_refused_line("jobs:\n\
-      - uses: \"actions/checkout@11d5960a326750d5838078e36cf38b85af677262\" # v4.4.0\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      - uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262' # v4.4.0\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      - {uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262}\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 extra # v4.4.0\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 #v4.4.0\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 note\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # main\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      # uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\r\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      - name: x uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262# v4.4.0\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      -uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n",
-    checkout_releases))
-  + _two(_refused_line("jobs:\n\
-      - uses: actions//checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n",
-    checkout_releases)) = 14
-end
+(* A line whose ground before the token is not `[spaces][- ]uses: `: refused by the
+   prefix alone. Spellings: commented out, another key before `uses:`, no space after the dash. *)
+fn test_refused_prefix_spellings (): bool =
+  _refused_two(
+    "jobs:\n\
+      # uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n")
+  && _refused_two(
+    "jobs:\n\
+      - name: x uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n")
+  && _refused_two(
+    "jobs:\n\
+      -uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n")
+
+(* The sub-sites of the prefix: a bare token, a prefix shorter than `uses:`, no blank after
+   `uses:`, `name:` where `uses:` goes (the span check), a word between `uses:` and the token. *)
+fn test_refused_prefix_helper_cases (): bool =
+  _refused_two(
+    "jobs:\n\
+      actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n")
+  && _refused_two(
+    "jobs:\n\
+s: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n")
+  && _refused_two(
+    "jobs:\n\
+      - uses:actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n")
+  && _refused_two(
+    "jobs:\n\
+      - name: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n")
+  && _refused_two(
+    "jobs:\n\
+      - uses: x actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n")
+
+(* A token with a leading or a trailing slash is refused by the parts of the token alone. *)
+fn test_refused_slash_cases (): bool =
+  _refused_two(
+    "jobs:\n\
+      - uses: /actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n")
+  && _refused_two(
+    "jobs:\n\
+      - uses: actions/checkout/@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n")
+
+(* A token with an empty part (`actions//checkout`) is refused by the parts of the token alone. *)
+fn test_refused_empty_part (): bool =
+  _refused_two(
+    "jobs:\n\
+      - uses: actions//checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n")
+
+(* A hash against the pin, with no blank before it, is refused by the blank test alone. *)
+fn test_refused_hash_against_the_pin (): bool =
+  _refused_two(
+    "jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262# v4.4.0\n")
+
+(* Blanks and nothing else after the pin: refused by the end of the line alone. *)
+fn test_refused_blanks_after_the_pin (): bool =
+  _refused_two(
+    "jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   \n")
+
+(* A word where the hash goes (`P x v4.4.0`) is refused by the hash test alone. *)
+fn test_refused_word_instead_of_hash (): bool =
+  _refused_two(
+    "jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 x v4.4.0\n")
+
+(* `#v4.4.0`, no blank after the hash: refused by that blank test alone. *)
+fn test_refused_no_space_after_hash (): bool =
+  _refused_two(
+    "jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 #v4.4.0\n")
+
+(* A comment whose first byte is not of a version (`# "v4"`, `# -`) is refused. *)
+fn test_refused_tag_not_a_name (): bool =
+  _refused_two(
+    "jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # \"v4\"\n")
+  && _refused_two(
+    "jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # -\n")
+
+(* A comment that is not a version tag (`# main`) is refused by the version test alone. *)
+fn test_refused_comment_not_a_version (): bool =
+  _refused_two(
+    "jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # main\n")
+
+(* Text after the tag, or a carriage return, is refused by the end-of-line test alone. *)
+fn test_refused_text_after_the_tag (): bool =
+  _refused_two(
+    "jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 note\n")
+  && _refused_two(
+    "jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\r\n")
+
+(* A double-quoted and a single-quoted value are refused (by the prefix and the rules after
+   the pin together). *)
+fn test_refused_quoted_values (): bool =
+  _refused_two(
+    "jobs:\n\
+      - uses: \"actions/checkout@11d5960a326750d5838078e36cf38b85af677262\" # v4.4.0\n")
+  && _refused_two(
+    "jobs:\n\
+      - uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262' # v4.4.0\n")
+
+(* Flow style (`{uses: actions/checkout@P}`) is refused (by the prefix and the rules after
+   the pin together). *)
+fn test_refused_flow_style (): bool =
+  _refused_two(
+    "jobs:\n\
+      - {uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262}\n")
+
+(* Text after the token (`P extra # v4.4.0`) is refused (by the hash test, the blank after
+   the hash, the version test and the end-of-line test together). *)
+fn test_refused_text_after_the_token (): bool =
+  _refused_two(
+    "jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 extra # v4.4.0\n")
+
+(* No comment after the pin is refused (by the blank test and the end of the line). *)
+fn test_refused_no_comment (): bool =
+  _refused_two(
+    "jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n")
 
 (* A releases text is lines of `owner/repo tag commit seconds` and nothing else *)
 fn test_actions_releases_lines_are_validated (): bool =

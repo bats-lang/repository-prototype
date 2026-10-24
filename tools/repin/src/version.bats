@@ -74,8 +74,8 @@ end
 
 (* The number at i, which is before j, and where the next one starts (after the '.') *)
 fn _number {l:agz}{n:pos}{i,j:nat | i < j; j <= n}
-  (bytes: !$A.borrow(byte, l, n), i: int i, j: int j): [next:nat | i < next; next <= j] @(int, int
-      next) = let
+  (bytes: !$A.borrow(byte, l, n), i: int i, j: int j)
+  : [next:nat | i < next; next <= j] @(int, int next) = let
   val stop = _digit_end(bytes, i, j)
   val value = _digits_value(bytes, i, stop, 0)
 in
@@ -83,14 +83,14 @@ in
 end
 
 fun _compare_numbers {first_loc,second_loc:agz}{first_size,second_size:pos}
-  {first_start,first_stop,second_start,second_stop:nat |
-   first_start <= first_stop; first_stop <= first_size;
-   second_start <= second_stop; second_stop <= second_size}
+  {first_start,first_stop:nat | first_start <= first_stop; first_stop <= first_size}
+  {second_start,second_stop:nat | second_start <= second_stop; second_stop <= second_size}
   .<(first_stop - first_start) + (second_stop - second_start)>.
   (first: !$A.borrow(byte, first_loc, first_size), first_start: int first_start,
    first_stop: int first_stop,
    second: !$A.borrow(byte, second_loc, second_size), second_start: int second_start,
-   second_stop: int second_stop): int =
+   second_stop: int second_stop)
+  : int =
   if first_start < first_stop then let
     val @(first_value, first_next) = _number(first, first_start, first_stop)
   in
