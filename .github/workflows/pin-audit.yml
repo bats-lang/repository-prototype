@@ -1,0 +1,45 @@
+# The weekly pin audit (bats-lang/repository-prototype#397, #405): tools/pin-audit clones every
+# non-archived repository of the organisation, checks its workflow files against the allowlist and
+# the templates and its CI inputs with `bats check-pins --discover`, and files one ticket in each
+# repository that diverges (--file-tickets). It opens no pull request. GH_TOKEN is the secret
+# AUDIT_TOKEN (repository-prototype#408), which can file tickets in every repository; without it
+# the audit exits 1 and says the token is missing.
+name: pin audit
+
+on:
+  schedule:
+    - cron: '41 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # the setup action names a pull request's head, the merge's second parent (bats#283)
+          fetch-depth: 2
+
+      # bats's setup action, pinned by commit as tools-test.yml pins it: the compiler built from
+      # the bootstrap C of the commit named (the one that runs bats check-pins), ATS2 installed
+      # by `bats ats2 install`, and a package repository at the commit named.
+      - name: Set up bats
+        uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
+        with:
+          bats-version: e00d6338999b69c43ee59d81423b85c9bfc981e1
+          repository-version: f78231483761dae99cebf497bd3e25da2552e5e7
+          require-lock: 'false'
+
+      - name: Build the pin audit
+        working-directory: tools/pin-audit
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
+
+      - name: Audit every repository and file a ticket for each that diverges
+        env:
+          GH_TOKEN: ${{ secrets.AUDIT_TOKEN }}
+        run: tools/pin-audit/dist/release/pin_audit --file-tickets

@@ -12,6 +12,22 @@
 # byte-identical, and a quoted value, flow style, a commented-out `uses:` line
 # and text after the token are refused with the file, the line number and the
 # line, and nothing is written.
+#
+# The action pins (#414, area: repin actions): `actions` runs the workflow on
+# tests/relock-pins/actions/workflows with a releases file and a time of the
+# test (`actions-releases`, `actions-now`; nothing is fetched and the clock is
+# not read) and `actions-check` compares the patch it hands on with
+# expected.patch and the `### Actions` section of its body with
+# expected-section.md; `actions-current` runs it on a directory whose pins are
+# all current (changed is no, no patch, no body); the first job above, which
+# gives neither input and whose workflows hold no third-party action, must have
+# no `### Actions` section (a caller that passes nothing new is relocked as
+# before). `actions-left` runs the awk programs between the `actions-left` and
+# `actions-bullet` markers of relock-pins.yml, which list the moves a run with
+# no RELOCK_TOKEN cannot make as `not moved`, on fixture records.
+# `actions-fetch` gives neither input, so the releases of a fixture's real
+# actions/checkout pin (v4.0.0) are fetched from GitHub, and
+# `actions-fetch-check` requires a move to a v4 release at least 7 days old.
 # The repin command (#420, area: repin command): `repin-moves` runs the
 # workflow with a command that moves a fixture file and writes one record, and
 # `repin-nothing` one that moves nothing; `repin` then reads the patch, the
@@ -195,6 +211,173 @@ jobs:
             echo "the $name spelling is refused: $(grep -F '::error' "$work/$name.out")"
           done
 
+  actions:
+    if: inputs.refusal == ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/actions/workflows
+      actions-releases: tests/relock-pins/actions/releases.txt
+      actions-now: '1700000000'
+      publish: 'false'
+      branch-prefix: relock-test-actions/
+
+  actions-current:
+    if: inputs.refusal == ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/actions/workflows-current
+      actions-releases: tests/relock-pins/actions/releases.txt
+      actions-now: '1700000000'
+      publish: 'false'
+      branch-prefix: relock-test-actions-current/
+
+  actions-check:
+    needs: [relock, actions, actions-current]
+    runs-on: ubuntu-24.04
+    env:
+      MOVES_CHANGED: ${{ needs.actions.outputs.changed }}
+      MOVES_PATCH: ${{ needs.actions.outputs.patch }}
+      MOVES_BODY: ${{ needs.actions.outputs.body }}
+      CURRENT_CHANGED: ${{ needs.actions-current.outputs.changed }}
+      CURRENT_PATCH: ${{ needs.actions-current.outputs.patch }}
+      CURRENT_BODY: ${{ needs.actions-current.outputs.body }}
+      COMPAT_CHANGED: ${{ needs.relock.outputs.changed }}
+      COMPAT_BODY: ${{ needs.relock.outputs.body }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: The patch is the expected one
+        run: |
+          set -eu
+          [ "$MOVES_CHANGED" = yes ] || { echo "::error::the outdated pin did not move (changed=$MOVES_CHANGED)"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/a"
+          printf '%s' "$MOVES_PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/a/moves.patch"
+          cat "$RUNNER_TEMP/a/moves.patch"
+          cmp "$RUNNER_TEMP/a/moves.patch" tests/relock-pins/actions/expected.patch \
+            || { echo "::error::the patch is not the expected one"; diff tests/relock-pins/actions/expected.patch "$RUNNER_TEMP/a/moves.patch" || true; exit 1; }
+          echo "the patch is the expected one"
+
+      - name: The body lists each pin examined in the Actions section
+        run: |
+          set -eu
+          printf '%s' "$MOVES_BODY" | base64 -d > "$RUNNER_TEMP/a/moves.md"
+          cat "$RUNNER_TEMP/a/moves.md"
+          awk '/^### Actions$/ { on = 1 } /^If a check here fails/ { on = 0 } on { print }' "$RUNNER_TEMP/a/moves.md" > "$RUNNER_TEMP/a/section.md"
+          cmp "$RUNNER_TEMP/a/section.md" tests/relock-pins/actions/expected-section.md \
+            || { echo "::error::the Actions section is not the expected one"; diff tests/relock-pins/actions/expected-section.md "$RUNNER_TEMP/a/section.md" || true; exit 1; }
+          echo "the Actions section is the expected one"
+
+      - name: Every pin current opens no pull request
+        run: |
+          set -eu
+          [ "$CURRENT_CHANGED" = no ] || { echo "::error::changed is '$CURRENT_CHANGED', every action pin is current"; exit 1; }
+          [ -z "$CURRENT_PATCH" ] && [ -z "$CURRENT_BODY" ] \
+            || { echo "::error::a run with every action pin current handed on a change"; exit 1; }
+          echo "changed=no, no patch, no body"
+
+      - name: A caller that passes nothing new is relocked as before
+        run: |
+          set -eu
+          [ "$COMPAT_CHANGED" = yes ] || { echo "::error::the scratch caller's pins did not move (changed=$COMPAT_CHANGED)"; exit 1; }
+          printf '%s' "$COMPAT_BODY" | base64 -d > "$RUNNER_TEMP/a/compat.md"
+          if grep -q '^### Actions' "$RUNNER_TEMP/a/compat.md"; then
+            echo "::error::a caller with no third-party action got an Actions section"; exit 1
+          fi
+          echo "no Actions section for a caller with no third-party action"
+
+  actions-left:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Without a RELOCK_TOKEN the moves are listed as not moved
+        run: |
+          set -eu
+          work="$RUNNER_TEMP/actions-left"
+          mkdir -p "$work"
+          dir=tests/relock-pins/actions
+          # the programs as relock-pins.yml has them, between their markers
+          awk '/# actions-left end/ { on = 0 } on { print } /# actions-left begin/ { on = 1 }' \
+            .github/workflows/relock-pins.yml > "$work/split.awk"
+          awk '/# actions-bullet end/ { on = 0 } on { print } /# actions-bullet begin/ { on = 1 }' \
+            .github/workflows/relock-pins.yml > "$work/bullet.awk"
+          [ -s "$work/split.awk" ] && [ -s "$work/bullet.awk" ] \
+            || { echo "::error::no actions-left or actions-bullet program in relock-pins.yml"; exit 1; }
+          : > "$work/shown"
+          : > "$work/left"
+          awk -F'\t' -v shown="$work/shown" -v left="$work/left" -f "$work/split.awk" "$dir/records-left.txt"
+          cmp "$work/shown" "$dir/shown.expected.txt" \
+            || { echo "::error::the records kept in the table are not the expected ones"; diff "$dir/shown.expected.txt" "$work/shown" || true; exit 1; }
+          cmp "$work/left" "$dir/left.expected.txt" \
+            || { echo "::error::the moves not made are not the expected ones"; diff "$dir/left.expected.txt" "$work/left" || true; exit 1; }
+          awk -F'\t' -f "$work/bullet.awk" "$work/left" > "$work/bullets"
+          cat "$work/bullets"
+          cmp "$work/bullets" "$dir/left.expected.md" \
+            || { echo "::error::the list of moves not made is not the expected one"; diff "$dir/left.expected.md" "$work/bullets" || true; exit 1; }
+          echo "a move that cannot be made is listed as not moved; the other records stay in the table"
+
+  actions-fetch:
+    if: inputs.refusal == ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/actions/fetch
+      publish: 'false'
+      branch-prefix: relock-test-actions-fetch/
+
+  # the releases come from GitHub here, so the rule is on the form of the move,
+  # not on a fixed newest: the pin moves to a v4 release at least 7 days old
+  actions-fetch-check:
+    needs: actions-fetch
+    runs-on: ubuntu-24.04
+    env:
+      CHANGED: ${{ needs.actions-fetch.outputs.changed }}
+      PATCH: ${{ needs.actions-fetch.outputs.patch }}
+      BODY: ${{ needs.actions-fetch.outputs.body }}
+    steps:
+      - name: The outdated pin moved to a release of its major at least 7 days old
+        run: |
+          set -eu
+          [ "$CHANGED" = yes ] || { echo "::error::the outdated pin did not move (changed=$CHANGED)"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/f"
+          printf '%s' "$PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/f/fetch.patch"
+          printf '%s' "$BODY" | base64 -d > "$RUNNER_TEMP/f/fetch.md"
+          cat "$RUNNER_TEMP/f/fetch.patch" "$RUNNER_TEMP/f/fetch.md"
+          [ "$(grep -c '^diff --git' "$RUNNER_TEMP/f/fetch.patch")" = 1 ] \
+            || { echo "::error::the patch is not the one file"; exit 1; }
+          grep -Fxq -- '-      - uses: actions/checkout@1e31de5234b9f8995739874a8ce0492dc87873e2 # v4.0.0' "$RUNNER_TEMP/f/fetch.patch" \
+            || { echo "::error::the old line is not removed"; exit 1; }
+          added=$(grep -E '^\+ +- uses: ' "$RUNNER_TEMP/f/fetch.patch")
+          printf '%s\n' "$added" | grep -Eq '^\+      - uses: actions/checkout@[0-9a-f]{40} # v4\.[0-9]+\.[0-9]+$' \
+            || { echo "::error::the new line is not a pin of a v4 release: $added"; exit 1; }
+          case "$added" in *1e31de5234b9f8995739874a8ce0492dc87873e2*) echo "::error::the commit did not change"; exit 1 ;; esac
+          grep -Eq '^\| action \| actions/checkout \| v4\.0\.0 \| v4\.[0-9]+\.[0-9]+ \| ([7-9]|[1-9][0-9]+) days \| moved \|$' "$RUNNER_TEMP/f/fetch.md" \
+            || { echo "::error::the body does not list the move with a release age of at least 7 days"; exit 1; }
+          echo "the pin moved to a v4 release at least 7 days old, and the body lists it"
+
+  actions-tags:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: A tag's commit is the one it points to, an annotated tag's dereferenced
+        run: |
+          set -eu
+          work="$RUNNER_TEMP/actions-tags"
+          mkdir -p "$work"
+          awk '/# tag-commit end/ { on = 0 } on { print } /# tag-commit begin/ { on = 1 }' \
+            .github/workflows/relock-pins.yml > "$work/commit.awk"
+          [ -s "$work/commit.awk" ] || { echo "::error::no tag-commit program in relock-pins.yml"; exit 1; }
+          tags=tests/relock-pins/actions/tags.txt
+          # tag_case TAG EXPECTED-COMMIT (empty: no commit)
+          tag_case() {
+            got=$(awk -v ref="refs/tags/$1" -f "$work/commit.awk" "$tags")
+            [ "$got" = "$2" ] || { echo "::error::tag $1: got '$got', expected '$2'"; exit 1; }
+            echo "tag $1: ${got:-none}"
+          }
+          tag_case v1.0.0 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          tag_case v1.1.0 cccccccccccccccccccccccccccccccccccccccc
+          tag_case v1.1 ''
+          tag_case v2.0.0 ''
   # a caller that passes no repin input gets today's relock: the scratch
   # caller's pin moves, as in the job above, and nothing mentions repin
   repin-compat:
