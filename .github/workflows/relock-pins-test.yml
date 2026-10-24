@@ -238,7 +238,7 @@ jobs:
       repin-paths: |
         tests/relock-pins/repin
       publish: 'false'
-      branch-prefix: relock-test-refused/
+      branch-prefix: relock-test-refused-${{ inputs.refusal }}/
 
   repin:
     needs: [repin-compat, repin-moves, repin-nothing]
