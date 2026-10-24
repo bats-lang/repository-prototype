@@ -294,3 +294,29 @@ in
       | ~$R.err(_) => false
     end
 end
+
+(* The text of the rope written to the file at the path path[0, path_len), which is made when
+   it is not there (permission bits rw-r--r--) and emptied when it is: whether it was written
+   whole. The rope is consumed. *)
+#pub fn write_rope_new_file {l:agz}{n:pos}{path_len:nat | path_len <= n; path_len < 524288}
+  (path: !$A.borrow(byte, l, n), path_len: int path_len, text: $B.sized_rope): bool
+
+implement write_rope_new_file (path, path_len, text) = let
+  val path_copy = $A.alloc<byte>(path_len + 1)
+  val () = _copy_path(path, path_len, path_copy, 0)
+  val @(frozen, view) = $A.freeze<byte>(path_copy)
+  val opened = $F.file_open(view, path_len + 1, $F.WriteOnly(), $F.CreateOrTruncate(), 420)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+in
+  case+ opened of
+  | ~$R.err(_) => let val () = discard_rope(text) in false end
+  | ~$R.ok(fd) => let
+      val ok = _write_chunks(fd, $B.sized_rope_chunks(text), true)
+      val closed = $F.file_close(fd)
+    in
+      case+ closed of
+      | ~$R.ok(_) => ok
+      | ~$R.err(_) => false
+    end
+end

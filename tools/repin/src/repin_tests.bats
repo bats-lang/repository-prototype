@@ -19,6 +19,10 @@
 staload "actions.sats"
 staload "age.sats"
 staload "driver.sats"
+staload "npm.sats"
+staload "npm_driver.sats"
+staload "npm.sats"
+staload "npm_driver.sats"
 staload "records.sats"
 staload "support.sats"
 staload "version.sats"
@@ -366,6 +370,81 @@ fn _records_of {text_len,releases_len:nat | text_len < 4096; releases_len < 4096
   val () = $A.free<byte>($A.thaw<byte>(releases_frozen))
   val () = discard_rope(out)
 in records end
+
+(* `repin npm` over the files outdated.json, compatible.json and times.txt of the directory
+   dir, with the update list written to the file updates, at now: its status and its records *)
+fn _run_npm {dir_len,updates_len:nat | dir_len < 200; updates_len < 200}
+  (dir: string dir_len, updates: string updates_len, now: lint): @(int, $B.sized_rope) = let
+  var arguments : $B.builder(0) = $B.create()
+  val () = $B.bput(arguments, dir)
+  val () = $B.bput(arguments, "/outdated.json")
+  val outdated_stop = $B.length(arguments)
+  val () = $B.bput(arguments, dir)
+  val () = $B.bput(arguments, "/compatible.json")
+  val compat_stop = $B.length(arguments)
+  val () = $B.bput(arguments, dir)
+  val () = $B.bput(arguments, "/times.txt")
+  val times_stop = $B.length(arguments)
+  val () = $B.bput(arguments, updates)
+  val updates_stop = $B.length(arguments)
+  val @(arguments_array, arguments_used) = $B.to_arr(arguments)
+  val @(arguments_frozen, arguments_view) = $A.freeze<byte>(arguments_array)
+  val records = $B.sized_rope_create()
+  val status = run_npm(arguments_view, 0, outdated_stop, outdated_stop, compat_stop,
+    compat_stop, times_stop, times_stop, updates_stop, now, records)
+  val () = $A.drop<byte>(arguments_frozen, arguments_view)
+  val () = $A.free<byte>($A.thaw<byte>(arguments_frozen))
+in @(status, records) end
+
+(* A directory of fixtures, `repin npm` at now: the status is 0, and the records and the
+   update list are the literals *)
+fn _npm_case {dir_len,updates_len,records_len,list_len:nat | dir_len < 200; updates_len < 200;
+  list_len < 4096}
+  (dir: string dir_len, updates: string updates_len, now: lint,
+   expected_records: string records_len, expected_list: string list_len): bool = let
+  val () = _mkdir("build/repin-tests")
+  val @(status, records) = _run_npm(dir, updates, now)
+  val same = _rope_is(records, expected_records)
+in status = 0 && same && _file_is(updates, expected_list) end
+
+(* A planted directory whose update list is the file kept, which holds "kept": `repin npm`
+   fails (status 1) and the file is as it was *)
+fn _npm_fails {dir_len:nat | dir_len < 200} (dir: string dir_len, now: lint): bool = let
+  val () = _mkdir("build/repin-tests")
+  val () = _make_file("build/repin-tests/npm-kept.upd", "kept\n", 420)
+  val @(status, records) = _run_npm(dir, "build/repin-tests/npm-kept.upd", now)
+  val () = discard_rope(records)
+in status = 1 && _file_is("build/repin-tests/npm-kept.upd", "kept\n") end
+
+(* The three files of a planted directory *)
+fn _plant_npm {outdated_len,compat_len,times_len:nat | outdated_len < 4096; compat_len < 4096;
+  times_len < 4096}
+  (outdated: string outdated_len, compat: string compat_len, times: string times_len): void = let
+  val () = _mkdir("build/repin-tests")
+  val () = _mkdir("build/repin-tests/npm-planted")
+  val () = _make_file("build/repin-tests/npm-planted/outdated.json", outdated, 420)
+  val () = _make_file("build/repin-tests/npm-planted/compatible.json", compat, 420)
+  val () = _make_file("build/repin-tests/npm-planted/times.txt", times, 420)
+in () end
+
+(* The records of a fixture directory, as a table (#410) *)
+fn _npm_table_is {dir_len,table_len:nat | dir_len < 200; table_len < 4096}
+  (dir: string dir_len, now: lint, table: string table_len): bool = let
+  val () = _mkdir("build/repin-tests")
+  val @(status, records) = _run_npm(dir, "build/repin-tests/npm-table.upd", now)
+  val same = _records_table_is(records, table)
+in status = 0 && same end
+
+(* The number of the first line of the times that is not a times line *)
+fn _bad_times_line {times_len:nat | times_len < 4096} (times: string times_len): int = let
+  var text : $B.builder(0) = $B.create()
+  val () = $B.bput(text, times)
+  val @(text_array, text_used) = $B.to_arr(text)
+  val @(frozen, view) = $A.freeze<byte>(text_array)
+  val bad = validate_times(view, text_used)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+in bad end
 
 $UNITTEST.run begin
 
@@ -972,5 +1051,172 @@ fn test_actions_missing_directory_and_missing_releases_fail (): bool = let
       "build/repin-tests/missing/absent.txt", _now())
   val () = discard_rope(records2)
 in no_directory = 1 && no_releases = 1 end
+
+
+(* ============================================================
+   The npm dependencies
+   ============================================================ *)
+
+(* In real pnpm output (tests/npm, see its README): semver 7.0.0 with ^7.0.0 moves to the
+   newest 7.x, a minor *)
+fn test_npm_in_range_minor_is_moved (): bool =
+  _npm_case("tests/npm/semver-minor", "build/repin-tests/npm-minor.upd", _now(),
+    "npm\tsemver\t7.0.0\t7.8.5\t126\tmoved\n", "semver@7.8.5\n")
+
+(* semver 7.8.4 with ~7.8.0 moves to 7.8.5, a patch *)
+fn test_npm_in_range_patch_is_moved (): bool =
+  _npm_case("tests/npm/semver-patch", "build/repin-tests/npm-patch.upd", _now(),
+    "npm\tsemver\t7.8.4\t7.8.5\t126\tmoved\n", "semver@7.8.5\n")
+
+(* psl 1.15.0, the newest, is 6 days old, and 1.14.0 before it 9 days (9.5): 1.14.0 is the
+   target and the status is moved *)
+fn test_npm_newest_six_days_old_the_one_before_nine_days_is_the_target (): bool =
+  _npm_case("tests/npm/psl-old", "build/repin-tests/npm-six.upd", 1733134564L + 6L * 86400L,
+    "npm\tpsl\t1.13.0\t1.14.0\t9\tmoved\n", "psl@1.14.0\n")
+
+(* the newest exactly 7 days old is moved to *)
+fn test_npm_candidate_exactly_seven_days_old_is_moved (): bool =
+  _npm_case("tests/npm/psl-old", "build/repin-tests/npm-seven.upd", 1733134564L + 604800L,
+    "npm\tpsl\t1.13.0\t1.15.0\t7\tmoved\n", "psl@1.15.0\n")
+
+(* one second short of 7 days (6 days 23 hours 59 minutes 59 seconds): the one before it *)
+fn test_npm_candidate_one_second_short_of_seven_days_is_not_the_target (): bool =
+  _npm_case("tests/npm/psl-old", "build/repin-tests/npm-short.upd", 1733134564L + 604799L,
+    "npm\tpsl\t1.13.0\t1.14.0\t10\tmoved\n", "psl@1.14.0\n")
+
+(* psl at 1.14.0 whose only newer version is 6 days old: too new, nothing to update *)
+fn test_npm_only_newer_version_under_seven_days_is_too_new (): bool =
+  _npm_case("tests/npm/psl-last", "build/repin-tests/npm-young.upd", 1733134564L + 6L * 86400L,
+    "npm\tpsl\t1.14.0\t1.15.0\t6\ttoo new\n", "")
+
+(* typescript 6.0.2 with ^6.0.0: 7.0.2 is a major and is not moved, 6.0.3 is still moved to *)
+fn test_npm_major_is_not_moved_while_the_patch_of_the_major_is (): bool =
+  _npm_case("tests/npm/typescript", "build/repin-tests/npm-typescript.upd", _now(),
+    "npm\ttypescript\t6.0.2\t6.0.3\t190\tmoved\nnpm\ttypescript\t6.0.2\t7.0.2\t107\tmajor, not moved\n",
+    "typescript@6.0.3\n")
+
+(* semver 7.5.4 with ~7.5.0 is at the end of its range, and the registry's 7.8.5 is the
+   same major but outside the range: current, not moved *)
+fn test_npm_package_at_the_end_of_its_range_is_current (): bool =
+  _npm_case("tests/npm/semver-current", "build/repin-tests/npm-current.upd", _now(),
+    "npm\tsemver\t7.5.4\t7.5.4\t1204\tcurrent\n", "")
+
+(* uuid 8.3.1 with >=8.0.0: the range allows 14.0.3, whose major step is not taken, and the
+   newest 8.x is moved to *)
+fn test_npm_range_that_allows_a_higher_major_does_not_take_it (): bool =
+  _npm_case("tests/npm/uuid-open", "build/repin-tests/npm-open.upd", _now(),
+    "npm\tuuid\t8.3.1\t8.3.2\t2145\tmoved\nnpm\tuuid\t8.3.1\t14.0.3\t13\tmajor, not moved\n",
+    "uuid@8.3.2\n")
+
+(* The records of the fixtures are the table of #410 byte for byte, one row of each status *)
+fn test_npm_records_are_the_table_moved_and_major (): bool =
+  _npm_table_is("tests/npm/typescript", _now(),
+    "| Kind | Name | Old | New | Release age | Status |\n\
+| --- | --- | --- | --- | --- | --- |\n\
+| npm | typescript | 6.0.2 | 6.0.3 | 190 days | moved |\n\
+| npm | typescript | 6.0.2 | 7.0.2 | 107 days | major, not moved |\n")
+
+fn test_npm_records_are_the_table_too_new (): bool =
+  _npm_table_is("tests/npm/psl-last", 1733134564L + 6L * 86400L,
+    "| Kind | Name | Old | New | Release age | Status |\n\
+| --- | --- | --- | --- | --- | --- |\n\
+| npm | psl | 1.14.0 | 1.15.0 | 6 days | too new |\n")
+
+fn test_npm_records_are_the_table_current (): bool =
+  _npm_table_is("tests/npm/semver-current", _now(),
+    "| Kind | Name | Old | New | Release age | Status |\n\
+| --- | --- | --- | --- | --- | --- |\n\
+| npm | semver | 7.5.4 | 7.5.4 | 1204 days | current |\n")
+
+(* Two dependencies, one of a scoped name: rows and update lines in the order of the
+   outdated text; a dependency with a candidate and a younger release moves to the
+   candidate, and one with only a major has only the major row *)
+fn test_npm_two_dependencies_in_order (): bool = let
+  val () = _plant_npm(
+    "{\"@scope/pkg\":{\"current\":\"1.0.0\",\"latest\":\"1.2.0\",\"wanted\":\"1.0.0\"},\
+\"other\":{\"current\":\"2.0.0\",\"latest\":\"3.0.0\",\"wanted\":\"2.0.0\"}}",
+    "{\"@scope/pkg\":{\"current\":\"1.0.0\",\"latest\":\"1.2.0\",\"wanted\":\"1.0.0\"}}",
+    "@scope/pkg 1.0.0 1600000000\n@scope/pkg 1.1.0 1690000000\n@scope/pkg 1.2.0 1699900000\n\
+other 2.0.0 1600000000\nother 3.0.0 1650000000\n")
+in _npm_case("build/repin-tests/npm-planted", "build/repin-tests/npm-two.upd", 1700000000L,
+    "npm\t@scope/pkg\t1.0.0\t1.1.0\t115\tmoved\nnpm\tother\t2.0.0\t3.0.0\t578\tmajor, not moved\n",
+    "@scope/pkg@1.1.0\n") end
+
+(* wanted newer than current, and no compatible entry, is the ceiling *)
+fn test_npm_wanted_is_the_ceiling_without_a_compatible_entry (): bool = let
+  val () = _plant_npm(
+    "{\"a\":{\"current\":\"1.0.0\",\"latest\":\"1.3.0\",\"wanted\":\"1.1.0\"}}", "{}",
+    "a 1.0.0 1600000000\na 1.1.0 1610000000\na 1.2.0 1620000000\na 1.3.0 1630000000\n")
+in _npm_case("build/repin-tests/npm-planted", "build/repin-tests/npm-wanted.upd", 1700000000L,
+    "npm\ta\t1.0.0\t1.1.0\t1041\tmoved\n", "a@1.1.0\n") end
+
+(* nothing outdated: no rows, an empty list *)
+fn test_npm_nothing_outdated_is_empty (): bool = let
+  val () = _plant_npm("{}", "{}", "a 1.0.0 1600000000\n")
+in _npm_case("build/repin-tests/npm-planted", "build/repin-tests/npm-empty.upd", 1700000000L,
+    "", "") end
+
+(* a version a row names that has no time is an error, and nothing is written *)
+fn test_npm_row_version_without_a_time_fails_and_writes_nothing (): bool = let
+  val () = _plant_npm(
+    "{\"a\":{\"current\":\"1.0.0\",\"latest\":\"2.0.0\",\"wanted\":\"1.0.0\"}}", "{}",
+    "a 1.0.0 1600000000\n")
+in _npm_fails("build/repin-tests/npm-planted", 1700000000L) end
+
+fn test_npm_current_version_without_a_time_fails (): bool = let
+  val () = _plant_npm(
+    "{\"a\":{\"current\":\"1.0.0\",\"latest\":\"1.0.0\",\"wanted\":\"1.0.0\"}}", "{}",
+    "b 1.0.0 1600000000\n")
+in _npm_fails("build/repin-tests/npm-planted", 1700000000L) end
+
+(* a version that is not a plain tag in the facts fails *)
+fn test_npm_prerelease_current_fails (): bool = let
+  val () = _plant_npm(
+    "{\"a\":{\"current\":\"1.0.0-rc1\",\"latest\":\"2.0.0\",\"wanted\":\"1.0.0-rc1\"}}",
+    "{}", "a 1.0.0-rc1 1600000000\na 2.0.0 1610000000\n")
+in _npm_fails("build/repin-tests/npm-planted", 1700000000L) end
+
+(* an outdated text that is not JSON, not an object, or has an object that is not one fails *)
+fn test_npm_outdated_that_is_not_json_fails (): bool = let
+  val () = _plant_npm("{\"a\":", "{}", "a 1.0.0 1600000000\n")
+in _npm_fails("build/repin-tests/npm-planted", 1700000000L) end
+
+fn test_npm_outdated_with_trailing_text_fails (): bool = let
+  val () = _plant_npm("{} x", "{}", "a 1.0.0 1600000000\n")
+in _npm_fails("build/repin-tests/npm-planted", 1700000000L) end
+
+fn test_npm_outdated_array_fails (): bool = let
+  val () = _plant_npm("[]", "{}", "a 1.0.0 1600000000\n")
+in _npm_fails("build/repin-tests/npm-planted", 1700000000L) end
+
+fn test_npm_compatible_array_fails (): bool = let
+  val () = _plant_npm("{}", "[]", "a 1.0.0 1600000000\n")
+in _npm_fails("build/repin-tests/npm-planted", 1700000000L) end
+
+fn test_npm_dependency_that_is_not_an_object_fails (): bool = let
+  val () = _plant_npm("{\"a\":\"1.0.0\"}", "{}", "a 1.0.0 1600000000\n")
+in _npm_fails("build/repin-tests/npm-planted", 1700000000L) end
+
+fn test_npm_empty_outdated_fails (): bool = let
+  val () = _plant_npm("", "{}", "a 1.0.0 1600000000\n")
+in _npm_fails("build/repin-tests/npm-planted", 1700000000L) end
+
+(* a line of the times that is not a times line is named by its number and fails *)
+fn test_npm_bad_times_line_fails (): bool = let
+  val () = _plant_npm("{}", "{}", "a 1.0.0 1600000000\na 1.1.0\n")
+in _npm_fails("build/repin-tests/npm-planted", 1700000000L) end
+
+fn test_npm_times_line_number_is_named (): bool =
+  _bad_times_line("a 1.0.0 1600000000\nb 2.0.0 1700000000") = 0
+  && _bad_times_line("a 1.0.0 1600000000\na 1.1.0\n") = 2
+  && _bad_times_line("a 1.0.0 16000000000000\n") = 1
+  && _bad_times_line("a 1.0.0 1600000000 x\n") = 1
+  && _bad_times_line("a  1.0.0 1600000000\n") = 1
+  && _bad_times_line(" a 1.0.0 1600000000\n") = 1
+  && _bad_times_line("a 1.0.0 1600000000\n\nb 1.0.0 1\n") = 2
+  && _bad_times_line("a 1.0.0 abc\n") = 1
+
+(* a missing outdated file fails *)
+fn test_npm_missing_file_fails (): bool = _npm_fails("build/repin-tests/npm-nowhere", 1700000000L)
 
 end
