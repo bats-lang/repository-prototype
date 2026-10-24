@@ -82,40 +82,45 @@ in
   if stop < j then @(value, stop + 1) else @(value, j)
 end
 
-fun _compare_numbers {l1,l2:agz}{n1,n2:pos}{ai,aj,bi,bj:nat | ai <= aj; aj <= n1; bi <= bj; bj <=
-    n2}
-  .<(aj - ai) + (bj - bi)>.
-  (first: !$A.borrow(byte, l1, n1), ai: int ai, aj: int aj,
-   second: !$A.borrow(byte, l2, n2), bi: int bi, bj: int bj): int =
-  if ai < aj then let
-    val @(first_value, first_next) = _number(first, ai, aj)
+fun _compare_numbers {first_loc,second_loc:agz}{first_size,second_size:pos}
+  {first_start,first_stop,second_start,second_stop:nat |
+   first_start <= first_stop; first_stop <= first_size;
+   second_start <= second_stop; second_stop <= second_size}
+  .<(first_stop - first_start) + (second_stop - second_start)>.
+  (first: !$A.borrow(byte, first_loc, first_size), first_start: int first_start,
+   first_stop: int first_stop,
+   second: !$A.borrow(byte, second_loc, second_size), second_start: int second_start,
+   second_stop: int second_stop): int =
+  if first_start < first_stop then let
+    val @(first_value, first_next) = _number(first, first_start, first_stop)
   in
-    if bi < bj then let
-      val @(second_value, second_next) = _number(second, bi, bj)
+    if second_start < second_stop then let
+      val @(second_value, second_next) = _number(second, second_start, second_stop)
     in
       if first_value < second_value then ~1
       else if first_value > second_value then 1
-      else _compare_numbers(first, first_next, aj, second, second_next, bj)
+      else _compare_numbers(first, first_next, first_stop, second, second_next, second_stop)
     end
     else if first_value > 0 then 1
-    else _compare_numbers(first, first_next, aj, second, bi, bj)
+    else _compare_numbers(first, first_next, first_stop, second, second_start, second_stop)
   end
-  else if bi < bj then let
-    val @(second_value, second_next) = _number(second, bi, bj)
+  else if second_start < second_stop then let
+    val @(second_value, second_next) = _number(second, second_start, second_stop)
   in
     if second_value > 0 then ~1
-    else _compare_numbers(first, ai, aj, second, second_next, bj)
+    else _compare_numbers(first, first_start, first_stop, second, second_next, second_stop)
   end
   else 0
 
 (* ~1, 0 or 1 as the version tag first[first_start, first_stop) is less than, equal to or
    greater than second[second_start, second_stop); both are version tags *)
-#pub fn version_compare {l1,l2:agz}{n1,n2:pos}{first_stop:nat | first_stop <= n1}
-  {first_start:nat | first_start <= first_stop}{second_stop:nat | second_stop <= n2}
-  {second_start:nat | second_start <= second_stop}
-  (first: !$A.borrow(byte, l1, n1), first_start: int first_start, first_stop: int first_stop,
-   second: !$A.borrow(byte, l2, n2), second_start: int second_start, second_stop: int
-       second_stop): int
+#pub fn version_compare {first_loc,second_loc:agz}{first_size,second_size:pos}
+  {first_stop:nat | first_stop <= first_size}{first_start:nat | first_start <= first_stop}
+  {second_stop:nat | second_stop <= second_size}{second_start:nat | second_start <= second_stop}
+  (first: !$A.borrow(byte, first_loc, first_size), first_start: int first_start,
+   first_stop: int first_stop,
+   second: !$A.borrow(byte, second_loc, second_size), second_start: int second_start,
+   second_stop: int second_stop): int
 
 implement version_compare (first, first_start, first_stop, second, second_start, second_stop) =
   _compare_numbers(first, _numbers_start(first, first_start, first_stop), first_stop,

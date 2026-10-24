@@ -40,10 +40,10 @@ fun _line_start {l:agz}{n:pos}{text_len:nat | text_len <= n}{i:nat | i <= text_l
   end
 
 (* The refusal, on standard error: the file, the line number and the line *)
-fn _say_refused {pl:agz}{pn:pos}{path_len:nat | path_len <= pn}
-  {tl:agz}{tn:pos}{text_len:nat | text_len <= tn}
-  (path: !$A.borrow(byte, pl, pn), path_len: int path_len,
-   text: !$A.borrow(byte, tl, tn), text_len: int text_len, number: int): void = let
+fn _say_refused {path_loc:agz}{path_size:pos}{path_len:nat | path_len <= path_size}
+  {text_loc:agz}{text_size:pos}{text_len:nat | text_len <= text_size}
+  (path: !$A.borrow(byte, path_loc, path_size), path_len: int path_len,
+   text: !$A.borrow(byte, text_loc, text_size), text_len: int text_len, number: int): void = let
   val start = _line_start(text, text_len, 0, 1, number)
   val stop = find_byte(text, text_len, start, 10)
   val () = prerr! ("repin: refused, not a plain uses line of a pin: ")
@@ -56,10 +56,13 @@ in () end
 (* One file: its text rewritten in memory (records appended to records); a refused line
    leaves the file alone. When write is true a file with a moved pin is written over
    itself. 0 when it went well, else 1 (said on standard error). *)
-fn _process_file {pl:agz}{pn:pos}{path_len:nat | path_len <= pn; path_len < 524288}
-  {rl:agz}{rn:pos | rn <= 524288}{releases_len:nat | releases_len <= rn}
-  (path: !$A.borrow(byte, pl, pn), path_len: int path_len,
-   releases: !$A.borrow(byte, rl, rn), releases_len: int releases_len, now: lint, write: bool,
+fn _process_file {path_loc:agz}{path_size:pos}{path_len:nat | path_len <= path_size; path_len <
+    524288}
+  {releases_loc:agz}{releases_size:pos | releases_size <= 524288}{releases_len:nat | releases_len
+      <= releases_size}
+  (path: !$A.borrow(byte, path_loc, path_size), path_len: int path_len,
+   releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len, now:
+       lint, write: bool,
    records: !$B.sized_rope): int = let
   var text : $B.builder(0) = $B.create()
   val @(ended, words) = read_file(path, path_len, text)
@@ -101,11 +104,15 @@ in status end
 
 (* The entry i of the directory dir[0, dir_len), when its name ends .yml or .yaml: how
    many files did not go well *)
-fn _process_entry {n:nat}{i:nat | i < n}{dl:agz}{dn:pos}{dir_len:nat | dir_len <= dn; dir_len <=
+fn _process_entry {entry_count:nat}{i:nat | i <
+    entry_count}{dir_loc:agz}{dir_size:pos}{dir_len:nat | dir_len <= dir_size; dir_len <=
     4096}
-  {rl:agz}{rn:pos | rn <= 524288}{releases_len:nat | releases_len <= rn}
-  (entries: !$F.entries(n), i: int i, dir: !$A.borrow(byte, dl, dn), dir_len: int dir_len,
-   releases: !$A.borrow(byte, rl, rn), releases_len: int releases_len, now: lint, write: bool,
+  {releases_loc:agz}{releases_size:pos | releases_size <= 524288}{releases_len:nat | releases_len
+      <= releases_size}
+  (entries: !$F.entries(entry_count), i: int i, dir: !$A.borrow(byte, dir_loc, dir_size), dir_len:
+      int dir_len,
+   releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len, now:
+       lint, write: bool,
    records: !$B.sized_rope): int = let
   val name_buffer = $A.alloc<byte>(1024)
   val name_len = $F.entries_name(entries, i, name_buffer, 1024)
@@ -131,34 +138,47 @@ fn _process_entry {n:nat}{i:nat | i < n}{dl:agz}{dn:pos}{dir_len:nat | dir_len <
   val () = $A.free<byte>($A.thaw<byte>(name_frozen))
 in status end
 
-fun _each_entry {n:nat}{i:nat | i <= n}{dl:agz}{dn:pos}{dir_len:nat | dir_len <= dn; dir_len <=
+fun _each_entry {entry_count:nat}{i:nat | i <= entry_count}{dir_loc:agz}{dir_size:pos}{dir_len:nat
+    | dir_len <= dir_size; dir_len <=
     4096}
-  {rl:agz}{rn:pos | rn <= 524288}{releases_len:nat | releases_len <= rn} .<n - i>.
-  (entries: !$F.entries(n), n: int n, i: int i, dir: !$A.borrow(byte, dl, dn), dir_len: int dir_len,
-   releases: !$A.borrow(byte, rl, rn), releases_len: int releases_len, now: lint, write: bool,
+  {releases_loc:agz}{releases_size:pos | releases_size <= 524288}{releases_len:nat | releases_len
+      <= releases_size} .<entry_count - i>.
+  (entries: !$F.entries(entry_count), entry_count: int entry_count, i: int i, dir:
+      !$A.borrow(byte, dir_loc, dir_size), dir_len: int dir_len,
+   releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len, now:
+       lint, write: bool,
    records: !$B.sized_rope): int =
-  if i >= n then 0
+  if i >= entry_count then 0
   else let
     val failed = _process_entry(entries, i, dir, dir_len, releases, releases_len, now, write,
         records)
-  in failed + _each_entry(entries, n, i + 1, dir, dir_len, releases, releases_len, now, write,
+  in failed + _each_entry(entries, entry_count, i + 1, dir, dir_len, releases, releases_len, now,
+      write,
       records) end
 
 (* The writing pass, unless the first failed: how many files did not go well *)
-fn _write_pass {n:nat}{dl:agz}{dn:pos}{dir_len:nat | dir_len <= dn; dir_len <= 4096}
-  {rl:agz}{rn:pos | rn <= 524288}{releases_len:nat | releases_len <= rn}
-  (first: int, entries: !$F.entries(n), n: int n, dir: !$A.borrow(byte, dl, dn), dir_len: int
+fn _write_pass {entry_count:nat}{dir_loc:agz}{dir_size:pos}{dir_len:nat | dir_len <= dir_size;
+    dir_len <= 4096}
+  {releases_loc:agz}{releases_size:pos | releases_size <= 524288}{releases_len:nat | releases_len
+      <= releases_size}
+  (first: int, entries: !$F.entries(entry_count), entry_count: int entry_count, dir:
+      !$A.borrow(byte, dir_loc, dir_size), dir_len: int
       dir_len,
-   releases: !$A.borrow(byte, rl, rn), releases_len: int releases_len, now: lint,
+   releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len, now:
+       lint,
    records: !$B.sized_rope): int =
   if first > 0 then 1
-  else _each_entry(entries, n, 0, dir, dir_len, releases, releases_len, now, true, records)
+  else _each_entry(entries, entry_count, 0, dir, dir_len, releases, releases_len, now, true,
+      records)
 
 (* Both passes over the entries of the directory: whether every file went well *)
-fn _rewrite_directory {dl:agz}{dn:pos}{dir_len:nat | dir_len <= dn; dir_len <= 4096}
-  {rl:agz}{rn:pos | rn <= 524288}{releases_len:nat | releases_len <= rn}
-  (dir: !$A.borrow(byte, dl, dn), dir_len: int dir_len,
-   releases: !$A.borrow(byte, rl, rn), releases_len: int releases_len, now: lint,
+fn _rewrite_directory {dir_loc:agz}{dir_size:pos}{dir_len:nat | dir_len <= dir_size; dir_len <=
+    4096}
+  {releases_loc:agz}{releases_size:pos | releases_size <= 524288}{releases_len:nat | releases_len
+      <= releases_size}
+  (dir: !$A.borrow(byte, dir_loc, dir_size), dir_len: int dir_len,
+   releases: !$A.borrow(byte, releases_loc, releases_size), releases_len: int releases_len, now:
+       lint,
    records: !$B.sized_rope): int =
   case+ list_directory(dir, dir_len) of
   | ~$R.err(failure) => let
@@ -180,11 +200,11 @@ fn _rewrite_directory {dl:agz}{dn:pos}{dir_len:nat | dir_len <= dn; dir_len <= 4
    seconds): 0 when it went well, with the move records appended to records, else 1 (said on
    standard error) with no file written when a file has a refused line or the releases file
    is not release lines. *)
-#pub fn run_actions {l:agz}{n:pos}{dir_stop:nat | dir_stop <= n}
+#pub fn run_actions {args_loc:agz}{args_size:pos}{dir_stop:nat | dir_stop <= args_size}
   {dir_start:nat | dir_start <= dir_stop; dir_stop - dir_start <= 4096}
-  {releases_stop:nat | releases_stop <= n}
+  {releases_stop:nat | releases_stop <= args_size}
   {releases_start:nat | releases_start <= releases_stop; releases_stop - releases_start <= 4096}
-  (args: !$A.borrow(byte, l, n), dir_start: int dir_start, dir_stop: int dir_stop,
+  (args: !$A.borrow(byte, args_loc, args_size), dir_start: int dir_start, dir_stop: int dir_stop,
    releases_start: int releases_start, releases_stop: int releases_stop, now: lint,
    records: !$B.sized_rope): int
 

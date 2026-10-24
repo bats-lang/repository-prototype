@@ -693,44 +693,63 @@ fn test_actions_repository_with_no_release_is_current (): bool =
     "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n",
     "action\tactions/checkout\tv4.4.0\tv4.4.0\t0\tcurrent\n", false)
 
-(* A line that holds a pin in another spelling is refused, named by its number: quoted double,
-    quoted single, flow, text after the token, no comment, no space after the hash, text after the
-    tag, comment is not a version, commented out, carriage return, other key, hash against the
-    pin, no space after the dash, empty part *)
-fn test_actions_every_other_spelling_of_a_pin_line_is_refused (): bool =
-  let
-    val rel = "actions/checkout v4.4.0 11d5960a326750d5838078e36cf38b85af677262 1790208000\n"
-  in
-  _refused_line("jobs:\n\
-      - uses: \"actions/checkout@11d5960a326750d5838078e36cf38b85af677262\" # v4.4.0\n", rel) = 2
-  && _refused_line("jobs:\n\
-      - uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262' # v4.4.0\n", rel) = 2
-  && _refused_line("jobs:\n\
-      - {uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262}\n", rel) = 2
-  && _refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 extra # v4.4.0\n", rel) = 2
-  && _refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n", rel) = 2
-  && _refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 #v4.4.0\n", rel) = 2
-  && _refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 note\n", rel) = 2
-  && _refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # main\n", rel) = 2
-  && _refused_line("jobs:\n\
-      # uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n", rel) = 2
-  && _refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\r\n", rel) = 2
-  && _refused_line("jobs:\n\
-      - name: x uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 #
-          v4.4.0\n", rel) = 2
-  && _refused_line("jobs:\n\
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262# v4.4.0\n", rel) = 2
-  && _refused_line("jobs:\n\
-      -uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n", rel) = 2
-  && _refused_line("jobs:\n\
-      - uses: actions//checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n", rel) = 2
-  end
+(* 1 when the line number is 2, else 0 *)
+fn _two (number: int): int = if number = 2 then 1 else 0
+
+(* A line that holds a pin in another spelling is refused, as line 2 of a text: the count of
+   refused lines is 14, one for each of these spellings (a double-quoted value, a
+   single-quoted value, flow style, text after the token, no comment, no space after the
+   hash, text after the tag, a comment that is not a version, a commented-out line, a
+   carriage return, another key before uses:, the hash against the pin, no space after the
+   dash, an empty part of the token). The test counts them together; it does not check one
+   spelling alone. *)
+fn test_actions_every_other_spelling_of_a_pin_line_is_refused (): bool = let
+  val checkout_releases =
+    "actions/checkout v4.4.0 11d5960a326750d5838078e36cf38b85af677262 1790208000\n"
+in
+  _two(_refused_line("jobs:\n\
+      - uses: \"actions/checkout@11d5960a326750d5838078e36cf38b85af677262\" # v4.4.0\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      - uses: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262' # v4.4.0\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      - {uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262}\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 extra # v4.4.0\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 #v4.4.0\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 note\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # main\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      # uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\r\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      - name: x uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262# v4.4.0\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      -uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n",
+    checkout_releases))
+  + _two(_refused_line("jobs:\n\
+      - uses: actions//checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n",
+    checkout_releases)) = 14
+end
 
 (* A releases text is lines of `owner/repo tag commit seconds` and nothing else *)
 fn test_actions_releases_lines_are_validated (): bool =

@@ -168,23 +168,28 @@ implement print_rope (text) = _print_chunks($B.sized_rope_chunks(text))
 
 implement discard_rope (text) = $B.rope_sized_list_free($B.sized_rope_chunks(text))
 
-fun _spans_equal {l1,l2:agz}{n1,n2:pos}{a,b:nat | a <= n1; b <= n2}
-  {span:nat | a + span <= n1; b + span <= n2}{i:nat | i <= span} .<span - i>.
-  (first: !$A.borrow(byte, l1, n1), a: int a, second: !$A.borrow(byte, l2, n2), b: int b,
+fun _spans_equal {first_loc,second_loc:agz}{first_size,second_size:pos}
+  {first_start:nat | first_start <= first_size}{second_start:nat | second_start <= second_size}
+  {span:nat | first_start + span <= first_size; second_start + span <= second_size}
+  {i:nat | i <= span} .<span - i>.
+  (first: !$A.borrow(byte, first_loc, first_size), first_start: int first_start,
+   second: !$A.borrow(byte, second_loc, second_size), second_start: int second_start,
    span: int span, i: int i): bool =
   if i >= span then true
-  else if byte2int0($A.read<byte>(first, a + i)) = byte2int0($A.read<byte>(second, b + i)) then
-    _spans_equal(first, a, second, b, span, i + 1)
+  else if byte2int0($A.read<byte>(first, first_start + i))
+          = byte2int0($A.read<byte>(second, second_start + i)) then
+    _spans_equal(first, first_start, second, second_start, span, i + 1)
   else false
 
 (* Whether first[first_start, first_stop) and second[second_start, second_stop) are the
    same bytes; the two may be one array *)
-#pub fn spans_equal {l1,l2:agz}{n1,n2:pos}{first_stop:nat | first_stop <= n1}
-  {first_start:nat | first_start <= first_stop}{second_stop:nat | second_stop <= n2}
-  {second_start:nat | second_start <= second_stop}
-  (first: !$A.borrow(byte, l1, n1), first_start: int first_start, first_stop: int first_stop,
-   second: !$A.borrow(byte, l2, n2), second_start: int second_start, second_stop: int
-       second_stop): bool
+#pub fn spans_equal {first_loc,second_loc:agz}{first_size,second_size:pos}
+  {first_stop:nat | first_stop <= first_size}{first_start:nat | first_start <= first_stop}
+  {second_stop:nat | second_stop <= second_size}{second_start:nat | second_start <= second_stop}
+  (first: !$A.borrow(byte, first_loc, first_size), first_start: int first_start,
+   first_stop: int first_stop,
+   second: !$A.borrow(byte, second_loc, second_size), second_start: int second_start,
+   second_stop: int second_stop): bool
 
 implement spans_equal (first, first_start, first_stop, second, second_start, second_stop) =
   if first_stop - first_start = second_stop - second_start then
@@ -235,8 +240,9 @@ fun _copy_bytes {l,other_loc:agz}{n:pos}{m:nat | m <= n}{capacity:pos | m <= cap
 (* One chunk's first used bytes written to the open file, as an array of exactly that
    length (file_write takes all of an array); the chunk is freed. Whether they were all
    written. *)
-fn _write_chunk {cap:pos | cap <= 524288}{lb:agz}{used:nat | used <= cap}
-  (fd: !$F.fd, chunk: $A.arr(byte, lb, cap), used: int used): bool =
+fn _write_chunk {chunk_capacity:pos | chunk_capacity <= 524288}{chunk_loc:agz}
+  {used:nat | used <= chunk_capacity}
+  (fd: !$F.fd, chunk: $A.arr(byte, chunk_loc, chunk_capacity), used: int used): bool =
   if used <= 0 then let val () = $A.free<byte>(chunk) in true end
   else let
     val piece = $A.alloc<byte>(used)
