@@ -1,0 +1,7 @@
+# a caller says how to call it: uses: bats-lang/repository-prototype/.github/workflows/publish.yml@<commit>
+jobs:
+  publish:
+    uses: bats-lang/repository-prototype/.github/workflows/publish.yml@1111111111111111111111111111111111111111 # repository-prototype main 1111111
+  again:
+    steps:
+      - run: echo "bats-lang/repository-prototype/.github/workflows/publish.yml@0000000000000000000000000000000000000000"

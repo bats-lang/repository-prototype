@@ -270,6 +270,20 @@ on:
         description: The bats compiler's repository, whose main .github/bats-version moves to
         type: string
         default: bats-lang/bats
+      compiler-pin-file:
+        description: >-
+          The file holding the compiler's commit, moved when the checkout has it
+          (area: relock own repository, repository-prototype#448); a test of this
+          workflow names a file that does not exist, so that the repository's own
+          pin file is not part of the fixture it relocks
+        type: string
+        default: .github/bats-version
+      repository-pin-file:
+        description: >-
+          The file holding the package repository's commit, moved when the checkout
+          has it; named like compiler-pin-file
+        type: string
+        default: .github/repository-version
       regenerate:
         description: >-
           Shell command run in the caller's checkout after the pins moved, when
@@ -598,6 +612,8 @@ jobs:
       CHECK_WORKFLOW: ${{ inputs.check-workflow }}
       PACKAGE_REPOSITORY: ${{ inputs.package-repository }}
       COMPILER_REPOSITORY: ${{ inputs.compiler-repository }}
+      COMPILER_PIN_FILE: ${{ inputs.compiler-pin-file }}
+      REPOSITORY_PIN_FILE: ${{ inputs.repository-pin-file }}
       BASE: ${{ inputs.base }}
       BRANCH_PREFIX: ${{ inputs.branch-prefix }}
       WORKFLOWS_DIRECTORY: ${{ inputs.workflows-directory }}
@@ -964,14 +980,14 @@ jobs:
           mkdir -p ~/relock
           # What was pinned, for the pull request's lists
           if [ -f bats.lock ]; then cp bats.lock ~/relock/old.lock; else : > ~/relock/old.lock; fi
-          compiler_old=$(tr -d '[:space:]' < .github/bats-version 2>/dev/null || true)
+          compiler_old=$(tr -d '[:space:]' < "$COMPILER_PIN_FILE" 2>/dev/null || true)
           compiler_new=$COMPILER_NEWEST
           repository_new=$REPOSITORY_NEWEST
-          repository_old=$(tr -d '[:space:]' < .github/repository-version 2>/dev/null || true)
+          repository_old=$(tr -d '[:space:]' < "$REPOSITORY_PIN_FILE" 2>/dev/null || true)
           # A package with no dependencies has no lock, and gets none
           if [ -f bats.lock ]; then bats lock --repository "$BATS_REPOSITORY"; fi
-          if [ -f .github/bats-version ]; then printf '%s\n' "$compiler_new" > .github/bats-version; fi
-          if [ -f .github/repository-version ]; then printf '%s\n' "$repository_new" > .github/repository-version; fi
+          if [ -f "$COMPILER_PIN_FILE" ]; then printf '%s\n' "$compiler_new" > "$COMPILER_PIN_FILE"; fi
+          if [ -f "$REPOSITORY_PIN_FILE" ]; then printf '%s\n' "$repository_new" > "$REPOSITORY_PIN_FILE"; fi
 
           # Each workflow pin, to its repository's newest main commit, with
           # the comment `# <repo> main <7 hex>` that bats check-pins requires
@@ -990,12 +1006,24 @@ jobs:
             owner_repo=$(printf '%s' "$pin" | cut -d/ -f1-2)
             newest=$(git ls-remote "https://github.com/$owner_repo.git" refs/heads/main | cut -f1)
             test -n "$newest" || { echo "::error::no main in $owner_repo"; exit 1; }
-            old=$(grep -rhF -- "$pin@" "$WORKFLOWS_DIRECTORY" | awk -v pin="$pin@" '{ i = index($0, pin); if (i) { t = substr($0, i + length(pin)); sub(/[ \t].*/, "", t); print t; exit } }')
-            test -n "$old" || { echo "::error::no workflow in $WORKFLOWS_DIRECTORY calls $pin"; exit 1; }
+            # area: relock own repository (repository-prototype#448): in the repository that hosts the
+            # pin's workflow, a mention that is not a plain `uses:` line (a header comment saying how
+            # to call it) is documentation and is left as it is, and a pin that no plain line calls
+            # (this repository calls them by path, `./`) is skipped; everywhere else, as before, a
+            # line holding the pin that is not a plain call is refused, and a pin nobody calls is an error
+            own=no
+            if [ "$owner_repo" = "${GITHUB_REPOSITORY:-}" ]; then own=yes; fi
+            if [ "$own" = yes ]; then
+              old=$(grep -rhE '^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]+' "$WORKFLOWS_DIRECTORY" | grep -F -- "$pin@" | awk -v pin="$pin@" '{ i = index($0, pin); if (i) { t = substr($0, i + length(pin)); sub(/[ \t].*/, "", t); print t; exit } }' || true)
+              if [ -z "$old" ]; then echo "::notice::no workflow in $WORKFLOWS_DIRECTORY calls $pin by commit: it is in this repository, so it is left alone"; continue; fi
+            else
+              old=$(grep -rhF -- "$pin@" "$WORKFLOWS_DIRECTORY" | awk -v pin="$pin@" '{ i = index($0, pin); if (i) { t = substr($0, i + length(pin)); sub(/[ \t].*/, "", t); print t; exit } }')
+              test -n "$old" || { echo "::error::no workflow in $WORKFLOWS_DIRECTORY calls $pin"; exit 1; }
+            fi
             comment="${owner_repo#*/} main $(printf '%.7s' "$newest")"
             grep -rlF -- "$pin@" "$WORKFLOWS_DIRECTORY" > ~/relock/pin-files
             while IFS= read -r file; do
-              awk -v pin="$pin@" -v newest="$newest" -v comment="$comment" -v file="$file" '
+              awk -v pin="$pin@" -v newest="$newest" -v comment="$comment" -v file="$file" -v own="$own" '
                 # pin-rewrite begin
                 {
                   i = index($0, pin)
@@ -1004,6 +1032,7 @@ jobs:
                   tail = substr($0, i + length(pin))
                   match(tail, /^[A-Za-z0-9._-]*/)
                   rest = substr(tail, RLENGTH + 1)
+                  if (own == "yes" && before !~ /^[ \t]*(-[ \t]+)?uses:[ \t]+$/) { print; next }
                   if (before !~ /^[ \t]*(-[ \t]+)?uses:[ \t]+$/ || rest !~ /^[ \t]*(#.*)?$/) {
                     print "::error file=" file ",line=" NR "::refused, not a plain uses line of the pin: " $0
                     exit 1
@@ -1119,9 +1148,9 @@ jobs:
             else
               echo "No package moved."
             fi
-            if [ -f .github/bats-version ]; then
+            if [ -f "$COMPILER_PIN_FILE" ]; then
               echo
-              echo "### Compiler (\`.github/bats-version\`)"
+              echo "### Compiler (\`$COMPILER_PIN_FILE\`)"
               echo
               if [ "$compiler_old" = "$compiler_new" ]; then
                 echo "Unchanged: \`$compiler_new\`."
@@ -1129,9 +1158,9 @@ jobs:
                 echo "\`${compiler_old:-(none)}\` → \`$compiler_new\` ([changes](https://github.com/$COMPILER_REPOSITORY/compare/$compiler_old...$compiler_new))"
               fi
             fi
-            if [ -f .github/repository-version ]; then
+            if [ -f "$REPOSITORY_PIN_FILE" ]; then
               echo
-              echo "### Package repository (\`.github/repository-version\`)"
+              echo "### Package repository (\`$REPOSITORY_PIN_FILE\`)"
               echo
               if [ "$repository_old" = "$repository_new" ]; then
                 echo "Unchanged: \`$repository_new\`."
@@ -1464,7 +1493,13 @@ jobs:
           # shows on the pull request. A token other than GITHUB_TOKEN
           # starts the pull request's checks by itself.
           if [ "$HAS_RELOCK_TOKEN" != true ]; then
-            gh workflow run "$CHECK_WORKFLOW" --repo "$repo" --ref "$branch"
+            # area: relock check workflow (repository-prototype#448): a repository with no workflow of
+            # that name (this one runs several, on their paths) has nothing to dispatch
+            if [ -f ".github/workflows/$CHECK_WORKFLOW" ]; then
+              gh workflow run "$CHECK_WORKFLOW" --repo "$repo" --ref "$branch"
+            else
+              echo "::notice::this repository has no .github/workflows/$CHECK_WORKFLOW to dispatch on $branch"
+            fi
           fi
 
           issue_title='Allow GitHub Actions to create pull requests, for the daily relock'
