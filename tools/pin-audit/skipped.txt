@@ -1,0 +1,11 @@
+# The repositories the pin audit does not audit (bats-lang/repository-prototype#430,
+# keyword: pin-audit skiplist).
+#
+# One entry on each line:
+#   <repository> <reason>
+# The name is exact (no pattern) and the reason says why the repository can never
+# pass: a test fixture that is non-canonical on purpose. A skipped repository is
+# neither cloned nor ticketed, and the audit's summary line names it. A line that
+# is not an entry, or has no reason, fails the audit.
+#
+relock-scratch the fixture of the shared relock workflow: its check.yml and relock.yml call a repository-prototype pull request head and its package.json holds version ranges (semver ^7.8.5, uuid ~8.3.2), so the relock has something to move; passing would remove what it tests (relock-scratch#3)
