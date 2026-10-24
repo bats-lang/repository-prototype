@@ -34,8 +34,8 @@ capacitor-plugins/.github/workflows/review-gate-relay.yml 4ff6964784e6a99a80b2e5
 repository-prototype/.github/workflows/check-aggregate-test.yml e27174f32c44395d688e5eefa4f56e78523ad82a4265dcbaef75336198d078fd # repository-prototype#397
 repository-prototype/.github/workflows/package-check.yml eeb8e971790c2b9c6673708b8a22941a45d4f1aa4d168a286cd2492a6ca64e63 # repository-prototype#397
 repository-prototype/.github/workflows/publish.yml 50ebb500e16336a6255d1923c79a9545d844c44e69e331f240e64c0d0eaa8290 # repository-prototype#397
-repository-prototype/.github/workflows/relock-pins.yml 4a70345b7012feaf5eb9988960136d28661ab330949cd5f395ebfc9d0c5cdad2 # repository-prototype#397
-repository-prototype/.github/workflows/relock-pins-test.yml 0b7e27fc2446a150d9e47959ffc525fd6119cce28967daedf742f048f1a699f3 # repository-prototype#397
+repository-prototype/.github/workflows/relock-pins.yml 98f7d95449cc4acda5c459055f84e14250b1c408755906772775072288f6cfca # repository-prototype#397
+repository-prototype/.github/workflows/relock-pins-test.yml c04446edba417100450c2eabe8f2c20c4578b8c522c080045e75fb9bedef6cd1 # repository-prototype#397
 repository-prototype/.github/workflows/tools-test.yml 6a0db1d658546c76389938d192342e0e59a0dcf1ff38c7cde54a119dc3edc9f1 # repository-prototype#397
 repository-prototype/.github/workflows/verify.yml 1a5c9600d9d3c6d6a5beaeefd3f386154eed17665b9caf3a921f25ca58c35290 # repository-prototype#397
 bridge/.github/workflows/review-gate.yml b15a17acc60004f27d6318fb62b234928b6bdaff437c644b941813cdbc7dfd10 # bridge#207
