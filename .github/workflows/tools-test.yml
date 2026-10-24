@@ -13,6 +13,8 @@ on:
       - 'tests/verify-archives/**'
       - 'scripts/verify-archives.sh'
       - '.github/workflows/tools-test.yml'
+      - '.github/bats-version'
+      - '.github/repository-version'
   workflow_dispatch:
 
 permissions: {}
@@ -29,14 +31,13 @@ jobs:
       # bats's setup action, pinned by commit as verify.yml does: the compiler built
       # from the bootstrap C of the commit named, ATS2 installed by `bats ats2
       # install` (SHA-256 checked), and a package repository at the commit named.
-      # This repository has no pin files, so both commits are given here. The tools'
+      # The two commits are the pin files .github/bats-version and .github/repository-version, which the
+      # daily relock moves (#448). The tools'
       # locks name packages newer than that commit, so the packages are fetched from
       # this checkout, which is the repository itself (--repository below).
       - name: Set up bats
         uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
         with:
-          bats-version: e00d6338999b69c43ee59d81423b85c9bfc981e1
-          repository-version: f78231483761dae99cebf497bd3e25da2552e5e7
           require-lock: 'false'
 
       - name: Build the pin audit and its stand-in gh
