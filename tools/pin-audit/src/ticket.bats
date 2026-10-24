@@ -130,6 +130,23 @@ in
   else _name_start(path_text, start, stop, slash + 1, slash + 1)
 end
 
+(* The path of the template of the file offenders_text[path_start, path_stop), whose last name starts at name_start: in
+   templates, or in templates/ISSUE_TEMPLATE for a file under .github/ISSUE_TEMPLATE (bats-lang/repository-prototype#406) *)
+fn _template_path {l:agz}{path_start,path_stop,name_start:nat | path_start <= path_stop; path_stop <= 524288; path_start <= name_start; name_start <= path_stop; path_stop - name_start <= 255}
+  (offenders_text: !$A.borrow(byte, l, 524288), path_start: int path_start, path_stop: int path_stop, name_start: int name_start): path_text =
+  if lit_step(offenders_text, path_stop, path_start, ".github/ISSUE_TEMPLATE/") >= 0 then let
+    var template_path : $B.builder(0) = $B.create()
+    val () = $B.bput(template_path, "tools/pin-audit/templates/ISSUE_TEMPLATE/")
+    val () = put_range(offenders_text, name_start, path_stop, template_path)
+    val @(path_array, path_len) = $B.to_arr(template_path)
+  in @(path_array, path_len) end
+  else let
+    var template_path : $B.builder(0) = $B.create()
+    val () = $B.bput(template_path, "tools/pin-audit/templates/")
+    val () = put_range(offenders_text, name_start, path_stop, template_path)
+    val @(path_array, path_len) = $B.to_arr(template_path)
+  in @(path_array, path_len) end
+
 (* The template of the name of the file, filled, as a section of the body: the file is the path
    offenders_text[path_start, path_stop) of the clone of repository_text[repository_start, repository_stop), its sha256
    offenders_text[hash_start, hash_stop) *)
@@ -143,10 +160,7 @@ fn _section {repository_loc,offenders_loc,commit_loc,comment_loc:agz}{repository
   val () = $B.sized_rope_copy(body, offenders_text, path_start, path_stop)
   val () = $B.sized_rope_bput(body, "`\n\n")
   val name_start = _name_start(offenders_text, path_start, path_stop, path_start, ~1)
-  var template_path : $B.builder(0) = $B.create()
-  val () = $B.bput(template_path, "tools/pin-audit/templates/")
-  val () = put_range(offenders_text, name_start, path_stop, template_path)
-  val @(template_path_array, template_path_len) = $B.to_arr(template_path)
+  val @(template_path_array, template_path_len) = _template_path(offenders_text, path_start, path_stop, name_start)
   val @(template_path_frozen, template_path_view) = $A.freeze<byte>(template_path_array)
   var template : $B.builder(0) = $B.create()
   val @(template_ended, _) = read_file(template_path_view, template_path_len, template)
@@ -273,7 +287,7 @@ implement file_ticket (repository_text, repository_start, repository_stop, offen
   val @(comment_array, comment_len) = $B.to_arr(comment)
   val @(comment_frozen, comment_view) = $A.freeze<byte>(comment_array)
   var body : $B.sized_rope = $B.sized_rope_create()
-  val () = $B.sized_rope_bput(body, "These workflow files are neither listed by sha256 in tools/pin-audit/allowlist.txt of bats-lang/repository-prototype nor equal to a template there with its holes filled. The correct file is shown for each.\n\n")
+  val () = $B.sized_rope_bput(body, "These files are neither listed by sha256 in tools/pin-audit/allowlist.txt of bats-lang/repository-prototype nor equal to a template there with its holes filled. The correct file is shown for each.\n\n")
   val () = _sections(repository_text, repository_start, repository_stop, offenders_text, offenders_len, 0, commit_text, 40, comment_view, comment_len, body)
   val () = $B.sized_rope_bput(body, "Done when: `pin_audit --repository ")
   val () = $B.sized_rope_copy(body, repository_text, repository_start, repository_stop)
