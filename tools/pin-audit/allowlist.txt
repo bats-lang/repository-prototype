@@ -35,7 +35,7 @@ repository-prototype/.github/workflows/check-aggregate-test.yml e27174f32c44395d
 repository-prototype/.github/workflows/package-check.yml eeb8e971790c2b9c6673708b8a22941a45d4f1aa4d168a286cd2492a6ca64e63 # repository-prototype#397
 repository-prototype/.github/workflows/publish.yml 50ebb500e16336a6255d1923c79a9545d844c44e69e331f240e64c0d0eaa8290 # repository-prototype#397
 repository-prototype/.github/workflows/relock-pins.yml 3c2aa315a51d8a5ab1b90a784f67233db0a03046013888632d283fb24e5d6500 # repository-prototype#397
-repository-prototype/.github/workflows/relock-pins-test.yml b37686a6b55a6ad8f13dfbcd7c9a898acf208b46d0b37269e87e8662f7817306 # repository-prototype#397
+repository-prototype/.github/workflows/relock-pins-test.yml 03d8af6fd6669d7f9c85ba0617b32ce39e0660c89805b53216219adb9f4c6030 # repository-prototype#397
 repository-prototype/.github/workflows/tools-test.yml 6a0db1d658546c76389938d192342e0e59a0dcf1ff38c7cde54a119dc3edc9f1 # repository-prototype#397
 repository-prototype/.github/workflows/verify.yml 1a5c9600d9d3c6d6a5beaeefd3f386154eed17665b9caf3a921f25ca58c35290 # repository-prototype#397
 bridge/.github/workflows/review-gate.yml b15a17acc60004f27d6318fb62b234928b6bdaff437c644b941813cdbc7dfd10 # bridge#207

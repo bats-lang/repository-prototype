@@ -22,6 +22,9 @@
 # through the whole workflow, which must end red with relock and publish not
 # run. `repin-compat` runs the workflow with none of the repin inputs and
 # reads the same outputs as before.
+# A dispatch with `refusal` runs only that case: the calls of the other jobs
+# share concurrency groups with the pull request's run and would cancel each
+# other's pending jobs.
 name: relock-pins test
 
 on:
@@ -44,6 +47,7 @@ permissions: {}
 
 jobs:
   relock:
+    if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
       base: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -194,6 +198,7 @@ jobs:
   # a caller that passes no repin input gets today's relock: the scratch
   # caller's pin moves, as in the job above, and nothing mentions repin
   repin-compat:
+    if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
       base: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -204,6 +209,7 @@ jobs:
       branch-prefix: relock-test-compat/
 
   repin-moves:
+    if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
       base: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -217,6 +223,7 @@ jobs:
       branch-prefix: relock-test-moves/
 
   repin-nothing:
+    if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
       base: ${{ github.event.pull_request.head.sha || github.sha }}
