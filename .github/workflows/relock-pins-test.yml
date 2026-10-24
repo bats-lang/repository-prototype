@@ -93,8 +93,9 @@ jobs:
         bats-lang/bats/.github/actions/setup
       pin-copies: |
         bats-lang/repository-prototype/.github/workflows/publish.yml source-ref
-      compiler-pin-file: tests/relock-pins/old-pins/bats-version
-      repository-pin-file: tests/relock-pins/old-pins/repository-version
+      # under workflows-directory: the patch stages .github and that directory only (#457)
+      compiler-pin-file: tests/relock-pins/workflows/pins/bats-version
+      repository-pin-file: tests/relock-pins/workflows/pins/repository-version
       publish: 'false'
       branch-prefix: relock-test/
 
@@ -125,13 +126,13 @@ jobs:
             grep -Fxq -- "-$old" "$1" \
               || { echo "::error::$pin_file did not move from $old"; exit 1; }
           done <<LIST
-          tests/relock-pins/old-pins/bats-version $(tr -d '[:space:]' < tests/relock-pins/old-pins/bats-version)
-          tests/relock-pins/old-pins/repository-version $(tr -d '[:space:]' < tests/relock-pins/old-pins/repository-version)
+          tests/relock-pins/workflows/pins/bats-version $(tr -d '[:space:]' < tests/relock-pins/workflows/pins/bats-version)
+          tests/relock-pins/workflows/pins/repository-version $(tr -d '[:space:]' < tests/relock-pins/workflows/pins/repository-version)
           LIST
           PINS
           sh "$RUNNER_TEMP/t/pins-moved.sh" "$RUNNER_TEMP/t/good.patch"
           # a patch where the fixture's pin did not move (it was current) is refused
-          awk '/^diff --git / { skip = ($0 ~ /old-pins\/bats-version/) } !skip { print }' \
+          awk '/^diff --git / { skip = ($0 ~ /pins\/bats-version/) } !skip { print }' \
             "$RUNNER_TEMP/t/good.patch" > "$RUNNER_TEMP/t/current.patch"
           if sh "$RUNNER_TEMP/t/pins-moved.sh" "$RUNNER_TEMP/t/current.patch"; then
             echo "::error::a patch without the compiler pin's move was accepted"; exit 1
