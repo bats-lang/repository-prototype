@@ -1,0 +1,13 @@
+diff --git a/tests/relock-pins/actions/workflows/ci.yml b/tests/relock-pins/actions/workflows/ci.yml
+index e21a5ff..9504bc1 100644
+--- a/tests/relock-pins/actions/workflows/ci.yml
++++ b/tests/relock-pins/actions/workflows/ci.yml
+@@ -8,7 +8,7 @@ jobs:
+     runs-on: ubuntu-24.04
+     steps:
+       # moves to the newest release of its major that is 7 days old (v1.2.0)
+-      - uses: acme/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v1.0.0
++      - uses: acme/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb # v1.2.0
+       # a newer major exists: not moved
+       - uses: acme/lint@cccccccccccccccccccccccccccccccccccccccc # v2.0.0
+       # the newer release is under 7 days old: too new
