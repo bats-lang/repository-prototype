@@ -45,6 +45,17 @@
 # to list the move with its release age; `npm-current` relocks a fixture whose
 # dependencies are all current (changed is no); every other call gives
 # `npm-ignore`, so the fixtures are left alone.
+# The Gradle wrapper (#416, area: repin gradle): `gradle` relocks the fixture
+# tests/relock-pins/gradle/project (wrapper 8.5, JDK 17 by its .java-version) at
+# a fixed time (`gradle-now`, 2026-10-24T12:00:00Z) and `gradle-check` requires
+# the patch to hold that project's wrapper files and nothing else, the
+# properties to name 8.14.6 (the newest 8.x at least 7 days old then) with
+# `distributionSha256Sum` equal to the body of the published `.sha256` (fetched
+# in the check and compared), the jar and scripts to be rewritten, and the
+# `### Gradle` section to list the move with its release age and the newer
+# major as `major, not moved`; `gradle-current` relocks a fixture that already
+# holds 8.14.6 (changed is no, no patch, no body of a move); every other call
+# gives `gradle-ignore`, so the fixtures are left alone.
 # A dispatch with `refusal` runs only that case: the calls of the other jobs
 # share concurrency groups with the pull request's run and would cancel each
 # other's pending jobs.
@@ -74,6 +85,7 @@ jobs:
     uses: ./.github/workflows/relock-pins.yml
     with:
       npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/workflows
       workflow-pins: |
@@ -224,6 +236,7 @@ jobs:
     uses: ./.github/workflows/relock-pins.yml
     with:
       npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/actions/workflows
       actions-releases: tests/relock-pins/actions/releases.txt
@@ -236,6 +249,7 @@ jobs:
     uses: ./.github/workflows/relock-pins.yml
     with:
       npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/actions/workflows-current
       actions-releases: tests/relock-pins/actions/releases.txt
@@ -331,6 +345,7 @@ jobs:
     uses: ./.github/workflows/relock-pins.yml
     with:
       npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/actions/fetch
       publish: 'false'
@@ -396,6 +411,7 @@ jobs:
     uses: ./.github/workflows/relock-pins.yml
     with:
       npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/workflows
       workflow-pins: |
@@ -408,6 +424,7 @@ jobs:
     uses: ./.github/workflows/relock-pins.yml
     with:
       npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/workflows
       repin-command: |
@@ -424,6 +441,7 @@ jobs:
     uses: ./.github/workflows/relock-pins.yml
     with:
       npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/actions/workflows
       actions-releases: tests/relock-pins/actions/releases.txt
@@ -441,6 +459,7 @@ jobs:
     uses: ./.github/workflows/relock-pins.yml
     with:
       npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/workflows
       repin-command: |
@@ -455,6 +474,7 @@ jobs:
     uses: ./.github/workflows/relock-pins.yml
     with:
       npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
       base: ${{ github.sha }}
       workflows-directory: tests/relock-pins/workflows
       repin-command: ${{ inputs.refusal == 'outside' && 'echo x > tests/relock-pins/outside.txt' || inputs.refusal == 'link' && 'ln -s /etc/passwd tests/relock-pins/repin/link' || inputs.refusal == 'bad-record' && 'echo not-a-record >> "$REPIN_RECORDS"' || 'exit 3' }}
@@ -687,6 +707,7 @@ jobs:
       npm-now: '1792800000'
       npm-node-version-file: tests/relock-pins/npm/project/.nvmrc
       npm-ignore: tests/relock-pins/npm/current
+      gradle-ignore: tests/relock-pins/gradle
       publish: 'false'
       branch-prefix: relock-test-npm/
 
@@ -699,6 +720,7 @@ jobs:
       npm-now: '1792800000'
       npm-node-version-file: tests/relock-pins/npm/current/.nvmrc
       npm-ignore: tests/relock-pins/npm/project
+      gradle-ignore: tests/relock-pins/gradle
       publish: 'false'
       branch-prefix: relock-test-npm-current/
 
@@ -759,3 +781,106 @@ jobs:
             echo "::error::an npm section where no npm project is looked at"; exit 1
           fi
           echo "no npm section"
+
+  # The Gradle wrapper (#416, area: repin gradle): the fixture project holds
+  # Gradle 8.5 under a JDK 17 (its .java-version); at the fixed time
+  # `gradle-now` the newest stable 8.x at least 7 days old is 8.14.6, and the
+  # newest release of the next major is not a target. `gradle-current` holds
+  # 8.14.6 already: nothing moves, so no pull request.
+  gradle:
+    if: inputs.refusal == ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      npm-ignore: tests/relock-pins/npm
+      gradle-now: '1792843200'
+      gradle-java-version-file: tests/relock-pins/gradle/project/.java-version
+      gradle-ignore: tests/relock-pins/gradle/current
+      publish: 'false'
+      branch-prefix: relock-test-gradle/
+
+  gradle-current:
+    if: inputs.refusal == ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      npm-ignore: tests/relock-pins/npm
+      gradle-now: '1792843200'
+      gradle-java-version-file: tests/relock-pins/gradle/current/.java-version
+      gradle-ignore: tests/relock-pins/gradle/project
+      publish: 'false'
+      branch-prefix: relock-test-gradle-current/
+
+  gradle-check:
+    needs: [relock, gradle, gradle-current]
+    runs-on: ubuntu-24.04
+    env:
+      MOVES_CHANGED: ${{ needs.gradle.outputs.changed }}
+      MOVES_PATCH: ${{ needs.gradle.outputs.patch }}
+      MOVES_PATCH_PART_2: ${{ needs.gradle.outputs.patch-part-2 }}
+      MOVES_PATCH_PART_3: ${{ needs.gradle.outputs.patch-part-3 }}
+      MOVES_PATCH_PART_4: ${{ needs.gradle.outputs.patch-part-4 }}
+      MOVES_PATCH_PART_5: ${{ needs.gradle.outputs.patch-part-5 }}
+      MOVES_PATCH_PART_6: ${{ needs.gradle.outputs.patch-part-6 }}
+      MOVES_PATCH_PART_7: ${{ needs.gradle.outputs.patch-part-7 }}
+      MOVES_PATCH_PART_8: ${{ needs.gradle.outputs.patch-part-8 }}
+      MOVES_BODY: ${{ needs.gradle.outputs.body }}
+      CURRENT_CHANGED: ${{ needs.gradle-current.outputs.changed }}
+      CURRENT_PATCH: ${{ needs.gradle-current.outputs.patch }}
+      CURRENT_BODY: ${{ needs.gradle-current.outputs.body }}
+      COMPAT_BODY: ${{ needs.relock.outputs.body }}
+    steps:
+      - name: The wrapper moved to the newest stable release of its major, with the published checksum
+        run: |
+          set -eu
+          [ "$MOVES_CHANGED" = yes ] || { echo "::error::the wrapper did not move (changed=$MOVES_CHANGED)"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/g"
+          # the patch is longer than one output: the pieces, in order
+          {
+            printf '%s' "$MOVES_PATCH"
+            printf '%s' "$MOVES_PATCH_PART_2$MOVES_PATCH_PART_3$MOVES_PATCH_PART_4$MOVES_PATCH_PART_5$MOVES_PATCH_PART_6$MOVES_PATCH_PART_7$MOVES_PATCH_PART_8"
+          } | base64 -d | gunzip > "$RUNNER_TEMP/g/moves.patch"
+          printf '%s' "$MOVES_BODY" | base64 -d > "$RUNNER_TEMP/g/moves.md"
+          echo "the first piece of the patch is ${#MOVES_PATCH} characters, the second ${#MOVES_PATCH_PART_2}"
+          [ -n "$MOVES_PATCH_PART_2" ] || { echo "::error::the wrapper's patch fits one piece: the pieces are not exercised"; exit 1; }
+          grep -E '^(diff --git|[-+]distribution|GIT binary patch)' "$RUNNER_TEMP/g/moves.patch"
+          cat "$RUNNER_TEMP/g/moves.md"
+          # the patch holds this project's wrapper files, and nothing else
+          files=$(grep '^diff --git' "$RUNNER_TEMP/g/moves.patch" | sort | tr '\n' ' ')
+          want="diff --git a/tests/relock-pins/gradle/project/gradle/wrapper/gradle-wrapper.jar b/tests/relock-pins/gradle/project/gradle/wrapper/gradle-wrapper.jar diff --git a/tests/relock-pins/gradle/project/gradle/wrapper/gradle-wrapper.properties b/tests/relock-pins/gradle/project/gradle/wrapper/gradle-wrapper.properties diff --git a/tests/relock-pins/gradle/project/gradlew b/tests/relock-pins/gradle/project/gradlew diff --git a/tests/relock-pins/gradle/project/gradlew.bat b/tests/relock-pins/gradle/project/gradlew.bat "
+          [ "$files" = "$want" ] || { echo "::error::the patch holds other files: $files"; exit 1; }
+          grep -Fxq -- '-distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip' "$RUNNER_TEMP/g/moves.patch"
+          grep -Fxq -- '+distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.6-bin.zip' "$RUNNER_TEMP/g/moves.patch"
+          # the checksum in the patch is the body of the published .sha256 of the version
+          published=$(curl -fsSL --retry 3 --retry-delay 5 https://services.gradle.org/distributions/gradle-8.14.6-bin.zip.sha256)
+          echo "published: $published"
+          grep -Fxq -- "+distributionSha256Sum=$published" "$RUNNER_TEMP/g/moves.patch" \
+            || { echo "::error::distributionSha256Sum is not the published checksum"; exit 1; }
+          echo "distributionSha256Sum equals the published .sha256 body"
+          # the jar and the scripts were rewritten by Gradle 8.14.6
+          grep -q '^GIT binary patch' "$RUNNER_TEMP/g/moves.patch"
+          grep -Fxq -- '+# SPDX-License-Identifier: Apache-2.0' "$RUNNER_TEMP/g/moves.patch"
+          # the section lists the move with old, new and release age, and the major's row is not a move
+          grep -Fxq -- '### Gradle' "$RUNNER_TEMP/g/moves.md"
+          grep -Fxq -- '| gradle | gradle | 8.5 | 8.14.6 | 16 days | moved |' "$RUNNER_TEMP/g/moves.md"
+          grep -E -- '^\| gradle \| gradle \| 8\.5 \| [0-9.]+ \| [0-9]+ days? \| major, not moved \|$' "$RUNNER_TEMP/g/moves.md"
+          echo "the wrapper moved to 8.14.6 with the published checksum; the next major did not"
+
+      - name: A fixture that already holds the newest of its major opens nothing
+        run: |
+          set -eu
+          [ "$CURRENT_CHANGED" = no ] || { echo "::error::changed is $CURRENT_CHANGED for a wrapper that is current"; exit 1; }
+          [ -z "$CURRENT_PATCH" ] && [ -z "$CURRENT_BODY" ] \
+            || { echo "::error::a patch or a body was handed on"; exit 1; }
+          echo "no change, no patch, no body"
+
+      - name: A caller that ignores the Gradle fixtures has no Gradle section
+        run: |
+          set -eu
+          printf '%s' "$COMPAT_BODY" | base64 -d > "$RUNNER_TEMP/compat.md"
+          if grep -q '^### Gradle' "$RUNNER_TEMP/compat.md"; then
+            echo "::error::a Gradle section where no wrapper is looked at"; exit 1
+          fi
+          echo "no Gradle section"
