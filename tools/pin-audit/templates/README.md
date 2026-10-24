@@ -16,3 +16,11 @@ parsed as YAML.
 
 `@@COMMIT@@` follows the `@` of the `uses:` line, so a filled line reads
 `...relock-pins.yml@<40 hex> # <comment>`.
+
+## ISSUE_TEMPLATE
+
+`ISSUE_TEMPLATE/ticket.md` is the canonical ticket template (bats-lang/repository-prototype#406),
+the text of that ticket's "The canonical template" byte for byte. It has no hole: a file under
+`.github/ISSUE_TEMPLATE/` of a repository passes when its bytes equal a `*.md` file of this
+directory, or when it is listed by hash with a ticket comment in `allowlist.txt` as the workflow
+files are, and never both. Nothing is parsed: not YAML, not Markdown.

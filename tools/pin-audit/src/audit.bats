@@ -1,6 +1,9 @@
-(* audit -- every workflow file of every non-archived repository of the
-   organisation is allowlisted by its hash or equals a template
-   (bats-lang/repository-prototype#396). Keyword: pin-audit.
+(* audit -- every workflow file and every file under .github/ISSUE_TEMPLATE of every
+   non-archived repository of the organisation is allowlisted by its hash or equals a
+   template (bats-lang/repository-prototype#396, #406). Keyword: pin-audit.
+
+   A file under .github/ISSUE_TEMPLATE is judged the same way against the templates of
+   tools/pin-audit/templates/ISSUE_TEMPLATE (files ending in .md, no holes, so equal byte for byte).
 
    A workflow file passes when exactly one holds, and is "not canonical"
    otherwise: its sha256 is listed with its repository and path in
@@ -43,15 +46,42 @@ datatype template_result =
   | Template_other
   | Template_equal
 
+(* The path of the directory of the templates of the workflow files, or of the issue-template files
+   (.github/ISSUE_TEMPLATE, bats-lang/repository-prototype#406) *)
+fn _directory_path (issue: bool): path_text =
+  if issue then let
+    var directory : $B.builder(0) = $B.create()
+    val () = $B.bput(directory, "tools/pin-audit/templates/ISSUE_TEMPLATE")
+    val @(directory_array, directory_len) = $B.to_arr(directory)
+  in @(directory_array, directory_len) end
+  else let
+    var directory : $B.builder(0) = $B.create()
+    val () = $B.bput(directory, "tools/pin-audit/templates")
+    val @(directory_array, directory_len) = $B.to_arr(directory)
+  in @(directory_array, directory_len) end
+
+(* The path of the template whose file name is name_view[0, name_len), in that directory *)
+fn _template_path {name_loc:agz}{name_len:nat | name_len <= 255}
+  (name_view: !$A.borrow(byte, name_loc, 1024), name_len: int name_len, issue: bool): path_text =
+  if issue then let
+    var path : $B.builder(0) = $B.create()
+    val () = $B.bput(path, "tools/pin-audit/templates/ISSUE_TEMPLATE/")
+    val () = put_range(name_view, 0, name_len, path)
+    val @(path_array, path_len) = $B.to_arr(path)
+  in @(path_array, path_len) end
+  else let
+    var path : $B.builder(0) = $B.create()
+    val () = $B.bput(path, "tools/pin-audit/templates/")
+    val () = put_range(name_view, 0, name_len, path)
+    val @(path_array, path_len) = $B.to_arr(path)
+  in @(path_array, path_len) end
+
 (* The template whose file name is template_name_view[0, template_name_len) (at most 255 bytes) against
    the file file_text[0, file_len); with report it says what it found *)
 fn _try_template {template_name_loc,file_loc:agz}{template_name_len:nat | template_name_len <= 255}{file_len:nat | file_len <= 524288}
   (template_name_view: !$A.borrow(byte, template_name_loc, 1024), template_name_len: int template_name_len,
-   file_text: !$A.borrow(byte, file_loc, 524288), file_len: int file_len, report: bool): template_result = let
-  var path_builder : $B.builder(0) = $B.create()
-  val () = $B.bput(path_builder, "tools/pin-audit/templates/")
-  val () = put_range(template_name_view, 0, template_name_len, path_builder)
-  val @(path_array, path_len) = $B.to_arr(path_builder)
+   file_text: !$A.borrow(byte, file_loc, 524288), file_len: int file_len, issue: bool, report: bool): template_result = let
+  val @(path_array, path_len) = _template_path(template_name_view, template_name_len, issue)
   val @(path_frozen, path_view) = $A.freeze<byte>(path_array)
   var content : $B.builder(0) = $B.create()
   val @(ended, why) = read_file(path_view, path_len, content)
@@ -90,14 +120,16 @@ in result end
 fun _scan {n:nat}{i:nat | i <= n}{file_loc,out_loc:agz}{file_len:nat | file_len <= 524288} .<n - i>.
   (entries: !$F.entries(n), n: int n, i: int i,
    file_text: !$A.borrow(byte, file_loc, 524288), file_len: int file_len,
-   name_out: !$A.arr(byte, out_loc, 256), report: bool, loaded: int, bad: int)
+   name_out: !$A.arr(byte, out_loc, 256), issue: bool, report: bool, loaded: int, bad: int)
   : @([found_len:nat | found_len <= 255] int found_len, int, int) =
   if i >= n then @(0, loaded, bad)
   else let
     val name_buffer = $A.alloc<byte>(1024)
     val name_len = $F.entries_name(entries, i, name_buffer, 1024)
     val @(name_frozen, name_view) = $A.freeze<byte>(name_buffer)
-    val yml = (if name_len >= 5 then lit_step(name_view, name_len, name_len - 4, ".yml") >= 0 else false): bool
+    val yml =
+      (if issue then (if name_len >= 4 then lit_step(name_view, name_len, name_len - 3, ".md") >= 0 else false)
+       else if name_len >= 5 then lit_step(name_view, name_len, name_len - 4, ".yml") >= 0 else false): bool
     val @(found, loaded2, bad2) =
       (if ~yml then @(0, loaded, bad)
        else if name_len > 255 then let
@@ -105,7 +137,7 @@ fun _scan {n:nat}{i:nat | i <= n}{file_loc,out_loc:agz}{file_len:nat | file_len 
          val () = println! ()
        in @(0, loaded, bad + 1) end
        else
-         (case+ _try_template(name_view, name_len, file_text, file_len, report) of
+         (case+ _try_template(name_view, name_len, file_text, file_len, issue, report) of
           | Template_unreadable() => @(0, loaded, bad + 1)
           | Template_other() => @(0, loaded + 1, bad)
           | Template_equal() =>
@@ -115,17 +147,15 @@ fun _scan {n:nat}{i:nat | i <= n}{file_loc,out_loc:agz}{file_len:nat | file_len 
     val () = $A.free<byte>($A.thaw<byte>(name_frozen))
   in
     if found > 0 then @(found, loaded2, bad2)
-    else _scan(entries, n, i + 1, file_text, file_len, name_out, report, loaded2, bad2)
+    else _scan(entries, n, i + 1, file_text, file_len, name_out, issue, report, loaded2, bad2)
   end
 
 (* The name of the template the file file_text[0, file_len) is, in name_out[0, result),
    or 0 when it is none *)
 fn _template_of {file_loc,out_loc:agz}{file_len:nat | file_len <= 524288}
-  (file_text: !$A.borrow(byte, file_loc, 524288), file_len: int file_len, name_out: !$A.arr(byte, out_loc, 256))
+  (file_text: !$A.borrow(byte, file_loc, 524288), file_len: int file_len, issue: bool, name_out: !$A.arr(byte, out_loc, 256))
   : [found_len:nat | found_len <= 255] int found_len = let
-  var path_builder : $B.builder(0) = $B.create()
-  val () = $B.bput(path_builder, "tools/pin-audit/templates")
-  val @(path_array, path_len) = $B.to_arr(path_builder)
+  val @(path_array, path_len) = _directory_path(issue)
   val @(path_frozen, path_view) = $A.freeze<byte>(path_array)
   val listed = dir_entries(path_view, path_len)
   val () = $A.drop<byte>(path_frozen, path_view)
@@ -134,17 +164,15 @@ in
   case+ listed of
   | ~$R.err(_) => 0
   | ~$R.ok(entries) => let
-      val @(found, _, _) = _scan(entries, $F.entries_count(entries), 0, file_text, file_len, name_out, false, 0, 0)
+      val @(found, _, _) = _scan(entries, $F.entries_count(entries), 0, file_text, file_len, name_out, issue, false, 0, 0)
       val () = $F.entries_free(entries)
     in found end
 end
 
-(* Reads every template once and says each: how many were read and how many
+(* Reads every template of one directory once and says each: how many were read and how many
    could not be (a missing directory counts as one) *)
-fn _templates_check (): @(int, int) = let
-  var path_builder : $B.builder(0) = $B.create()
-  val () = $B.bput(path_builder, "tools/pin-audit/templates")
-  val @(path_array, path_len) = $B.to_arr(path_builder)
+fn _templates_check_in (issue: bool): @(int, int) = let
+  val @(path_array, path_len) = _directory_path(issue)
   val @(path_frozen, path_view) = $A.freeze<byte>(path_array)
   val listed = dir_entries(path_view, path_len)
   val () = $A.drop<byte>(path_frozen, path_view)
@@ -154,17 +182,24 @@ fn _templates_check (): @(int, int) = let
   val counts =
     (case+ listed of
      | ~$R.err(failure) => let
-         val () = println! ("::error title=pin audit::the templates directory tools/pin-audit/templates could not be read: ", $F.io_error_text(failure))
-       in @(0, 1) end
+         val () = print! ("::error title=pin audit::the templates directory ")
+         val () = if issue then print! ("tools/pin-audit/templates/ISSUE_TEMPLATE") else print! ("tools/pin-audit/templates")
+       in (println! (" could not be read: ", $F.io_error_text(failure)); @(0, 1)) end
      | ~$R.ok(entries) => let
          val name_out = $A.alloc<byte>(256)
-         val @(_, loaded, bad) = _scan(entries, $F.entries_count(entries), 0, empty_view, 0, name_out, true, 0, 0)
+         val @(_, loaded, bad) = _scan(entries, $F.entries_count(entries), 0, empty_view, 0, name_out, issue, true, 0, 0)
          val () = $A.free<byte>(name_out)
          val () = $F.entries_free(entries)
        in @(loaded, bad) end): @(int, int)
   val () = $A.drop<byte>(empty_frozen, empty_view)
   val () = $A.free<byte>($A.thaw<byte>(empty_frozen))
 in counts end
+
+(* Reads every template, of the workflow files and of the issue-template files, once and says each *)
+fn _templates_check (): @(int, int) = let
+  val @(workflow_loaded, workflow_bad) = _templates_check_in(false)
+  val @(issue_loaded, issue_bad) = _templates_check_in(true)
+in @(workflow_loaded + issue_loaded, workflow_bad + issue_bad) end
 
 (* ============================================================
    The counts
@@ -246,8 +281,9 @@ fn _verdict {repository_loc,path_loc,content_loc,hash_loc,allowlist_loc:agz}{rep
    allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len,
    offenders: !$B.sized_rope): column = let
   val @(slot, line_number) = allowlist_find(allowlist_text, allowlist_len, repository_text, repository_start, repository_end, path_text, path_start, path_end, hash_text)
+  val issue = (lit_step(path_text, path_end, path_start, ".github/ISSUE_TEMPLATE/") >= 0): bool
   val name_out = $A.alloc<byte>(256)
-  val named = _template_of(content_text, content_len, name_out)
+  val named = _template_of(content_text, content_len, issue, name_out)
   val @(template_name_frozen, template_name_view) = $A.freeze<byte>(name_out)
   val listed = (case+ slot of | Hash_current() => true | Hash_next() => true | Hash_unlisted() => false): bool
   val verdict_column =
@@ -391,7 +427,8 @@ fn _tree_argv {repository_loc:agz}{repository_start,repository_end:nat | reposit
   $L.list_vt_cons(arg_text("-z"),
   $L.list_vt_cons(arg_text("HEAD"),
   $L.list_vt_cons(arg_text(".github/workflows/"),
-    $L.list_vt_nil())))))))
+  $L.list_vt_cons(arg_text(".github/ISSUE_TEMPLATE/"),
+    $L.list_vt_nil()))))))))
 
 (* Every record of listing_text[0, listing_len) from i, `<mode> <type> <object>\t<path>` and a
    zero byte (git ls-tree -z): a blob whose path ends in .yml or .yaml is a
@@ -418,8 +455,9 @@ fun _records {repository_loc,listing_loc,allowlist_loc:agz}{repository_start,rep
        val path_at = tab_at + 1
        val yml = (if j - 4 >= path_at then lit_step(listing_text, j, j - 4, ".yml") >= 0 else false): bool
        val yaml = (if j - 5 >= path_at then lit_step(listing_text, j, j - 5, ".yaml") >= 0 else false): bool
+       val issue = (lit_step(listing_text, j, path_at, ".github/ISSUE_TEMPLATE/") >= 0): bool
      in
-       if blob && (yml || yaml) then _audit_file(repository_text, repository_start, repository_end, listing_text, path_at, j, line_is(listing_text, i, first_space, "120000"), allowlist_text, allowlist_len, offenders, counts)
+       if (blob && (yml || yaml)) || issue then _audit_file(repository_text, repository_start, repository_end, listing_text, path_at, j, line_is(listing_text, i, first_space, "120000"), allowlist_text, allowlist_len, offenders, counts)
        else counts
      end): tally
 in

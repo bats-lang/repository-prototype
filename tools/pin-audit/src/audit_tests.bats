@@ -379,7 +379,7 @@ in $B.sized_rope_bput(body, "```\n\n") end
 
 (* The start of every ticket's body *)
 fn _expect_start (body: !$B.sized_rope): void =
-  $B.sized_rope_bput(body, "These workflow files are neither listed by sha256 in tools/pin-audit/allowlist.txt of bats-lang/repository-prototype nor equal to a template there with its holes filled. The correct file is shown for each.\n\n")
+  $B.sized_rope_bput(body, "These files are neither listed by sha256 in tools/pin-audit/allowlist.txt of bats-lang/repository-prototype nor equal to a template there with its holes filled. The correct file is shown for each.\n\n")
 
 (* The end of the body of the ticket of the repository repository *)
 fn _expect_end {repository_len:nat | repository_len < 100} (body: !$B.sized_rope, repository: string repository_len): void = let
@@ -850,7 +850,7 @@ fn test_passing_repository_gets_no_ticket (): bool = let
   val dir = "build/pin-audit-tests/ticket-none"
   val () = _fresh(dir)
   val () = _plant_fine(dir, "fine")
-  val judged = _judge_run(dir, _only_with_tickets("fine"), "GH_TOKEN=test-token", 0, "== fine\n", "1 passed by a template", "", "ticket")
+  val judged = _judge_run(dir, _only_with_tickets("fine"), "GH_TOKEN=test-token", 0, "== fine\n", "1 passed by a template", "", "ticket created")
   val none = _file_judge(dir, "gh-calls.txt", "", "issue")
 in judged && none end
 
@@ -899,6 +899,103 @@ fn test_symbolic_link_section_says_delete (): bool = let
   val () = $B.sized_rope_bput(expected, "## `.github/workflows/link.yml`\n\nNo template of this name is in tools/pin-audit/templates of bats-lang/repository-prototype, so the file has no correct text to show. Delete it.\n\n")
   val () = _expect_end(expected, "link")
   val body = _body_is(dir, "link", expected)
+in judged && body end
+
+(* ============================================================
+   .github/ISSUE_TEMPLATE (bats-lang/repository-prototype#406)
+   ============================================================ *)
+
+(* The canonical ticket template, as bytes, one of whose bytes may be changed to `~` (mutate: its place, or ~1), as
+   a file of the folder .github/ISSUE_TEMPLATE/ of the planted repository *)
+fn _issue_template {dir_len,name_len,file_len:nat | dir_len < 200; name_len < 100; file_len < 300}
+  (dir: string dir_len, name: string name_len, file: string file_len, mutate: int): void = let
+  var template : $B.builder(0) = $B.create()
+  val @(ended, _) = read_constant("templates/ISSUE_TEMPLATE/ticket.md", template)
+  val @(template_array, template_len) = $B.to_arr(template)
+  val @(template_frozen, template_view) = $A.freeze<byte>(template_array)
+  var text : $B.sized_rope = $B.sized_rope_create()
+  val () = _fill_loop(template_view, template_len, 0, text, "", "", "", mutate)
+  val () = $A.drop<byte>(template_frozen, template_view)
+  val () = $A.free<byte>($A.thaw<byte>(template_frozen))
+in _put_rope(dir, name, ".github/ISSUE_TEMPLATE/", file, text) end
+
+(* A repository with a canonical check.yml and the issue-template file ticket.md, equal to the canonical one except for the byte at mutate *)
+fn _plant_with_issue_template {dir_len,name_len:nat | dir_len < 200; name_len < 100} (dir: string dir_len, name: string name_len, mutate: int): void = let
+  val () = _plant(dir, name)
+  val () = _fill(dir, name, "check.yml", "templates/check.yml", "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", "17", ~1)
+  val () = _issue_template(dir, name, "ticket.md", mutate)
+in _commit(dir, name) end
+
+(* An issue-template file equal to the canonical one passes *)
+fn test_issue_template_equal_passes (): bool = let
+  val dir = "build/pin-audit-tests/issue-equal"
+  val () = _fresh(dir)
+  val () = _plant_with_issue_template(dir, "tidy", ~1)
+  val () = _names(dir, "tidy\n")
+in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 6 read, 0 failing", "::error") end
+
+(* ... and the same file with one byte changed fails, named *)
+fn test_issue_template_one_byte_changed_fails (): bool = let
+  val dir = "build/pin-audit-tests/issue-changed"
+  val () = _fresh(dir)
+  val () = _plant_with_issue_template(dir, "drift", 100)
+  val () = _names(dir, "drift\n")
+in _judge(dir, 1, "::error title=pin audit::drift: .github/ISSUE_TEMPLATE/ticket.md: not canonical: its sha256 ", "is not listed for it in tools/pin-audit/allowlist.txt and it equals no template with its holes filled", "== failing repositories: drift", "ISSUE_TEMPLATE/ticket.md: pass") end
+
+(* A file that is not the canonical one's name is judged by its bytes too: another name with the canonical bytes passes, another text fails *)
+fn test_issue_template_other_text_fails (): bool = let
+  val dir = "build/pin-audit-tests/issue-other"
+  val () = _fresh(dir)
+  val () = _plant(dir, "own")
+  val () = _fill(dir, "own", "check.yml", "templates/check.yml", "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", "17", ~1)
+  val () = _put(dir, "own", ".github/ISSUE_TEMPLATE/", "bug.md", "---\nname: Bug\n---\n")
+  val () = _commit(dir, "own")
+  val () = _names(dir, "own\n")
+in _judge(dir, 1, "own: .github/ISSUE_TEMPLATE/bug.md: not canonical", "1 not canonical", "", "bug.md: pass") end
+
+(* A file listed by hash with a ticket comment passes *)
+fn test_issue_template_listed_with_ticket_passes (): bool = let
+  val dir = "build/pin-audit-tests/issue-listed"
+  val () = _fresh(dir)
+  val () = _plant(dir, "own")
+  val () = _fill(dir, "own", "check.yml", "templates/check.yml", "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", "17", ~1)
+  val () = _put(dir, "own", ".github/ISSUE_TEMPLATE/", "bug.md", "---\nname: Bug\n---\n")
+  val () = _commit(dir, "own")
+  val () = _names(dir, "own\n")
+  val () = _allow(dir, "own/.github/ISSUE_TEMPLATE/bug.md", "---\nname: Bug\n---\n", "", "own#1")
+in _judge(dir, 0, ".github/ISSUE_TEMPLATE/bug.md: pass, its sha256 is the current hash of tools/pin-audit/allowlist.txt line 1", "1 passed by an allowlisted hash", "", "::error") end
+
+(* ... and the same listing without a ticket comment fails: the entry is a failure of the allowlist and lists nothing *)
+fn test_issue_template_listed_without_ticket_fails (): bool = let
+  val dir = "build/pin-audit-tests/issue-listed-no-ticket"
+  val () = _fresh(dir)
+  val () = _plant(dir, "own")
+  val () = _fill(dir, "own", "check.yml", "templates/check.yml", "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", "17", ~1)
+  val () = _put(dir, "own", ".github/ISSUE_TEMPLATE/", "bug.md", "---\nname: Bug\n---\n")
+  val () = _commit(dir, "own")
+  val () = _names(dir, "own\n")
+  val () = _allow(dir, "own/.github/ISSUE_TEMPLATE/bug.md", "---\nname: Bug\n---\n", "", "")
+in _judge(dir, 1, "::error title=pin audit::allowlist.txt line 1: it has no ticket comment", "own: .github/ISSUE_TEMPLATE/bug.md: not canonical", "1 entries, 1 failing", "bug.md: pass") end
+
+(* The ticket of a repository whose issue template drifted shows the canonical one *)
+fn test_issue_template_ticket_shows_canonical (): bool = let
+  val dir = "build/pin-audit-tests/issue-ticket"
+  val () = _fresh(dir)
+  val () = _plant_with_issue_template(dir, "drift", 100)
+  val judged = _judge_run(dir, _only_with_tickets("drift"), "GH_TOKEN=test-token", 1, "ticket created", "1 not canonical", "", "ticket updated")
+  var canonical : $B.builder(0) = $B.create()
+  val @(_, _) = read_constant("templates/ISSUE_TEMPLATE/ticket.md", canonical)
+  val @(canonical_array, canonical_len) = $B.to_arr(canonical)
+  val @(canonical_frozen, canonical_view) = $A.freeze<byte>(canonical_array)
+  var expected : $B.sized_rope = $B.sized_rope_create()
+  val () = _expect_start(expected)
+  val () = $B.sized_rope_bput(expected, "## `.github/ISSUE_TEMPLATE/ticket.md`\n\nThe audit compares bytes: the file is exactly this text.\n\n```\n")
+  val () = $B.sized_rope_copy(expected, canonical_view, 0, canonical_len)
+  val () = $B.sized_rope_bput(expected, "```\n\n")
+  val () = $A.drop<byte>(canonical_frozen, canonical_view)
+  val () = $A.free<byte>($A.thaw<byte>(canonical_frozen))
+  val () = _expect_end(expected, "drift")
+  val body = _body_is(dir, "drift", expected)
 in judged && body end
 
 end
