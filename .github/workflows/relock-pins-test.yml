@@ -12,6 +12,16 @@
 # byte-identical, and a quoted value, flow style, a commented-out `uses:` line
 # and text after the token are refused with the file, the line number and the
 # line, and nothing is written.
+# The repin command (#420, area: repin command): `repin-moves` runs the
+# workflow with a command that moves a fixture file and writes one record, and
+# `repin-nothing` one that moves nothing; `repin` then reads the patch, the
+# body and `changed`. `repin-refusals` runs the script between the
+# `repin-check` markers of relock-pins.yml on fixture repositories (a write
+# outside the paths, a link, a failing command, a refused path, a record file
+# removed), and a dispatch with the input `refusal` runs one such command
+# through the whole workflow, which must end red with relock and publish not
+# run. `repin-compat` runs the workflow with none of the repin inputs and
+# reads the same outputs as before.
 name: relock-pins test
 
 on:
@@ -21,6 +31,14 @@ on:
       - '.github/workflows/relock-pins-test.yml'
       - 'tests/relock-pins/**'
   workflow_dispatch:
+    inputs:
+      refusal:
+        description: >-
+          Run the repin command of this case (outside, link, fails or
+          bad-record) through relock-pins.yml: the run must be red, with the
+          relock and publish jobs not run
+        type: string
+        default: ''
 
 permissions: {}
 
@@ -172,3 +190,248 @@ jobs:
               || { echo "::error::the $name refusal does not name the file and the line number"; cat "$work/$name.out"; exit 1; }
             echo "the $name spelling is refused: $(grep -F '::error' "$work/$name.out")"
           done
+
+  # a caller that passes no repin input gets today's relock: the scratch
+  # caller's pin moves, as in the job above, and nothing mentions repin
+  repin-compat:
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      workflow-pins: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml
+      publish: 'false'
+      branch-prefix: relock-test-compat/
+
+  repin-moves:
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      repin-command: |
+        printf 'new\n' > tests/relock-pins/repin/pin.txt
+        printf 'fixture\tpin.txt\told\tnew\t8\tmoved\n' >> "$REPIN_RECORDS"
+      repin-paths: |
+        tests/relock-pins/repin
+      publish: 'false'
+      branch-prefix: relock-test-moves/
+
+  repin-nothing:
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      repin-command: |
+        printf 'fixture\tpin.txt\told\told\t8\tcurrent\n' >> "$REPIN_RECORDS"
+      repin-paths: |
+        tests/relock-pins/repin
+      publish: 'false'
+      branch-prefix: relock-test-nothing/
+
+  repin-refused:
+    if: github.event_name == 'workflow_dispatch' && inputs.refusal != ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      repin-command: ${{ inputs.refusal == 'outside' && 'echo x > tests/relock-pins/outside.txt' || inputs.refusal == 'link' && 'ln -s /etc/passwd tests/relock-pins/repin/link' || inputs.refusal == 'bad-record' && 'echo not-a-record >> "$REPIN_RECORDS"' || 'exit 3' }}
+      repin-paths: |
+        tests/relock-pins/repin
+      publish: 'false'
+      branch-prefix: relock-test-refused/
+
+  repin:
+    needs: [repin-compat, repin-moves, repin-nothing]
+    runs-on: ubuntu-24.04
+    env:
+      COMPAT_CHANGED: ${{ needs.repin-compat.outputs.changed }}
+      COMPAT_PATCH: ${{ needs.repin-compat.outputs.patch }}
+      COMPAT_BODY: ${{ needs.repin-compat.outputs.body }}
+      MOVES_CHANGED: ${{ needs.repin-moves.outputs.changed }}
+      MOVES_PATCH: ${{ needs.repin-moves.outputs.patch }}
+      MOVES_BODY: ${{ needs.repin-moves.outputs.body }}
+      NOTHING_CHANGED: ${{ needs.repin-nothing.outputs.changed }}
+      NOTHING_PATCH: ${{ needs.repin-nothing.outputs.patch }}
+      NOTHING_BODY: ${{ needs.repin-nothing.outputs.body }}
+    steps:
+      - name: A command that moves a file and writes a record, the patch holds the file and the body the record
+        run: |
+          set -eu
+          [ "$MOVES_CHANGED" = yes ] || { echo "::error::the moved fixture was not seen (changed=$MOVES_CHANGED)"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/r"
+          printf '%s' "$MOVES_PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/r/moves.patch"
+          printf '%s' "$MOVES_BODY" | base64 -d > "$RUNNER_TEMP/r/moves.md"
+          cat "$RUNNER_TEMP/r/moves.patch" "$RUNNER_TEMP/r/moves.md"
+          [ "$(grep -c '^diff --git' "$RUNNER_TEMP/r/moves.patch")" = 1 ] \
+            || { echo "::error::the patch is not the one file"; exit 1; }
+          grep -Fxq 'diff --git a/tests/relock-pins/repin/pin.txt b/tests/relock-pins/repin/pin.txt' "$RUNNER_TEMP/r/moves.patch" \
+            || { echo "::error::the patch does not name the fixture file"; exit 1; }
+          grep -Fxq -- '-old' "$RUNNER_TEMP/r/moves.patch" && grep -Fxq -- '+new' "$RUNNER_TEMP/r/moves.patch" \
+            || { echo "::error::the patch does not hold the change old to new"; exit 1; }
+          grep -Fxq '### Moved by the repin command' "$RUNNER_TEMP/r/moves.md" \
+            || { echo "::error::the body has no section for the repin records"; exit 1; }
+          grep -Fxq '| fixture | pin.txt | old | new | 8 days | moved |' "$RUNNER_TEMP/r/moves.md" \
+            || { echo "::error::the body does not list the record"; exit 1; }
+          echo "the patch holds the file's change and the body lists the record"
+
+      - name: A command that moves nothing, changed is no
+        run: |
+          set -eu
+          [ "$NOTHING_CHANGED" = no ] || { echo "::error::changed is '$NOTHING_CHANGED', the command moved nothing"; exit 1; }
+          [ -z "$NOTHING_PATCH" ] && [ -z "$NOTHING_BODY" ] \
+            || { echo "::error::a run that moved nothing handed on a change"; exit 1; }
+          echo "changed=no, no patch, no body"
+
+      - name: A caller with no repin input relocks as before
+        run: |
+          set -eu
+          [ "$COMPAT_CHANGED" = yes ] || { echo "::error::the scratch caller's pin did not move (changed=$COMPAT_CHANGED)"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/r"
+          printf '%s' "$COMPAT_PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/r/compat.patch"
+          printf '%s' "$COMPAT_BODY" | base64 -d > "$RUNNER_TEMP/r/compat.md"
+          grep -q '^+.*uses: bats-lang/repository-prototype/.github/workflows/publish.yml@[0-9a-f]\{40\} # repository-prototype main ' "$RUNNER_TEMP/r/compat.patch" \
+            || { echo "::error::the pin line did not move"; exit 1; }
+          if grep -q 'repin' "$RUNNER_TEMP/r/compat.patch" "$RUNNER_TEMP/r/compat.md"; then
+            echo "::error::a run with no repin input mentions repin"; exit 1
+          fi
+          echo "the pin moved, and neither the patch nor the body mentions repin"
+
+  repin-refusals:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: The repin script refuses a write outside the paths, a link, a failure and a refused path
+        run: |
+          set -eu
+          work="$RUNNER_TEMP/repin-refusals"
+          mkdir -p "$work"
+          # the script as relock-pins.yml has it, between its markers
+          awk '/# repin-check end/ { on = 0 } on { print } /# repin-check begin/ { on = 1 }' \
+            .github/workflows/relock-pins.yml > "$work/check.sh"
+          [ -s "$work/check.sh" ] || { echo "::error::no repin-check script in relock-pins.yml"; exit 1; }
+          fixture=$PWD/tests/relock-pins/repin
+
+          # run_case NAME EXPECT COMMAND PATHS [MESSAGE]: the script in a fresh
+          # git repository holding the fixture, a tracked README and a .gitignore
+          run_case() {
+            name=$1; expect=$2; command=$3; paths=$4; message=${5:-}
+            repo="$work/$name/repo"
+            mkdir -p "$repo/fixture" "$work/$name/tmp"
+            cp "$fixture"/*.txt "$repo/fixture/"
+            printf 'readme\n' > "$repo/README"
+            printf 'build/\n' > "$repo/.gitignore"
+            git -C "$repo" init -q
+            git -C "$repo" add -A
+            git -C "$repo" -c user.name=t -c user.email=t@example.com commit -q -m fixture
+            status=0
+            (cd "$repo" && RUNNER_TEMP="$work/$name/tmp" REPIN_COMMAND="$command" REPIN_PATHS="$paths" MAX_BYTES=1000000 bash "$work/check.sh") \
+              > "$work/$name/out" 2>&1 || status=$?
+            cat "$work/$name/out"
+            if [ "$expect" = ok ]; then
+              [ "$status" -eq 0 ] || { echo "::error::case $name: refused (status $status), expected it to pass"; exit 1; }
+              [ -s "$work/$name/tmp/repin/files.tar" ] || { echo "::error::case $name: no tar"; exit 1; }
+            else
+              [ "$status" -ne 0 ] || { echo "::error::case $name: passed, expected a refusal"; exit 1; }
+              [ ! -e "$work/$name/tmp/repin/files.tar" ] || { echo "::error::case $name: refused but a tar was made"; exit 1; }
+              if [ -n "$message" ]; then
+                grep -Fq -- "$message" "$work/$name/out" || { echo "::error::case $name: no message '$message'"; exit 1; }
+              fi
+            fi
+            echo "case $name: $expect"
+          }
+
+          move='printf "new\n" > fixture/pin.txt; printf "fixture\tpin.txt\told\tnew\t8\tmoved\n" >> "$REPIN_RECORDS"'
+          run_case moves ok "$move" fixture
+          tar -tf "$work/moves/tmp/repin/files.tar" | grep -Fxq fixture/pin.txt
+          grep -Fq 'fixture	pin.txt	old	new	8	moved' "$work/moves/tmp/repin/records"
+          run_case nothing ok ':' fixture
+          [ ! -s "$work/nothing/tmp/repin/records" ]
+          run_case outside-new fail 'echo x > outside.txt' fixture 'wrote outside repin-paths: outside.txt'
+          run_case outside-tracked fail 'echo x >> README' fixture 'wrote outside repin-paths: README'
+          run_case outside-deleted fail 'rm README' fixture 'wrote outside repin-paths: README'
+          run_case outside-ignored fail 'mkdir build; echo x > build/x' fixture 'wrote outside repin-paths: build/'
+          run_case sibling fail 'echo x > fixture-two' fixture 'wrote outside repin-paths: fixture-two'
+          run_case link-inside fail 'ln -s /etc/passwd fixture/link' fixture 'holds something that is not a regular file or a directory'
+          run_case link-path fail 'rm fixture/pin.txt; ln -s other.txt fixture/pin.txt' fixture/pin.txt 'is a link'
+          run_case fails fail 'exit 3' fixture
+          run_case writes-then-fails fail 'echo x > fixture/pin.txt; exit 3' fixture
+          run_case path-gone fail 'rm -r fixture' fixture 'left no fixture'
+          run_case records-removed fail 'rm "$REPIN_RECORDS"' fixture 'removed or replaced the file REPIN_RECORDS'
+          run_case no-paths fail ':' '' 'without repin-paths'
+          run_case path-dotdot fail ':' '../x' 'path that is refused: ../x'
+          run_case path-github fail ':' '.github' 'path that is refused: .github'
+          run_case path-git-deep fail ':' 'fixture/.GIT' 'path that is refused: fixture/.GIT'
+          run_case path-absolute fail ':' '/etc' 'path that is refused: /etc'
+          run_case path-dash fail ':' '-fixture' 'path that is refused: -fixture'
+
+  repin-take:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: The relock job takes the repinned files as data and refuses what is not
+        run: |
+          set -eu
+          work="$RUNNER_TEMP/repin-take"
+          mkdir -p "$work"
+          # the Python as relock-pins.yml has it, between its markers
+          awk '/# repin-take end/ { on = 0 } on { sub(/^ {10}/, ""); print } /# repin-take begin/ { on = 1 }' \
+            .github/workflows/relock-pins.yml > "$work/take.py"
+          [ -s "$work/take.py" ] || { echo "::error::no repin-take program in relock-pins.yml"; exit 1; }
+          # take_case NAME EXPECT MEMBERS: a tar made by $work/make.py from MEMBERS
+          # (kind:name, kind file, dir, link, device) is taken in a checkout of the fixture
+          cat > "$work/make.py" <<'MAKE'
+          import io, sys, tarfile
+          with tarfile.open(sys.argv[1], 'w') as archive:
+              for spec in sys.argv[2:]:
+                  kind, name = spec.split(':', 1)
+                  member = tarfile.TarInfo(name)
+                  if kind == 'dir':
+                      member.type = tarfile.DIRTYPE
+                      member.mode = 0o755
+                      archive.addfile(member)
+                  elif kind == 'link':
+                      member.type = tarfile.SYMTYPE
+                      member.linkname = '/etc/passwd'
+                      archive.addfile(member)
+                  elif kind == 'device':
+                      member.type = tarfile.CHRTYPE
+                      archive.addfile(member)
+                  else:
+                      data = b'new\n'
+                      member.size = len(data)
+                      member.mode = 0o644
+                      archive.addfile(member, io.BytesIO(data))
+          MAKE
+          take_case() {
+            name=$1; expect=$2; cap=$3; paths=$4; shift 4
+            mkdir -p "$work/$name/checkout/tests/relock-pins/repin" "$work/$name/tmp/repin"
+            cp tests/relock-pins/repin/*.txt "$work/$name/checkout/tests/relock-pins/repin/"
+            python3 -I "$work/make.py" "$work/$name/tmp/repin/files.tar" "$@"
+            status=0
+            (cd "$work/$name/checkout" && RUNNER_TEMP="$work/$name/tmp" REPIN_PATHS="$paths" REPIN_MAX_BYTES="$cap" python3 -I - "$work/$name/tmp/repin/files.tar" < "$work/take.py") \
+              > "$work/$name/out" 2>&1 || status=$?
+            cat "$work/$name/out"
+            if [ "$expect" = ok ]; then
+              [ "$status" -eq 0 ] || { echo "::error::take case $name: refused, expected it to pass"; exit 1; }
+            else
+              [ "$status" -ne 0 ] || { echo "::error::take case $name: taken, expected a refusal"; exit 1; }
+              grep -Fq '::error::' "$work/$name/out" || { echo "::error::take case $name: no message"; exit 1; }
+              # a refused tar leaves the checkout's files as they were
+              [ "$(cat "$work/$name/checkout/tests/relock-pins/repin/pin.txt")" = old ] \
+                || { echo "::error::take case $name: refused but the file changed"; exit 1; }
+            fi
+            echo "take case $name: $expect"
+          }
+          paths=tests/relock-pins/repin
+          good="dir:tests/relock-pins/repin file:tests/relock-pins/repin/pin.txt file:tests/relock-pins/repin/other.txt"
+          take_case good ok 1000 "$paths" $good
+          [ "$(cat "$work/good/checkout/tests/relock-pins/repin/pin.txt")" = new ]
+          take_case link fail 1000 "$paths" $good link:tests/relock-pins/repin/link
+          take_case device fail 1000 "$paths" $good device:tests/relock-pins/repin/device
+          take_case outside fail 1000 "$paths" $good file:tests/relock-pins/outside.txt
+          take_case sibling fail 1000 "$paths" $good file:tests/relock-pins/repin-two/x.txt
+          take_case dotdot fail 1000 "$paths" $good file:tests/relock-pins/repin/../../x.txt
+          take_case github fail 1000 "$paths" $good file:tests/relock-pins/repin/.github/x.txt
+          take_case over-cap fail 6 "$paths" $good
+          take_case path-missing fail 1000 "$(printf 'tests/relock-pins/repin\ntests/relock-pins/gone')" $good
+          take_case path-refused fail 1000 ".github" dir:.github
