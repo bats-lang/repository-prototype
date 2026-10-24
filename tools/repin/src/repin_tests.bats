@@ -1,4 +1,4 @@
-(* repin_tests -- the tests of repin (bats-lang/repository-prototype#410, #411), run by
+(* repin_tests -- the tests of repin (bats-lang/repository-prototype#410, #411, #412, #413), run by
    `bats test` in tools/repin. The cases of the age rule, the records and the action pins
    in a text build their input in memory and compare the output byte for byte with a
    literal; `now` is a constant of each case, never the clock. The directory cases of
@@ -19,6 +19,8 @@
 staload "actions.sats"
 staload "age.sats"
 staload "driver.sats"
+staload "gradle.sats"
+staload "gradle_driver.sats"
 staload "npm.sats"
 staload "npm_driver.sats"
 staload "npm.sats"
@@ -1218,5 +1220,456 @@ fn test_npm_times_line_number_is_named (): bool =
 
 (* a missing outdated file fails *)
 fn test_npm_missing_file_fails (): bool = _npm_fails("build/repin-tests/npm-nowhere", 1700000000L)
+
+
+
+(* ============================================================
+   The Gradle wrapper
+   ============================================================ *)
+
+(* `repin gradle` over the files gradle-wrapper.properties and checksum.sha256 of the
+   directory dir and the versions file, with the update lines written to the file updates,
+   at now: its status and its records *)
+fn _run_gradle {dir_len,versions_len,updates_len:nat | dir_len < 100; versions_len < 100;
+  updates_len < 100}
+  (dir: string dir_len, versions: string versions_len, updates: string updates_len, now: lint)
+  : @(int, $B.sized_rope) = let
+  var arguments : $B.builder(0) = $B.create()
+  val () = $B.bput(arguments, dir)
+  val () = $B.bput(arguments, "/gradle-wrapper.properties")
+  val properties_stop = $B.length(arguments)
+  val () = $B.bput(arguments, versions)
+  val versions_stop = $B.length(arguments)
+  val () = $B.bput(arguments, dir)
+  val () = $B.bput(arguments, "/checksum.sha256")
+  val checksum_stop = $B.length(arguments)
+  val () = $B.bput(arguments, updates)
+  val updates_stop = $B.length(arguments)
+  val @(arguments_array, arguments_used) = $B.to_arr(arguments)
+  val @(arguments_frozen, arguments_view) = $A.freeze<byte>(arguments_array)
+  val records = $B.sized_rope_create()
+  val status = run_gradle(arguments_view, 0, properties_stop, properties_stop, versions_stop,
+    versions_stop, checksum_stop, checksum_stop, updates_stop, now, records)
+  val () = $A.drop<byte>(arguments_frozen, arguments_view)
+  val () = $A.free<byte>($A.thaw<byte>(arguments_frozen))
+in @(status, records) end
+
+(* The directory of files and the versions file, at now: the status is 0, and the records and
+   the update lines are the literals *)
+fn _gradle_case_with {dir_len,versions_len,updates_len,records_len,list_len:nat | dir_len < 100;
+  versions_len < 100; updates_len < 100; list_len < 4096}
+  (dir: string dir_len, versions: string versions_len, updates: string updates_len, now: lint,
+   expected_records: string records_len, expected_list: string list_len): bool = let
+  val () = _mkdir("build/repin-tests")
+  val @(status, records) = _run_gradle(dir, versions, updates, now)
+  val same = _rope_is(records, expected_records)
+in status = 0 && same && _file_is(updates, expected_list) end
+
+(* A directory of fixtures (tests/gradle, see its README) against the real versions text *)
+fn _gradle_case {dir_len,updates_len,records_len,list_len:nat | dir_len < 100; updates_len < 100;
+  list_len < 4096}
+  (dir: string dir_len, updates: string updates_len, now: lint,
+   expected_records: string records_len, expected_list: string list_len): bool =
+  _gradle_case_with(dir, "tests/gradle/versions.json", updates, now, expected_records,
+    expected_list)
+
+(* The planted directory and its versions file *)
+fn _planted_case {updates_len,records_len,list_len:nat | updates_len < 100; list_len < 4096}
+  (updates: string updates_len, now: lint, expected_records: string records_len,
+   expected_list: string list_len): bool =
+  _gradle_case_with("build/repin-tests/gradle-planted",
+    "build/repin-tests/gradle-planted/versions.json", updates, now, expected_records,
+    expected_list)
+
+(* The records of a fixture directory, as a table (#410) *)
+fn _gradle_table_is {dir_len,table_len:nat | dir_len < 100; table_len < 4096}
+  (dir: string dir_len, now: lint, table: string table_len): bool = let
+  val () = _mkdir("build/repin-tests")
+  val @(status, records) = _run_gradle(dir, "tests/gradle/versions.json",
+    "build/repin-tests/gradle-table.upd", now)
+  val same = _records_table_is(records, table)
+in status = 0 && same end
+
+(* The three files of the planted directory: the properties, the versions and the checksum *)
+fn _plant_gradle {properties_len,versions_len,checksum_len:nat | properties_len < 4096;
+  versions_len < 4096; checksum_len < 4096}
+  (properties: string properties_len, versions: string versions_len,
+   checksum: string checksum_len): void = let
+  val () = _mkdir("build/repin-tests")
+  val () = _mkdir("build/repin-tests/gradle-planted")
+  val () = _make_file("build/repin-tests/gradle-planted/gradle-wrapper.properties", properties, 420)
+  val () = _make_file("build/repin-tests/gradle-planted/versions.json", versions, 420)
+  val () = _make_file("build/repin-tests/gradle-planted/checksum.sha256", checksum, 420)
+in () end
+
+(* The planted directory fails (status 1) and the update file, which holds "kept", is as it
+   was *)
+fn _planted_fails (now: lint): bool = let
+  val () = _mkdir("build/repin-tests")
+  val () = _make_file("build/repin-tests/gradle-kept.upd", "kept\n", 420)
+  val @(status, records) = _run_gradle("build/repin-tests/gradle-planted",
+    "build/repin-tests/gradle-planted/versions.json", "build/repin-tests/gradle-kept.upd", now)
+  val () = discard_rope(records)
+in status = 1 && _file_is("build/repin-tests/gradle-kept.upd", "kept\n") end
+
+(* The number of the first refused line of the properties text, and whether the version of
+   its distributionUrl line is the literal (the empty one when there is none) *)
+fn _properties_line {properties_len:nat | properties_len < 4096}
+  (properties: string properties_len): int = let
+  val @(array, used) = _text_array(properties)
+  val @(frozen, view) = $A.freeze<byte>(array)
+  val @(bad, _, _) = scan_properties(view, used)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+in bad end
+
+fn _properties_version_is {properties_len,version_len:nat | properties_len < 4096; version_len < 4096}
+  (properties: string properties_len, version: string version_len): bool = let
+  val @(array, used) = _text_array(properties)
+  val @(frozen, view) = $A.freeze<byte>(array)
+  val @(version_array, version_used) = _text_array(version)
+  val @(version_frozen, version_view) = $A.freeze<byte>(version_array)
+  val @(bad, start, stop) = scan_properties(view, used)
+  val same = spans_equal(view, start, stop, version_view, 0, version_used)
+  val () = $A.drop<byte>(version_frozen, version_view)
+  val () = $A.free<byte>($A.thaw<byte>(version_frozen))
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+in bad = 0 && same end
+
+(* Whether the build time text is not a build time, or is the seconds *)
+fn _seconds_of {text_len:nat | text_len < 4096} (text: string text_len, ok: bool, seconds: lint): bool = let
+  val @(array, used) = _text_array(text)
+  val @(frozen, view) = $A.freeze<byte>(array)
+  val @(parsed, value) = build_seconds(view, 0, used)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+in if ok then parsed && value = seconds else ~parsed end
+
+(* --- the real versions text (tests/gradle/versions.json, read on 2026-10-24) --- *)
+
+(* an old wrapper moves to the newest stable release of its major with the published
+   checksum of that release; the newest of the higher major is its own row *)
+fn test_gradle_old_wrapper_moves_to_the_newest_stable_of_its_major (): bool =
+  _gradle_case("tests/gradle/old-wrapper", "build/repin-tests/gradle-old.upd", 1792843200L,
+    "gradle\tgradle\t8.5\t8.14.6\t16\tmoved\ngradle\tgradle\t8.5\t9.8.2\t4\tmajor, not moved\n",
+    "8.14.6\n7988ed071b2a07900e2ec715fca15c6ab72bce6db433af301fa7fa7e9407bd24\n")
+
+(* a snapshot and a nightly newer than the newest stable release are ignored *)
+fn test_gradle_snapshot_and_nightly_newer_than_the_stable_are_ignored (): bool =
+  _gradle_case("tests/gradle/snapshot-newer", "build/repin-tests/gradle-snapshot.upd",
+    1794312000L, "gradle\tgradle\t9.4.0\t9.8.2\t21\tmoved\n",
+    "9.8.2\n21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607\n")
+
+(* release candidates (9.8.0-rc-1 to 3, 8 days old) newer than the newest stable are ignored *)
+fn test_gradle_release_candidate_newer_than_the_stable_is_ignored (): bool =
+  _gradle_case("tests/gradle/release-candidate-newer", "build/repin-tests/gradle-rc.upd",
+    1790771095L, "gradle\tgradle\t9.6.0\t9.7.1\t41\tmoved\n",
+    "9.7.1\nacd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a\n")
+
+(* 9.8.0 is 6 days old: the release before it is the target *)
+fn test_gradle_stable_six_days_old_is_skipped_for_the_one_before (): bool =
+  _gradle_case("tests/gradle/six-days-old", "build/repin-tests/gradle-six.upd",
+    1790257200L + 6L * 86400L, "gradle\tgradle\t9.6.0\t9.7.1\t41\tmoved\n",
+    "9.7.1\nacd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a\n")
+
+(* 9.8.0 one second short of 7 days: still skipped *)
+fn test_gradle_stable_one_second_short_of_seven_days_is_skipped (): bool =
+  _gradle_case("tests/gradle/six-days-old", "build/repin-tests/gradle-short.upd",
+    1790257200L + 604799L, "gradle\tgradle\t9.6.0\t9.7.1\t42\tmoved\n",
+    "9.7.1\nacd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a\n")
+
+(* 9.8.0 exactly 7 days old: moved to it *)
+fn test_gradle_stable_exactly_seven_days_old_is_moved (): bool =
+  _gradle_case("tests/gradle/seven-days-old", "build/repin-tests/gradle-seven.upd",
+    1790257200L + 604800L, "gradle\tgradle\t9.6.0\t9.8.0\t7\tmoved\n",
+    "9.8.0\nbafd5ce9cfaea0fbccfdc8439a1ac42fbd4cd9c89dc9a988228d8a2639a58e6c\n")
+
+(* the newest of its major, and a newer major: that is the only row, nothing is written *)
+fn test_gradle_newer_major_is_not_moved (): bool =
+  _gradle_case("tests/gradle/major-not-moved", "build/repin-tests/gradle-major.upd", 1792843200L,
+    "gradle\tgradle\t8.14.6\t9.8.2\t4\tmajor, not moved\n", "")
+
+(* a wrapper at the newest stable release is current *)
+fn test_gradle_wrapper_at_the_target_is_current (): bool =
+  _gradle_case("tests/gradle/current", "build/repin-tests/gradle-current.upd", 1792843200L,
+    "gradle\tgradle\t9.8.2\t9.8.2\t4\tcurrent\n", "")
+
+(* the only newer release is 4 days old: too new *)
+fn test_gradle_only_newer_release_under_seven_days_is_too_new (): bool =
+  _gradle_case("tests/gradle/too-new", "build/repin-tests/gradle-young.upd", 1792843200L,
+    "gradle\tgradle\t9.8.1\t9.8.2\t4\ttoo new\n", "")
+
+(* the records are the table of #410, byte for byte *)
+fn test_gradle_records_are_the_table_moved_and_major (): bool =
+  _gradle_table_is("tests/gradle/old-wrapper", 1792843200L,
+"| Kind | Name | Old | New | Release age | Status |\n\
+| --- | --- | --- | --- | --- | --- |\n\
+| gradle | gradle | 8.5 | 8.14.6 | 16 days | moved |\n\
+| gradle | gradle | 8.5 | 9.8.2 | 4 days | major, not moved |\n")
+
+fn test_gradle_records_are_the_table_major_only (): bool =
+  _gradle_table_is("tests/gradle/major-not-moved", 1792843200L,
+"| Kind | Name | Old | New | Release age | Status |\n\
+| --- | --- | --- | --- | --- | --- |\n\
+| gradle | gradle | 8.14.6 | 9.8.2 | 4 days | major, not moved |\n")
+
+fn test_gradle_records_are_the_table_current (): bool =
+  _gradle_table_is("tests/gradle/current", 1792843200L,
+"| Kind | Name | Old | New | Release age | Status |\n\
+| --- | --- | --- | --- | --- | --- |\n\
+| gradle | gradle | 9.8.2 | 9.8.2 | 4 days | current |\n")
+
+fn test_gradle_records_are_the_table_too_new (): bool =
+  _gradle_table_is("tests/gradle/too-new", 1792843200L,
+"| Kind | Name | Old | New | Release age | Status |\n\
+| --- | --- | --- | --- | --- | --- |\n\
+| gradle | gradle | 9.8.1 | 9.8.2 | 4 days | too new |\n")
+
+(* the build times of the real body, with their zone offsets, are the seconds of UTC *)
+fn test_gradle_build_time_is_utc_seconds (): bool =
+  _seconds_of("20250704131544+0000", true, 1751634944L)
+  && _seconds_of("20120313171009+0100", true, 1331655009L)
+  && _seconds_of("20110227141320+1100", true, 1298776400L)
+  && _seconds_of("20260101000000-0100", true, 1767229200L)
+  && _seconds_of("19700101000000+0000", true, 0L)
+  && _seconds_of("20000229235959+0000", true, 951868799L)
+
+fn test_gradle_build_time_that_is_not_one_is_refused (): bool =
+  _seconds_of("20250704131544", false, 0L)
+  && _seconds_of("20250704131544+000", false, 0L)
+  && _seconds_of("20250704131544+00000", false, 0L)
+  && _seconds_of("20250704131544 0000", false, 0L)
+  && _seconds_of("2025070413154x+0000", false, 0L)
+  && _seconds_of("20251304131544+0000", false, 0L)
+  && _seconds_of("20250004131544+0000", false, 0L)
+  && _seconds_of("20250732131544+0000", false, 0L)
+  && _seconds_of("20250704241544+0000", false, 0L)
+  && _seconds_of("20250704136044+0000", false, 0L)
+  && _seconds_of("20250704131560+0000", false, 0L)
+  && _seconds_of("20250704131544+2400", false, 0L)
+  && _seconds_of("20250704131544+0060", false, 0L)
+  && _seconds_of("19691231235959+0000", false, 0L)
+  && _seconds_of("19700101000000+0100", false, 0L)
+
+
+(* a snapshot that has a plain version is no target *)
+fn test_gradle_snapshot_flag_makes_a_release_no_target (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20260101000000+0000\",\"snapshot\":true,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "")
+in _planted_case("build/repin-tests/gradle-snapshot_flag_makes_a_release_no_target.upd", 1800000000L,
+    "gradle\tgradle\t9.8.0\t9.8.0\t744\tcurrent\n", "") end
+
+(* a nightly that has a plain version is no target *)
+fn test_gradle_nightly_flag_makes_a_release_no_target (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20260101000000+0000\",\"snapshot\":false,\"nightly\":true,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "")
+in _planted_case("build/repin-tests/gradle-nightly_flag_makes_a_release_no_target.upd", 1800000000L,
+    "gradle\tgradle\t9.8.0\t9.8.0\t744\tcurrent\n", "") end
+
+(* a release candidate that has a plain version is no target *)
+fn test_gradle_rcfor_makes_a_release_no_target (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20260101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"9.8.1\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "")
+in _planted_case("build/repin-tests/gradle-rcfor_makes_a_release_no_target.upd", 1800000000L,
+    "gradle\tgradle\t9.8.0\t9.8.0\t744\tcurrent\n", "") end
+
+(* a version that is no plain version tag is no target *)
+fn test_gradle_version_that_is_not_plain_is_no_target (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1-milestone-1\",\"buildTime\":\"20260101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "")
+in _planted_case("build/repin-tests/gradle-version_that_is_not_plain_is_no_target.upd", 1800000000L,
+    "gradle\tgradle\t9.8.0\t9.8.0\t744\tcurrent\n", "") end
+
+(* a release that is not stable needs no build time *)
+fn test_gradle_non_stable_release_needs_no_build_time (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"x\",\"snapshot\":true,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "")
+in _planted_case("build/repin-tests/gradle-non_stable_release_needs_no_build_time.upd", 1800000000L,
+    "gradle\tgradle\t9.8.0\t9.8.0\t744\tcurrent\n", "") end
+
+(* a zone offset is applied: 9.8.1 was built at 2026-12-30 23:00 UTC (the text says 2026-12-31
+   00:00 at +0100), so it is exactly 7 days old at the second of the case *)
+fn test_gradle_zone_offset_is_applied_to_the_age (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20261231000000+0100\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+in _planted_case("build/repin-tests/gradle-zone.upd", 1799276400L,
+    "gradle\tgradle\t9.8.0\t9.8.1\t7\tmoved\n", "9.8.1\n0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n") end
+
+fn test_gradle_zone_offset_one_second_short_is_too_new (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20261231000000+0100\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+in _planted_case("build/repin-tests/gradle-zone2.upd", 1799276399L,
+    "gradle\tgradle\t9.8.0\t9.8.1\t6\ttoo new\n", "") end
+
+(* the published checksum may end in one newline; the update lines hold it once *)
+fn test_gradle_checksum_with_a_newline_is_copied_without_it (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n")
+in _planted_case("build/repin-tests/gradle-checksum_with_a_newline_is_copied_without_it.upd", 1800000000L,
+    "gradle\tgradle\t9.8.0\t9.8.1\t744\tmoved\n", "9.8.1\n0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n") end
+
+(* the published checksum as it is *)
+fn test_gradle_checksum_without_a_newline_is_copied (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+in _planted_case("build/repin-tests/gradle-checksum_without_a_newline_is_copied.upd", 1800000000L,
+    "gradle\tgradle\t9.8.0\t9.8.1\t744\tmoved\n", "9.8.1\n0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n") end
+
+(* a move with no checksum fails and writes nothing *)
+fn test_gradle_empty_checksum_of_a_move_fails (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "")
+in _planted_fails(1800000000L) end
+
+(* a checksum of 63 digits fails *)
+fn test_gradle_short_checksum_of_a_move_fails (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde")
+in _planted_fails(1800000000L) end
+
+(* a checksum in upper case fails *)
+fn test_gradle_upper_case_checksum_of_a_move_fails (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF")
+in _planted_fails(1800000000L) end
+
+(* a checksum with two newlines fails *)
+fn test_gradle_checksum_with_two_newlines_fails (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n\n")
+in _planted_fails(1800000000L) end
+
+(* a checksum with a blank after it fails *)
+fn test_gradle_checksum_with_a_blank_fails (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]",
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef ")
+in _planted_fails(1800000000L) end
+
+(* a wrapper whose version is no stable release of the versions fails *)
+fn test_gradle_wrapper_version_that_is_no_stable_release_fails (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.9.9-bin.zip\n",
+    "[{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]", "")
+in _planted_fails(1800000000L) end
+
+(* a stable release with a build time that is none fails *)
+fn test_gradle_stable_release_with_a_bad_build_time_fails (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"x\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]", "")
+in _planted_fails(1800000000L) end
+
+(* a release with no snapshot flag fails *)
+fn test_gradle_release_without_snapshot_fails (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20250101000000+0000\",\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]", "")
+in _planted_fails(1800000000L) end
+
+(* a release with no rcFor fails *)
+fn test_gradle_release_without_rcfor_fails (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.1\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]", "")
+in _planted_fails(1800000000L) end
+
+(* a release with no version fails *)
+fn test_gradle_release_without_version_fails (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"},{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]", "")
+in _planted_fails(1800000000L) end
+
+(* a versions text that is an object fails *)
+fn test_gradle_versions_that_are_an_object_fail (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "{}", "")
+in _planted_fails(1800000000L) end
+
+(* a versions text that is not JSON fails *)
+fn test_gradle_versions_that_are_no_json_fail (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{", "")
+in _planted_fails(1800000000L) end
+
+(* a versions text with text after the array fails *)
+fn test_gradle_versions_with_trailing_text_fail (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}] x", "")
+in _planted_fails(1800000000L) end
+
+(* an empty versions text fails *)
+fn test_gradle_empty_versions_fail (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "", "")
+in _planted_fails(1800000000L) end
+
+(* a release that is not an object fails *)
+fn test_gradle_release_that_is_no_object_fails (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-bin.zip\n",
+    "[1,{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]", "")
+in _planted_fails(1800000000L) end
+
+(* a properties text with no distributionUrl line fails *)
+fn test_gradle_properties_with_no_distribution_url_fail (): bool = let
+  val () = _plant_gradle("distributionBase=GRADLE_USER_HOME\n",
+    "[{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]", "")
+in _planted_fails(1800000000L) end
+
+(* a distributionUrl of the -all.zip distribution is refused *)
+fn test_gradle_properties_with_the_all_distribution_fail (): bool = let
+  val () = _plant_gradle("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.0-all.zip\n",
+    "[{\"version\":\"9.8.0\",\"buildTime\":\"20250101000000+0000\",\"snapshot\":false,\"nightly\":false,\"rcFor\":\"\"}]", "")
+in _planted_fails(1800000000L) end
+
+(* a missing properties file fails *)
+fn test_gradle_missing_file_fails (): bool = let
+  val () = _mkdir("build/repin-tests")
+  val () = _make_file("build/repin-tests/gradle-kept.upd", "kept\n", 420)
+  val @(status, records) = _run_gradle("build/repin-tests/gradle-nowhere",
+    "tests/gradle/versions.json", "build/repin-tests/gradle-kept.upd", 1800000000L)
+  val () = discard_rope(records)
+in status = 1 && _file_is("build/repin-tests/gradle-kept.upd", "kept\n") end
+
+(* the first refused line of a properties text is named by its number *)
+fn test_gradle_refused_lines_are_named_by_their_number (): bool =
+  true
+  && _properties_line("a=1\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-all.zip\n") = 2
+  && _properties_line("distributionUrl=https://services.gradle.org/distributions/gradle-8.5-bin.zip\n") = 1
+  && _properties_line("distributionUrl=https\\://example.com/distributions/gradle-8.5-bin.zip\n") = 1
+  && _properties_line(" distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n") = 1
+  && _properties_line("distributionUrl = https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n") = 1
+  && _properties_line("distributionUrl:https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n") = 1
+  && _properties_line("distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\r\n") = 1
+  && _properties_line("distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-rc-1-bin.zip\n") = 1
+  && _properties_line("distributionUrl=https\\://services.gradle.org/distributions/gradle--bin.zip\n") = 1
+  && _properties_line("distributionUrl=Https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n") = 1
+  && _properties_line("distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n") = 2
+  && _properties_line("distributionSha256Sum=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n") = 0
+  && _properties_line("distributionSha256Sum=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde\n") = 1
+  && _properties_line("distributionSha256Sum=0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF\n") = 1
+  && _properties_line("distributionSha256Sum=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\ndistributionSha256Sum=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n") = 3
+  && _properties_line(" distributionSha256Sum=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n") = 1
+  && _properties_line("distributionSha256Sum = 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n") = 1
+  && _properties_line("# distributionUrl=bogus\n!distributionUrl=bogus\ndistributionUrlX=bogus\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n") = 0
+  && _properties_line("# a comment\n\n   \nnetworkTimeout=10000\n") = 0
+  && _properties_line("") = 0
+
+fn test_gradle_the_version_of_the_distribution_url_is_found (): bool =
+  _properties_version_is("distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n", "8.5")
+  && _properties_version_is("a=1\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip", "8.5")
+  && _properties_version_is("# distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n", "")
+  && _properties_version_is("", "")
+  && _properties_version_is("distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\nb=2\n", "8.5")
 
 end
