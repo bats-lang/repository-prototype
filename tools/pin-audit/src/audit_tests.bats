@@ -67,14 +67,24 @@ fun _put_repeated {n:nat} .<n>. (rope: !$B.sized_rope, n: int n): void =
    A case's directory
    ============================================================ *)
 
-(* A fresh dir: the templates, the stand-in gh, an allowlist with no entry
-   and an empty name list. The old one, if any, is removed first. *)
+(* A fresh dir: a git repository with one commit (made with fixed names and dates, so its
+   hash is the same on every run: the commit the audit puts in a ticket), the templates, the
+   stand-in gh, an allowlist with no entry and an empty name list. The old one, if any, is
+   removed first. *)
 fn _fresh {dir_len:nat | dir_len < 200} (dir: string dir_len): void = let
   val _ = run_program("rm", args3(arg_text("-rf"), arg_text("--"), arg_text(dir)))
   val _ = run_program("mkdir", $L.list_vt_cons(arg_text("-p"), $L.list_vt_cons(arg_text("--"),
             args3(join_text2(dir, "/tools/pin-audit"), join_text2(dir, "/planted"), join_text2(dir, "/bin")))))
   val _ = run_program("cp", args3(arg_text("-R"), arg_text("templates"), join_text2(dir, "/tools/pin-audit/templates")))
   val _ = run_program("cp", args2(arg_text("dist/debug/gh_stand_in"), join_text2(dir, "/bin/gh")))
+  val _ = run_program("git", args3(arg_text("init"), arg_text("-q"), arg_text(dir)))
+  val _ = run_with("git", $L.list_vt_cons(arg_text("git"), $L.list_vt_cons(arg_text("-C"), $L.list_vt_cons(arg_text(dir),
+            $L.list_vt_cons(arg_text("-c"), $L.list_vt_cons(arg_text("user.name=plant"),
+            $L.list_vt_cons(arg_text("-c"), $L.list_vt_cons(arg_text("user.email=plant@example.com"),
+            $L.list_vt_cons(arg_text("-c"), $L.list_vt_cons(arg_text("commit.gpgsign=false"),
+            $L.list_vt_cons(arg_text("commit"), $L.list_vt_cons(arg_text("-q"), $L.list_vt_cons(arg_text("--allow-empty"),
+            args2(arg_text("-m"), arg_text("plant")))))))))))))),
+            args2(arg_text("GIT_AUTHOR_DATE=2026-01-01T00:00:00+0000"), arg_text("GIT_COMMITTER_DATE=2026-01-01T00:00:00+0000")))
   var allowlist : $B.sized_rope = $B.sized_rope_create()
   val () = $B.sized_rope_bput(allowlist, "# no entries\n")
   val _ = write_rope(join_path3(dir, "/", "tools/pin-audit/allowlist.txt"), allowlist)
@@ -247,10 +257,11 @@ in () end
    Running the audit
    ============================================================ *)
 
-(* The built audit in dir, with the stand-in gh first on PATH and the
-   planted repositories behind GIT_CONFIG_GLOBAL: its exit status, its
-   output in out *)
-fn _audit {dir_len:nat | dir_len < 200} (dir: string dir_len, out: !$B.builder(0) >> $B.builder_v): @(int, read_end) = let
+(* The built audit in dir with the options (its arguments), with the stand-in gh first on PATH, the
+   planted repositories behind GIT_CONFIG_GLOBAL and the entry token (GH_TOKEN=<value>, empty for
+   no token) in its environment: its exit status, its output in out *)
+fn _audit_run {dir_len,token_len:nat | dir_len < 200; token_len < 200}
+  (dir: string dir_len, options: $L.listv($P.arg_entry), token: string token_len, out: !$B.builder(0) >> $B.builder_v): @(int, read_end) = let
   val () = _config(dir)
   val cwd = $A.alloc<byte>(4096)
   val cwd_len = cwd_length(cwd)
@@ -278,20 +289,26 @@ fn _audit {dir_len:nat | dir_len < 200} (dir: string dir_len, out: !$B.builder(0
   val () = $B.bput(config_entry, "/gitconfig")
   val @(config_entry_array, config_entry_len) = $B.to_arr(config_entry)
   val result = capture_with("env",
-    args4(arg_text("env"), arg_text("-C"), arg_text(dir), arg_text("../../../dist/debug/pin_audit")),
-    args2(@(path_entry_array, path_entry_len), @(config_entry_array, config_entry_len)), out)
+    $L.list_vt_cons(arg_text("env"), $L.list_vt_cons(arg_text("-C"), $L.list_vt_cons(arg_text(dir),
+      $L.list_vt_cons(arg_text("../../../dist/debug/pin_audit"), options)))),
+    $L.list_vt_cons(arg_text(token), args2(@(path_entry_array, path_entry_len), @(config_entry_array, config_entry_len))), out)
   val () = $A.drop<byte>(old_frozen, old_view)
   val () = $A.free<byte>($A.thaw<byte>(old_frozen))
   val () = $A.drop<byte>(cwd_frozen, cwd_view)
   val () = $A.free<byte>($A.thaw<byte>(cwd_frozen))
 in result end
 
-(* Runs the case and judges it: the exit status is want, the output holds
+(* The audit with no option and no token *)
+fn _audit {dir_len:nat | dir_len < 200} (dir: string dir_len, out: !$B.builder(0) >> $B.builder_v): @(int, read_end) =
+  _audit_run(dir, no_arguments(), "GH_TOKEN=", out)
+
+(* Runs the case with the options and the token and judges it: the exit status is want, the output holds
    the three texts and lacks the last. A failing case prints what it saw. *)
-fn _judge {dir_len,first_len,second_len,third_len,absent_len:nat | dir_len < 200}
-  (dir: string dir_len, want: int, first: string first_len, second: string second_len, third: string third_len, absent: string absent_len): bool = let
+fn _judge_run {dir_len,token_len,first_len,second_len,third_len,absent_len:nat | dir_len < 200; token_len < 200}
+  (dir: string dir_len, options: $L.listv($P.arg_entry), token: string token_len,
+   want: int, first: string first_len, second: string second_len, third: string third_len, absent: string absent_len): bool = let
   var out : $B.builder(0) = $B.create()
-  val @(status, ended) = _audit(dir, out)
+  val @(status, ended) = _audit_run(dir, options, token, out)
   val @(output_array, output_len) = $B.to_arr(out)
   val @(output_frozen, output_view) = $A.freeze<byte>(output_array)
   val whole = (case+ ended of | Read_whole() => true | Read_too_long() => false | Read_failed() => false): bool
@@ -307,6 +324,93 @@ fn _judge {dir_len,first_len,second_len,third_len,absent_len:nat | dir_len < 200
   val () = $A.drop<byte>(output_frozen, output_view)
   val () = $A.free<byte>($A.thaw<byte>(output_frozen))
 in good end
+
+(* ... with no option and no token *)
+fn _judge {dir_len,first_len,second_len,third_len,absent_len:nat | dir_len < 200}
+  (dir: string dir_len, want: int, first: string first_len, second: string second_len, third: string third_len, absent: string absent_len): bool =
+  _judge_run(dir, no_arguments(), "GH_TOKEN=", want, first, second, third, absent)
+
+(* The file file of the case's directory read into out *)
+fn _read_file_of {dir_len,file_len:nat | dir_len < 200; file_len < 200}
+  (dir: string dir_len, file: string file_len, out: !$B.builder(0) >> $B.builder_v): @(read_end, string) = let
+  val @(path_array, path_len) = join_path3(dir, "/", file)
+  val @(path_frozen, path_view) = $A.freeze<byte>(path_array)
+  val read = read_file(path_view, path_len, out)
+  val () = $A.drop<byte>(path_frozen, path_view)
+  val () = $A.free<byte>($A.thaw<byte>(path_frozen))
+in read end
+
+(* Whether the file of the case's directory holds the first text and lacks the second (a file that is not there is empty) *)
+fn _file_judge {dir_len,file_len,has_len,lacks_len:nat | dir_len < 200; file_len < 200}
+  (dir: string dir_len, file: string file_len, has: string has_len, lacks: string lacks_len): bool = let
+  var text : $B.builder(0) = $B.create()
+  val @(ended, _) = _read_file_of(dir, file, text)
+  val @(text_array, text_len) = $B.to_arr(text)
+  val @(text_frozen, text_view) = $A.freeze<byte>(text_array)
+  val read_ok = (case+ ended of | Read_whole() => true | Read_too_long() => false | Read_failed() => text_length(has) = 0): bool
+  val good = read_ok && output_has(text_view, text_len, has) && output_lacks(text_view, text_len, lacks)
+  val () =
+    if good then ()
+    else let
+      val () = println! ("FAIL ", dir, "/", file, ": wanted it to hold: ", has, " | and lack: ", lacks)
+      val () = println! ("  it was:")
+    in print_range(text_view, 0, text_len) end
+  val () = $A.drop<byte>(text_frozen, text_view)
+  val () = $A.free<byte>($A.thaw<byte>(text_frozen))
+in good end
+
+(* The text a ticket's body has for the file path (in backquotes) whose template is template_path, filled
+   with the values: written to the rope. The test's own copy of the body's form, so the audit's is
+   compared with a text that is not its code. *)
+fn _expect_section {path_len,template_path_len,commit_len,comment_len,minute_len:nat | path_len < 100; template_path_len < 4096}
+  (body: !$B.sized_rope, path: string path_len, template_path: string template_path_len,
+   commit: string commit_len, comment: string comment_len, minute: string minute_len): void = let
+  val () = $B.sized_rope_bput(body, "## `")
+  val () = $B.sized_rope_bput(body, path)
+  val () = $B.sized_rope_bput(body, "`\n\nThe audit compares bytes: the file is exactly this text.\n\n```\n")
+  var template : $B.builder(0) = $B.create()
+  val @(ended, _) = read_constant(template_path, template)
+  val @(template_array, template_len) = $B.to_arr(template)
+  val @(template_frozen, template_view) = $A.freeze<byte>(template_array)
+  val () = _fill_loop(template_view, template_len, 0, body, commit, comment, minute, ~1)
+  val () = $A.drop<byte>(template_frozen, template_view)
+  val () = $A.free<byte>($A.thaw<byte>(template_frozen))
+in $B.sized_rope_bput(body, "```\n\n") end
+
+(* The start of every ticket's body *)
+fn _expect_start (body: !$B.sized_rope): void =
+  $B.sized_rope_bput(body, "These workflow files are neither listed by sha256 in tools/pin-audit/allowlist.txt of bats-lang/repository-prototype nor equal to a template there with its holes filled. The correct file is shown for each.\n\n")
+
+(* The end of the body of the ticket of the repository repository *)
+fn _expect_end {repository_len:nat | repository_len < 100} (body: !$B.sized_rope, repository: string repository_len): void = let
+  val () = $B.sized_rope_bput(body, "Done when: `pin_audit --repository ")
+  val () = $B.sized_rope_bput(body, repository)
+in $B.sized_rope_bput(body, "` exits 0.\n") end
+
+(* The path of the body the audit wrote for the repository, as an argument *)
+fn _actual_body_arg {dir_len,repository_len:nat | dir_len < 100; repository_len < 100}
+  (dir: string dir_len, repository: string repository_len): $P.arg_entry = let
+  var actual_path : $B.builder(0) = $B.create()
+  val () = $B.bput(actual_path, dir)
+  val () = $B.bput(actual_path, "/audit-clones/")
+  val () = $B.bput(actual_path, repository)
+  val () = $B.bput(actual_path, ".ticket.md")
+  val @(actual_array, actual_len) = $B.to_arr(actual_path)
+in @(actual_array, actual_len) end
+
+(* Whether the body the audit wrote for the repository (audit-clones/<repository>.ticket.md of the case's directory)
+   is byte for byte the expected text; a difference is shown *)
+fn _body_is {dir_len,repository_len:nat | dir_len < 100; repository_len < 100}
+  (dir: string dir_len, repository: string repository_len, expected: $B.sized_rope): bool = let
+  val _ = write_rope(join_path3(dir, "/", "expected-body.md"), expected)
+  val same = run_program("cmp", args3(arg_text("-s"), join_text2(dir, "/expected-body.md"), _actual_body_arg(dir, repository)))
+  val () =
+    if same = 0 then ()
+    else let
+      val () = println! ("FAIL ", dir, ": the ticket's body is not the expected text; diff expected actual:")
+      val _ = run_program("diff", args2(join_text2(dir, "/expected-body.md"), _actual_body_arg(dir, repository)))
+    in () end
+in same = 0 end
 
 (* ============================================================
    The templates' holes, in the matcher
@@ -515,15 +619,16 @@ fn test_malformed_entries_fail (): bool = let
   val () = _allow_raw(dir, "bespoke/a.yml 0000000000000000000000000000000000000000000000000000000000000000 1111111111111111111111111111111111111111111111111111111111111111 2222222222222222222222222222222222222222222222222222222222222222 # bespoke#1\nbespoke/b.yml 0000000000000000000000000000000000000000000000000000000000000000 # bespoke#1\nbespoke/b.yml 1111111111111111111111111111111111111111111111111111111111111111 # bespoke#1\nbespoke/c.yml 00 # bespoke#1\nnot an entry\n")
 in _judge(dir, 1, "allowlist.txt line 1: it is not one or two hashes", "allowlist.txt line 3: it is listed twice", "allowlist.txt line 4: it has no 64-digit lowercase sha256", "") end
 
-(* A repository with no workflow file passes, said *)
-fn test_repository_without_workflows_passes (): bool = let
+(* A repository with no CI input at all fails, named: bats check-pins --discover exits 2 for it, and a
+   nonzero exit is a failure of the repository *)
+fn test_repository_without_workflows_fails (): bool = let
   val dir = "build/pin-audit-tests/no-workflows"
   val () = _fresh(dir)
   val () = _plant(dir, "quiet")
   val () = _put(dir, "quiet", "", "README.md", "nothing here\n")
   val () = _commit(dir, "quiet")
   val () = _names(dir, "quiet\n")
-in _judge(dir, 0, "== quiet\n   no workflow files", "1 repositories, 0 workflow files", "", "::error") end
+in _judge(dir, 1, "::error title=pin audit::quiet: bats check-pins --discover failed (status 2)", "1 repositories, 0 workflow files", "1 repository errors", "pass, ") end
 
 (* A path over the bound is a failure of its own, said and counted *)
 fn test_path_over_bound_fails (): bool = let
@@ -600,5 +705,200 @@ fn test_empty_list_fails (): bool = let
   val dir = "build/pin-audit-tests/empty-list"
   val () = _fresh(dir)
 in _judge(dir, 1, "the list held no repository", "", "", "") end
+
+(* ============================================================
+   --repository (bats-lang/repository-prototype#405)
+   ============================================================ *)
+
+(* The options `--repository <name>` *)
+fn _only {name_len:nat | name_len < 100} (name: string name_len): $L.listv($P.arg_entry) =
+  args2(arg_text("--repository"), arg_text(name))
+
+(* A repository whose one file is a canonical check.yml *)
+fn _plant_fine {dir_len,name_len:nat | dir_len < 200; name_len < 100} (dir: string dir_len, name: string name_len): void = let
+  val () = _plant(dir, name)
+  val () = _fill(dir, name, "check.yml", "templates/check.yml", "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", "17", ~1)
+in _commit(dir, name) end
+
+(* A repository whose one file is a check.yml that is not canonical *)
+fn _plant_diverging {dir_len,name_len:nat | dir_len < 200; name_len < 100} (dir: string dir_len, name: string name_len): void = let
+  val () = _plant(dir, name)
+  val () = _workflow(dir, name, "check.yml", "name: my own check\non: push\n")
+in _commit(dir, name) end
+
+(* --repository audits that repository alone, passing: the stand-in gh fails if it is asked for a list, and the list names another *)
+fn test_repository_option_passes (): bool = let
+  val dir = "build/pin-audit-tests/only-passes"
+  val () = _fresh(dir)
+  val () = _plant_fine(dir, "fine")
+  val () = _plant_diverging(dir, "other")
+  val () = _names(dir, "other\nfine\n")
+  val () = _flag(dir, "gh-fail")
+in _judge_run(dir, _only("fine"), "GH_TOKEN=", 0, "== fine\n", "1 repositories, 1 workflow files", ".github/workflows/check.yml: pass, equal to the template check.yml", "other") end
+
+(* ... failing, with the repository named and no other *)
+fn test_repository_option_fails (): bool = let
+  val dir = "build/pin-audit-tests/only-fails"
+  val () = _fresh(dir)
+  val () = _plant_fine(dir, "fine")
+  val () = _plant_diverging(dir, "bad")
+  val () = _names(dir, "fine\nbad\n")
+  val () = _flag(dir, "gh-fail")
+in _judge_run(dir, _only("bad"), "GH_TOKEN=", 1, "::error title=pin audit::bad: .github/workflows/check.yml: not canonical", "1 repositories, 1 workflow files", "== failing repositories: bad", "fine") end
+
+(* Without the option every repository of the stand-in gh's list is audited *)
+fn test_without_option_audits_every_repository (): bool = let
+  val dir = "build/pin-audit-tests/every"
+  val () = _fresh(dir)
+  val () = _plant_fine(dir, "fine")
+  val () = _plant_diverging(dir, "bad")
+  val () = _names(dir, "fine\nbad\n")
+in _judge(dir, 1, "== fine\n", "== bad\n", "== 2 repositories, 2 workflow files: 0 passed by an allowlisted hash, 1 passed by a template, 1 not canonical, 0 over the bound, 0 unreadable; 0 repository errors", "") end
+
+(* Arguments that are not the options are refused with status 2, and nothing is audited *)
+fn test_unknown_option_refused (): bool = let
+  val dir = "build/pin-audit-tests/option-unknown"
+  val () = _fresh(dir)
+in _judge_run(dir, args1(arg_text("--bogus")), "GH_TOKEN=", 2, "usage: pin_audit [--repository <name>] [--file-tickets]", "", "", "== ") end
+
+fn test_repository_without_name_refused (): bool = let
+  val dir = "build/pin-audit-tests/option-no-name"
+  val () = _fresh(dir)
+in _judge_run(dir, args1(arg_text("--repository")), "GH_TOKEN=", 2, "usage: pin_audit", "", "", "== ") end
+
+fn test_repository_twice_refused (): bool = let
+  val dir = "build/pin-audit-tests/option-twice"
+  val () = _fresh(dir)
+in _judge_run(dir, args4(arg_text("--repository"), arg_text("a"), arg_text("--repository"), arg_text("b")), "GH_TOKEN=", 2, "usage: pin_audit", "", "", "== ") end
+
+(* ============================================================
+   bats check-pins --discover (bats-lang/repository-prototype#405)
+   ============================================================ *)
+
+(* A repository that passes says that the checker ran in its clone *)
+fn test_checker_runs_in_the_clone (): bool = let
+  val dir = "build/pin-audit-tests/checker-runs"
+  val () = _fresh(dir)
+  val () = _plant_fine(dir, "fine")
+in _judge_run(dir, _only("fine"), "GH_TOKEN=", 0, "== fine\n   bats check-pins --discover:\n", "0 repository errors", "", "failed") end
+
+(* A clone with a floating input fails with the repository named and the checker's own failure under it, though
+   the file is listed (so the file audit passes and the checker is the only failure) *)
+fn test_floating_input_fails (): bool = let
+  val dir = "build/pin-audit-tests/floating"
+  val () = _fresh(dir)
+  val () = _plant(dir, "floating")
+  val () = _workflow(dir, "floating", "own.yml", "name: own\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n")
+  val () = _commit(dir, "floating")
+  val () = _allow(dir, "floating/.github/workflows/own.yml", "name: own\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n", "", "floating#1")
+in _judge_run(dir, _only("floating"), "GH_TOKEN=", 1, "::error title=pin audit::floating: bats check-pins --discover failed (status 1)",
+     ".github/workflows/own.yml:5:", "1 repository errors", "not canonical:") end
+
+(* ============================================================
+   The ticket of a diverging repository (bats-lang/repository-prototype#405)
+   ============================================================ *)
+
+(* The options `--repository <name> --file-tickets` *)
+fn _only_with_tickets {name_len:nat | name_len < 100} (name: string name_len): $L.listv($P.arg_entry) =
+  args3(arg_text("--repository"), arg_text(name), arg_text("--file-tickets"))
+
+(* A repository with two offending files: a check.yml and a relock.yml (cron minute 41) that are neither listed nor templates *)
+fn _plant_two_offenders {dir_len,name_len:nat | dir_len < 200; name_len < 100} (dir: string dir_len, name: string name_len): void = let
+  val () = _plant(dir, name)
+  val () = _workflow(dir, name, "check.yml", "name: my own check\non: push\n")
+  val () = _workflow(dir, name, "relock.yml", "name: relock\non:\n  schedule:\n    - cron: '41 5 * * *'\n")
+in _commit(dir, name) end
+
+(* The body of the ticket for _plant_two_offenders: the check.yml and the relock.yml of the templates with the checkout's commit
+   (the case's directory has one fixed commit), its comment and the repository's own minute 41 *)
+fn _expect_two_offenders {name_len:nat | name_len < 100} (name: string name_len): $B.sized_rope = let
+  var body : $B.sized_rope = $B.sized_rope_create()
+  val () = _expect_start(body)
+  val () = _expect_section(body, ".github/workflows/check.yml", "templates/check.yml", "8a556d1e80eed22883318e2c6d9a1c7c299ca140", "repository-prototype main 8a556d1", "41")
+  val () = _expect_section(body, ".github/workflows/relock.yml", "templates/relock.yml", "8a556d1e80eed22883318e2c6d9a1c7c299ca140", "repository-prototype main 8a556d1", "41")
+  val () = _expect_end(body, name)
+in body end
+
+(* Two offending files: one created ticket, titled by the repository, labelled p0, whose body has each file's path and its
+   whole correct text; the open tickets were listed first, and nothing was edited *)
+fn test_two_offenders_get_one_created_ticket (): bool = let
+  val dir = "build/pin-audit-tests/ticket-created"
+  val () = _fresh(dir)
+  val () = _plant_two_offenders(dir, "diverge")
+  val judged = _judge_run(dir, _only_with_tickets("diverge"), "GH_TOKEN=test-token", 1,
+    "   ticket created: https://example.invalid/create\n", "== 1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 0 passed by a template, 2 not canonical", "== failing repositories: diverge", "ticket updated")
+  val listed = _file_judge(dir, "gh-calls.txt", "gh issue list -R bats-lang/diverge --state open --limit 100 --search Make diverge's workflow and issue-template files canonical in:title --json number,title --jq", "issue edit")
+  val created = _file_judge(dir, "gh-calls.txt", "gh issue create -R bats-lang/diverge --title Make diverge's workflow and issue-template files canonical --label p0 --body-file audit-clones/diverge.ticket.md\n", "issue edit")
+  val body = _body_is(dir, "diverge", _expect_two_offenders("diverge"))
+in judged && listed && created && body end
+
+(* A ticket of the title that is open gets its body replaced: one edit, no create, the same body *)
+fn test_open_ticket_is_edited (): bool = let
+  val dir = "build/pin-audit-tests/ticket-edited"
+  val () = _fresh(dir)
+  val () = _plant_two_offenders(dir, "diverge")
+  val () = _put(dir, "diverge", "", "unrelated.txt", "x\n")
+  val _ = write_rope(join_path3(dir, "/", "gh-open.txt"), let var open : $B.sized_rope = $B.sized_rope_create() val () = $B.sized_rope_bput(open, "7\n") in open end)
+  val judged = _judge_run(dir, _only_with_tickets("diverge"), "GH_TOKEN=test-token", 1,
+    "   ticket updated: https://example.invalid/edit\n", "2 not canonical", "== failing repositories: diverge", "ticket created")
+  val edited = _file_judge(dir, "gh-calls.txt", "gh issue edit 7 -R bats-lang/diverge --body-file audit-clones/diverge.ticket.md\n", "issue create")
+  val body = _body_is(dir, "diverge", _expect_two_offenders("diverge"))
+in judged && edited && body end
+
+(* A repository that passes gets no ticket: gh is not called for one *)
+fn test_passing_repository_gets_no_ticket (): bool = let
+  val dir = "build/pin-audit-tests/ticket-none"
+  val () = _fresh(dir)
+  val () = _plant_fine(dir, "fine")
+  val judged = _judge_run(dir, _only_with_tickets("fine"), "GH_TOKEN=test-token", 0, "== fine\n", "1 passed by a template", "", "ticket")
+  val none = _file_judge(dir, "gh-calls.txt", "", "issue")
+in judged && none end
+
+(* A missing token (GH_TOKEN empty, as the workflow's secret is when it is not set) exits 1 with a message naming AUDIT_TOKEN,
+   audits nothing and calls gh for nothing *)
+fn test_missing_token_files_nothing (): bool = let
+  val dir = "build/pin-audit-tests/ticket-no-token"
+  val () = _fresh(dir)
+  val () = _plant_two_offenders(dir, "diverge")
+  val judged = _judge_run(dir, _only_with_tickets("diverge"), "GH_TOKEN=", 1,
+    "::error title=pin audit::AUDIT_TOKEN is missing", "nothing was filed", "", "== ")
+  val none = _file_judge(dir, "gh-calls.txt", "", "issue")
+in judged && none end
+
+(* The minute is 17 when the offending relock.yml has no cron line, and a file with no template of its name says so, with its hash *)
+fn test_minute_seventeen_and_file_without_template (): bool = let
+  val dir = "build/pin-audit-tests/ticket-seventeen"
+  val () = _fresh(dir)
+  val () = _plant(dir, "odd")
+  val () = _workflow(dir, "odd", "relock.yml", "name: relock\non: push\n")
+  val () = _workflow(dir, "odd", "deploy.yml", "name: deploy\non: push\n")
+  val () = _commit(dir, "odd")
+  val judged = _judge_run(dir, _only_with_tickets("odd"), "GH_TOKEN=test-token", 1, "ticket created", "2 not canonical", "", "ticket updated")
+  var expected : $B.sized_rope = $B.sized_rope_create()
+  val () = _expect_start(expected)
+  val () = $B.sized_rope_bput(expected, "## `.github/workflows/deploy.yml`\n\nNo template of this name is in tools/pin-audit/templates of bats-lang/repository-prototype, so the file has no correct text to show. Delete it, or list its sha256 ")
+  val () = _hash_into(expected, "name: deploy\non: push\n")
+  val () = $B.sized_rope_bput(expected, " in tools/pin-audit/allowlist.txt there with a ticket comment.\n\n")
+  val () = _expect_section(expected, ".github/workflows/relock.yml", "templates/relock.yml", "8a556d1e80eed22883318e2c6d9a1c7c299ca140", "repository-prototype main 8a556d1", "17")
+  val () = _expect_end(expected, "odd")
+  val body = _body_is(dir, "odd", expected)
+in judged && body end
+
+(* A symbolic link has no sha256 to list: its section says to delete it *)
+fn test_symbolic_link_section_says_delete (): bool = let
+  val dir = "build/pin-audit-tests/ticket-symlink"
+  val () = _fresh(dir)
+  val () = _plant(dir, "link")
+  val () = _workflow(dir, "link", "real.yml", "name: real\n")
+  val _ = run_program("ln", args3(arg_text("-s"), arg_text("real.yml"), join_text2(dir, "/planted/link.git/.github/workflows/link.yml")))
+  val () = _commit(dir, "link")
+  val () = _allow(dir, "link/.github/workflows/real.yml", "name: real\n", "", "link#1")
+  val judged = _judge_run(dir, _only_with_tickets("link"), "GH_TOKEN=test-token", 1, "ticket created", "1 not canonical", "", "ticket updated")
+  var expected : $B.sized_rope = $B.sized_rope_create()
+  val () = _expect_start(expected)
+  val () = $B.sized_rope_bput(expected, "## `.github/workflows/link.yml`\n\nNo template of this name is in tools/pin-audit/templates of bats-lang/repository-prototype, so the file has no correct text to show. Delete it.\n\n")
+  val () = _expect_end(expected, "link")
+  val body = _body_is(dir, "link", expected)
+in judged && body end
 
 end
