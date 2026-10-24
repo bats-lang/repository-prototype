@@ -93,6 +93,9 @@ jobs:
         bats-lang/bats/.github/actions/setup
       pin-copies: |
         bats-lang/repository-prototype/.github/workflows/publish.yml source-ref
+      # under workflows-directory: the patch stages .github and that directory only (#457)
+      compiler-pin-file: tests/relock-pins/workflows/pins/bats-version
+      repository-pin-file: tests/relock-pins/workflows/pins/repository-version
       publish: 'false'
       branch-prefix: relock-test/
 
@@ -103,6 +106,7 @@ jobs:
       CHANGED: ${{ needs.relock.outputs.changed }}
       PATCH: ${{ needs.relock.outputs.patch }}
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: The moved pin lines carry the comment
         run: |
           set -eu
@@ -111,11 +115,28 @@ jobs:
           printf '%s' "$PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/t/good.patch"
           cat "$RUNNER_TEMP/t/good.patch"
 
-          # this call keeps the default pin files: the repository's own two move (area: relock own repository)
-          for pin_file in .github/bats-version .github/repository-version; do
-            grep -Fxq "diff --git a/$pin_file b/$pin_file" "$RUNNER_TEMP/t/good.patch" \
+          # This call names pin files of its own, deliberately behind (the repository's own
+          # .github/bats-version is an input that is current after every relock, #457; area:
+          # relock own repository): each must move, from the commit the fixture holds.
+          cat > "$RUNNER_TEMP/t/pins-moved.sh" <<'PINS'
+          set -eu
+          while read -r pin_file old; do
+            grep -Fxq "diff --git a/$pin_file b/$pin_file" "$1" \
               || { echo "::error::$pin_file did not move"; exit 1; }
-          done
+            grep -Fxq -- "-$old" "$1" \
+              || { echo "::error::$pin_file did not move from $old"; exit 1; }
+          done <<LIST
+          tests/relock-pins/workflows/pins/bats-version $(tr -d '[:space:]' < tests/relock-pins/workflows/pins/bats-version)
+          tests/relock-pins/workflows/pins/repository-version $(tr -d '[:space:]' < tests/relock-pins/workflows/pins/repository-version)
+          LIST
+          PINS
+          sh "$RUNNER_TEMP/t/pins-moved.sh" "$RUNNER_TEMP/t/good.patch"
+          # a patch where the fixture's pin did not move (it was current) is refused
+          awk '/^diff --git / { skip = ($0 ~ /pins\/bats-version/) } !skip { print }' \
+            "$RUNNER_TEMP/t/good.patch" > "$RUNNER_TEMP/t/current.patch"
+          if sh "$RUNNER_TEMP/t/pins-moved.sh" "$RUNNER_TEMP/t/current.patch"; then
+            echo "::error::a patch without the compiler pin's move was accepted"; exit 1
+          fi
 
           # The rule: each added line with `uses:` is exactly
           # `uses: <owner>/<repo>/<path>@<40 hex> # <repo> main <7 hex>`, the
