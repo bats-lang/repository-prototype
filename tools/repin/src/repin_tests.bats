@@ -1661,6 +1661,7 @@ fn test_gradle_refused_lines_are_named_by_their_number (): bool =
   && _properties_line("distributionSha256Sum=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\ndistributionSha256Sum=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n") = 3
   && _properties_line(" distributionSha256Sum=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n") = 1
   && _properties_line("distributionSha256Sum = 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n") = 1
+  && _properties_line("distributionSha256Sum:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n") = 1
   && _properties_line("# distributionUrl=bogus\n!distributionUrl=bogus\ndistributionUrlX=bogus\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n") = 0
   && _properties_line("# a comment\n\n   \nnetworkTimeout=10000\n") = 0
   && _properties_line("") = 0

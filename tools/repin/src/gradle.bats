@@ -132,14 +132,11 @@ in
     else let
       val key_stop = _key_end(bytes, stop, first)
     in
-      if span_is(bytes, first, key_stop, "distributionUrl") then
-        (if first <> start then @(3, stop, stop)
-         else let
-           val @(ok, vs, ve) = _url_value(bytes, start, stop)
-         in if ok then @(1, vs, ve) else @(3, stop, stop) end)
+      if span_is(bytes, first, key_stop, "distributionUrl") then let
+        val @(ok, vs, ve) = _url_value(bytes, start, stop)
+      in if ok then @(1, vs, ve) else @(3, stop, stop) end
       else if span_is(bytes, first, key_stop, "distributionSha256Sum") then
-        (if first = start && _sha_line_ok(bytes, start, stop) then @(2, stop, stop)
-         else @(3, stop, stop))
+        (if _sha_line_ok(bytes, start, stop) then @(2, stop, stop) else @(3, stop, stop))
       else @(0, stop, stop)
     end
   end
