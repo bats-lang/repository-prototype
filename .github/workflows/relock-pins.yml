@@ -56,10 +56,13 @@
 # The change handed on as outputs (the patch, gzipped and base64, in pieces of
 # 100000 characters) is written to a file of the runner, not to an
 # environment variable, so the pull request's text and the pushed change have
-# no size limit of ours. A patch of 800000 characters or more does not fit the
-# eight outputs: a run that does not publish fails with a message (its outputs
-# are what a caller reads), and a run that publishes leaves `patch` and its
-# parts empty, since the push does not read them. `regenerate-max-bytes` is
+# no size limit of ours. The outputs of a job together may not exceed 1,048,576
+# bytes (GitHub fails the job at its end, after the push: bats's regenerated
+# bootstrap/c made a patch under 800000 characters that did; the cap below is
+# set well under that, by what was seen, not by a documented count), so a patch of
+# 400000 characters or more is not an output: a run that does not publish fails
+# with a message (its outputs are what a caller reads), and a run that publishes
+# leaves `patch` and its parts empty, since the push does not read them. `regenerate-max-bytes` is
 # kept for callers that pass it and no longer limits anything.
 #
 # Concurrency: the group is `relock-pins-<repository>-<branch-prefix>` (never
@@ -190,8 +193,8 @@
 # characters once gzipped and base64 (the diff holds it in both directions).
 # So the patch travels in up to 8 pieces of 100000 characters, the first as
 # `patch` (the whole patch when it is under 100000, as before) and the others as
-# `patch-part-2` to `patch-part-8`; a change over 800000 characters fails with a
-# message, as one over the old limit did.
+# `patch-part-2` to `patch-part-8`; a change of 400000 characters or more is not an
+# output (see the regenerate paragraph above).
 #
 # The caller's pins, each moved only when the caller has it:
 #
@@ -421,7 +424,7 @@ on:
         description: yes when a pin or the lock moved, else no
         value: ${{ jobs.relock.outputs.changed }}
       patch:
-        description: The change as a patch, gzipped and base64, the regenerated files included (empty when nothing moved, and when a run that publishes has a patch of 800000 characters or more); its first 100000 characters when it is longer, the rest in patch-part-2 to patch-part-8
+        description: The change as a patch, gzipped and base64, the regenerated files included (empty when nothing moved, and when a run that publishes has a patch of 400000 characters or more); its first 100000 characters when it is longer, the rest in patch-part-2 to patch-part-8
         value: ${{ jobs.relock.outputs.patch }}
       patch-part-2:
         description: Piece 2 of the patch (the next 100000 characters; empty when the patch is shorter)
@@ -1298,11 +1301,11 @@ jobs:
           done
           patch=$(git diff --cached --binary | gzip -9n | base64 -w0)
           body=$(base64 -w0 ~/relock/body.md)
-          # eight outputs of 100000 characters: a larger patch is not an output
-          # (a run that publishes does not read the outputs, so it goes on)
-          if [ ${#patch} -ge 800000 ]; then
+          # the outputs of a job together are under 1,048,576 bytes: a larger patch
+          # is not an output (a run that publishes does not read the outputs, so it goes on)
+          if [ ${#patch} -ge 400000 ]; then
             [ "$PUBLISH" = true ] \
-              || { echo "::error::the relock's change is larger than the outputs hold (patch ${#patch} characters, the most is 799999)"; exit 1; }
+              || { echo "::error::the relock's change is larger than the outputs hold (patch ${#patch} characters, the most is 399999)"; exit 1; }
             echo "::notice::the patch is ${#patch} characters, more than the outputs hold: patch and its parts are empty; the branch has the change"
             patch=''
           fi
