@@ -16,12 +16,6 @@
                               by the registry's publish times (TIMES) at NOW (npm.bats):
                               the move records are printed and the lines name@version of
                               the moves are written to the file UPDATES
-     repin gradle PROPERTIES VERSIONS CHECKSUM NOW UPDATES
-                              the gradle-wrapper.properties PROPERTIES moved by the
-                              body of Gradle's versions/all (VERSIONS) and the published
-                              checksum of the target (CHECKSUM) at NOW (gradle.bats): the
-                              move records are printed and, for a move, the version and
-                              the checksum are written to the file UPDATES, a line each
 
    Exit status: 0 done, 1 a file that cannot be read or is not records, 2 the
    command line is not one of these. It reads the files it is given, makes no
@@ -36,7 +30,6 @@
 
 staload "age.sats"
 staload "driver.sats"
-staload "gradle_driver.sats"
 staload "npm_driver.sats"
 staload "records.sats"
 staload "support.sats"
@@ -156,37 +149,10 @@ in
   else let val () = prerrln! ("repin: NOW is 1 to 12 digits") in 1 end
 end
 
-(* The wrapper properties file at args[properties_start, properties_stop), the versions and
-   checksum files, at the time args[now_start, now_stop) (whole seconds): the move records
-   on standard output and the version and checksum lines in the file at args[updates_start,
-   updates_stop); 1 when it failed (nothing written) *)
-fn _gradle {l:agz}{n:pos | n <= 4096}
-  {updates_stop:nat | updates_stop <= n}{updates_start:nat | updates_start <= updates_stop}
-  {now_stop:nat | now_stop <= n}{now_start:nat | now_start <= now_stop}
-  {checksum_stop:nat | checksum_stop <= n}{checksum_start:nat | checksum_start <= checksum_stop}
-  {versions_stop:nat | versions_stop <= n}{versions_start:nat | versions_start <= versions_stop}
-  {properties_stop:nat | properties_stop <= n}{properties_start:nat | properties_start <= properties_stop}
-  (args: !$A.borrow(byte, l, n), properties_start: int properties_start,
-   properties_stop: int properties_stop, versions_start: int versions_start,
-   versions_stop: int versions_stop, checksum_start: int checksum_start,
-   checksum_stop: int checksum_stop, now_start: int now_start, now_stop: int now_stop,
-   updates_start: int updates_start, updates_stop: int updates_stop): int = let
-  val @(now_ok, now) = parse_seconds(args, now_start, now_stop)
-in
-  if now_ok then let
-    val records = $B.sized_rope_create()
-    val status = run_gradle(args, properties_start, properties_stop, versions_start,
-      versions_stop, checksum_start, checksum_stop, updates_start, updates_stop, now, records)
-    val () = if status = 0 then print_rope(records) else discard_rope(records)
-  in status end
-  else let val () = prerrln! ("repin: NOW is 1 to 12 digits") in 1 end
-end
-
 fn _usage (): int = let
   val () = prerrln! ("usage: repin table RECORDS | repin age NOW PUBLISHED")
   val () = prerrln! ("       repin actions DIR NOW RELEASES")
   val () = prerrln! ("       repin npm OUTDATED COMPATIBLE TIMES NOW UPDATES")
-  val () = prerrln! ("       repin gradle PROPERTIES VERSIONS CHECKSUM NOW UPDATES")
 in 2 end
 
 (* The argument at index (the program is 0) of the NUL-separated arguments
@@ -224,11 +190,6 @@ in
   else if span_is(args, command_start, command_stop, "npm") then
     (if sixth_start < args_len && seventh_start >= args_len
      then _npm(args, second_start, second_stop, third_start, third_stop, fourth_start,
-       fourth_stop, fifth_start, fifth_stop, sixth_start, sixth_stop)
-     else _usage())
-  else if span_is(args, command_start, command_stop, "gradle") then
-    (if sixth_start < args_len && seventh_start >= args_len
-     then _gradle(args, second_start, second_stop, third_start, third_stop, fourth_start,
        fourth_stop, fifth_start, fifth_stop, sixth_start, sixth_stop)
      else _usage())
   else _usage()

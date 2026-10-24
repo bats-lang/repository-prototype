@@ -1,0 +1,10 @@
+# A fixture whose action pins are all the newest (repository-prototype#414).
+name: scratch current
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: acme/cache@ffffffffffffffffffffffffffffffffffffffff # v1.1.0
+      - uses: acme/deploy@1111111111111111111111111111111111111111 # v1.0.0

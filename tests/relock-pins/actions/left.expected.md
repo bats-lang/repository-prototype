@@ -1,0 +1,2 @@
+- `acme/checkout` (action): `v1.0.0` → `v1.2.0`, release age 8 days, **not moved**: GITHUB_TOKEN cannot change files in `.github/workflows`: move it in a pull request, or give this workflow a `RELOCK_TOKEN` secret that can.
+- `acme/build` (action): `v4.0.0` → `v4.1.0`, release age 1 day, **not moved**: GITHUB_TOKEN cannot change files in `.github/workflows`: move it in a pull request, or give this workflow a `RELOCK_TOKEN` secret that can.
