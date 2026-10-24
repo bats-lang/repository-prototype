@@ -10,6 +10,12 @@
                               moved by the releases file RELEASES at NOW
                               (actions.bats, driver.bats); the move records
                               are printed
+     repin npm OUTDATED COMPATIBLE TIMES NOW UPDATES
+                              the npm dependencies of `pnpm outdated --format json`
+                              (OUTDATED) and its `--compatible` form (COMPATIBLE) moved
+                              by the registry's publish times (TIMES) at NOW (npm.bats):
+                              the move records are printed and the lines name@version of
+                              the moves are written to the file UPDATES
 
    Exit status: 0 done, 1 a file that cannot be read or is not records, 2 the
    command line is not one of these. It reads the files it is given, makes no
@@ -24,6 +30,7 @@
 
 staload "age.sats"
 staload "driver.sats"
+staload "npm_driver.sats"
 staload "records.sats"
 staload "support.sats"
 
@@ -116,9 +123,36 @@ in
   else let val () = prerrln! ("repin: NOW is 1 to 12 digits") in 1 end
 end
 
+(* The npm dependencies of the outdated file at args[outdated_start, outdated_stop) and the
+   compatible and times files, at the time args[now_start, now_stop) (whole seconds): the
+   move records on standard output and the update lines in the file at args[updates_start,
+   updates_stop); 1 when it failed (nothing written) *)
+fn _npm {l:agz}{n:pos | n <= 4096}
+  {updates_stop:nat | updates_stop <= n}{updates_start:nat | updates_start <= updates_stop}
+  {now_stop:nat | now_stop <= n}{now_start:nat | now_start <= now_stop}
+  {times_stop:nat | times_stop <= n}{times_start:nat | times_start <= times_stop}
+  {compat_stop:nat | compat_stop <= n}{compat_start:nat | compat_start <= compat_stop}
+  {outdated_stop:nat | outdated_stop <= n}{outdated_start:nat | outdated_start <= outdated_stop}
+  (args: !$A.borrow(byte, l, n), outdated_start: int outdated_start,
+   outdated_stop: int outdated_stop, compat_start: int compat_start,
+   compat_stop: int compat_stop, times_start: int times_start, times_stop: int times_stop,
+   now_start: int now_start, now_stop: int now_stop, updates_start: int updates_start,
+   updates_stop: int updates_stop): int = let
+  val @(now_ok, now) = parse_seconds(args, now_start, now_stop)
+in
+  if now_ok then let
+    val records = $B.sized_rope_create()
+    val status = run_npm(args, outdated_start, outdated_stop, compat_start, compat_stop,
+      times_start, times_stop, updates_start, updates_stop, now, records)
+    val () = if status = 0 then print_rope(records) else discard_rope(records)
+  in status end
+  else let val () = prerrln! ("repin: NOW is 1 to 12 digits") in 1 end
+end
+
 fn _usage (): int = let
   val () = prerrln! ("usage: repin table RECORDS | repin age NOW PUBLISHED")
   val () = prerrln! ("       repin actions DIR NOW RELEASES")
+  val () = prerrln! ("       repin npm OUTDATED COMPATIBLE TIMES NOW UPDATES")
 in 2 end
 
 (* The argument at index (the program is 0) of the NUL-separated arguments
@@ -137,7 +171,9 @@ fn _command {l:agz}{n:pos | n <= 4096}{args_len:nat | args_len <= n}
   val @(second_start, second_stop) = _argument(args, args_len, 2)
   val @(third_start, third_stop) = _argument(args, args_len, 3)
   val @(fourth_start, fourth_stop) = _argument(args, args_len, 4)
-  val @(fifth_start, _) = _argument(args, args_len, 5)
+  val @(fifth_start, fifth_stop) = _argument(args, args_len, 5)
+  val @(sixth_start, sixth_stop) = _argument(args, args_len, 6)
+  val @(seventh_start, _) = _argument(args, args_len, 7)
 in
   if command_start >= args_len then _usage()
   else if span_is(args, command_start, command_stop, "table") then
@@ -150,6 +186,11 @@ in
     (if fourth_start < args_len && fifth_start >= args_len
      then _actions(args, second_start, second_stop, third_start, third_stop,
        fourth_start, fourth_stop)
+     else _usage())
+  else if span_is(args, command_start, command_stop, "npm") then
+    (if sixth_start < args_len && seventh_start >= args_len
+     then _npm(args, second_start, second_stop, third_start, third_stop, fourth_start,
+       fourth_stop, fifth_start, fifth_stop, sixth_start, sixth_stop)
      else _usage())
   else _usage()
 end
