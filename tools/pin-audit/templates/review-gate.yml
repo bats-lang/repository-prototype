@@ -1,0 +1,303 @@
+name: review-gate
+
+# No pull request merges before a review (keyword: adversarial review).
+# This sets the commit status
+# `adversarial-review` on each pull request's head commit. It fails
+# closed: success only for a perfectly formed approval of the current head,
+# by a trusted author, in the newest review attempt, as GitHub renders it
+# and as it is written, with no standing "Request changes" review; anything
+# else, an error included, is pending.
+#
+# Formal pull request reviews are read too (their text, as rendered): one
+# that is the newest review attempt makes the gate pending, never success.
+#
+# Every trigger runs this file as the default branch has it, never as the
+# pull request has it: pull_request_target, issue_comment, workflow_run and
+# schedule. That is safe because the job checks out nothing and runs no
+# code of the pull request; comment bodies are read as data by python only,
+# never put in a shell.
+#
+# A formal pull request review fires pull_request_review, which would run
+# the pull request's own copy of a workflow, so review-gate-relay.yml (no
+# permissions, does nothing) takes that event and its completion runs this
+# gate through workflow_run. The relay is only a fast path: the schedule
+# runs the gate over every open pull request (about every 15 minutes, as
+# GitHub schedules it, best effort), so nothing
+# depends on the relay running (a pull request can change it, and a fork's
+# runs can wait for approval).
+#
+# It uses no action at all (only the runner's gh and python3), so there is
+# no action to pin.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+  issue_comment:
+    types: [created, edited, deleted]
+  workflow_run:
+    workflows: [review-gate-relay]
+    types: [completed]
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: review-gate-${{ github.event_name == 'schedule' && 'schedule' || github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    # An issue_comment event also fires for issues: only a pull request's counts
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Set the adversarial-review status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number }}
+          EVENT_HEAD: ${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+
+          # One pull request: gate.sh <number or empty> <the event's head or empty>
+          cat > "$work/gate.sh" <<'GATE'
+          set -euo pipefail
+          PR="$1"
+          head="$2"
+          posted=no
+          dir=$(mktemp -d)
+
+          post() {
+            gh api --method POST "repos/$REPO/statuses/$head" \
+              -f state="$1" -f context=adversarial-review \
+              -f description="${2:0:140}" -f target_url="$3" > /dev/null
+            posted=yes
+            echo "#${PR:-?} adversarial-review: $1 on $head ($2)"
+          }
+          # Any failure (an API error, a parse error, anything) posts
+          # pending on the head known so far, so an earlier success never
+          # outlives a failed run. With no head known (a comment event whose
+          # lookups all failed), the next scheduled run decides.
+          on_exit() {
+            code=$?
+            if [ "$posted" = no ] && [[ "$head" =~ ^[0-9a-f]{40}$ ]]; then
+              post pending "The gate failed: pending until it runs again" "$RUN_URL" || true
+            fi
+            exit "$code"
+          }
+          trap on_exit EXIT
+
+          # workflow_run gives no pull request for a fork's: find it by commit
+          if [ -z "$PR" ] && [[ "$head" =~ ^[0-9a-f]{40}$ ]]; then
+            PR=$(gh api "repos/$REPO/commits/$head/pulls" \
+              --jq '[.[] | select(.state == "open")][0].number // empty')
+            echo "Pull request for $head: ${PR:-none found}"
+          fi
+          if [ -z "$PR" ]; then
+            echo "No open pull request for ${head:-an unknown head}"
+            exit 1
+          fi
+
+          # Neither event's GITHUB_SHA is the pull request's head, so the
+          # status goes to the head read from the pull request itself:
+          # exactly 40 lowercase hex digits, three tries.
+          read_head=""
+          for try in 1 2 3; do
+            if read_head=$(gh api "repos/$REPO/pulls/$PR" --jq .head.sha) \
+               && [[ "$read_head" =~ ^[0-9a-f]{40}$ ]]; then
+              break
+            fi
+            read_head=""
+            [ "$try" = 3 ] || sleep 5
+          done
+          if [ -z "$read_head" ]; then
+            echo "#$PR: the head could not be read"
+            exit 1
+          fi
+          head="$read_head"
+
+          # full+json: each comment's body as written and body_text, GitHub's
+          # own plain-text rendering of it
+          gh api --paginate -H "Accept: application/vnd.github.full+json" \
+            "repos/$REPO/issues/$PR/comments?per_page=100" --jq '.[]' > "$dir/comments.jsonl"
+          gh api --paginate -H "Accept: application/vnd.github.full+json" \
+            "repos/$REPO/pulls/$PR/reviews?per_page=100" --jq '.[]' > "$dir/reviews.jsonl"
+
+          HEAD_SHA="$head" python3 "$GATE_DIR/decide.py" "$dir" > "$dir/verdict.json"
+          state=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["state"])' "$dir/verdict.json")
+          text=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["text"])' "$dir/verdict.json")
+          url=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["url"])' "$dir/verdict.json")
+          case "$state" in
+            success|pending) ;;
+            *) exit 1 ;;
+          esac
+          post "$state" "$text" "${url:-${GITHUB_SERVER_URL}/${REPO}/pull/${PR}}"
+          GATE
+
+          cat > "$work/decide.py" <<'PY'
+          import html, json, os, re, sys, unicodedata
+
+          head = os.environ["HEAD_SHA"]
+          folder = sys.argv[1]
+          TRUSTED = {"OWNER", "MEMBER", "COLLABORATOR"}
+
+          def log(*parts):
+              print(*parts, file=sys.stderr)
+
+          def load(name):
+              dec, text, out, i = json.JSONDecoder(), open(os.path.join(folder, name)).read(), [], 0
+              while True:
+                  while i < len(text) and text[i].isspace():
+                      i += 1
+                  if i == len(text):
+                      return out
+                  obj, i = dec.raw_decode(text, i)
+                  out.append(obj)
+
+          def plain(s):
+              """NFKC, then no format characters (zero-width ones, the BOM), no
+              combining marks, no CR; lower case."""
+              s = unicodedata.normalize("NFKD", unicodedata.normalize("NFKC", s))
+              s = "".join(ch for ch in s if unicodedata.category(ch) != "Cf"
+                          and not unicodedata.category(ch).startswith("M"))
+              return s.replace("\r", "").lower()
+
+          # Detection is loose: "adversarialreview" within two edits, on the
+          # letters of a line, after entities, link targets and marks are
+          # gone, digits read as the letters they look like, and any
+          # non-ASCII letter standing for any letter.
+          TARGET = "adversarialreview"
+          DIGITS = str.maketrans("01345", "oieas")
+
+          def letters(line):
+              s = re.sub(r"\]\([^)]*\)", "", html.unescape(line))
+              s = plain(s).translate(DIGITS)
+              return "".join("?" if ord(ch) > 127 else ch for ch in s if ch.isalpha())
+
+          def near(text):
+              if sum(ch != "?" for ch in text) < 10:
+                  return False
+              prev = [0] * (len(text) + 1)
+              for i, p in enumerate(TARGET, 1):
+                  cur = [i] + [0] * len(text)
+                  for j, t in enumerate(text, 1):
+                      cost = 0 if t in (p, "?") else 1
+                      cur[j] = min(prev[j - 1] + cost, prev[j] + 1, cur[j - 1] + 1)
+                  prev = cur
+              return min(prev) <= 2
+
+          def first_lines(s, n=3):
+              return [l for l in (s or "").replace("\r", "\n").split("\n") if l.strip()][:n]
+
+          def is_attempt(c):
+              return any(near(letters(l))
+                         for l in first_lines(c.get("body_text")) + first_lines(c.get("body")))
+
+          def field_lines(lines, word):
+              return [l for l in lines if re.match(r"\W*" + word, plain(l))
+                      or re.search(word + r"\s*:", plain(l))]
+
+          def why_not(c):
+              """None when the comment is a perfectly formed approval of head."""
+              body, text = c.get("body"), c.get("body_text")
+              if body is None or text is None:
+                  return "The newest review could not be read"
+              raw = body.replace("\r", "").split("\n")
+              shown = [l.strip() for l in text.replace("\r", "").split("\n") if l.strip()]
+              # As written: plain text and inline code only
+              if "```" in body or "~~~" in body:
+                  return "The newest review has a code fence; use inline code"
+              if "<!--" in body or re.search(r"<[A-Za-z/]", body):
+                  return "The newest review has HTML; use plain text"
+              if any(re.match(r" {0,3}\[[^\]]*\]:", l) for l in raw):
+                  return "The newest review has a link or footnote definition"
+              if any(unicodedata.category(ch) == "Cf" for ch in body):
+                  return "The newest review has invisible characters"
+              if any(ord(ch) > 127 and unicodedata.category(ch)[0] in "LM" for ch in body):
+                  return "The newest review has non-ASCII letters or marks"
+              if raw[0] != "## Adversarial review" or not shown or shown[0] != "Adversarial review":
+                  return "The newest review's first line is not exactly ## Adversarial review"
+              # As shown and as written: one verdict, one Reviewed line
+              verdicts = (field_lines(shown, "verdict"), field_lines(raw, "verdict"))
+              reviewed = (field_lines(shown, "reviewed"), field_lines(raw, "reviewed"))
+              if verdicts == (["Verdict: changes needed"], ["Verdict: changes needed"]):
+                  return "Adversarial review: changes needed"
+              if verdicts != (["Verdict: approved"], ["Verdict: approved"]):
+                  return "The newest review has no single exact Verdict line"
+              # GitHub shows a commit's SHA shortened to 7 digits
+              if (reviewed[0] not in (["Reviewed: " + head[:7]], ["Reviewed: " + head])
+                      or reviewed[1] != ["Reviewed: " + head]):
+                  return "Approved, but not with one line Reviewed: <head SHA>"
+              return None
+
+          # Review attempts: conversation comments, and formal pull request
+          # reviews (a review's text, submitted; it can only ever block)
+          comments = load("comments.jsonl")
+          reviews = load("reviews.jsonl")
+          for c in comments:
+              c["kind"], c["at"] = "comment", c["created_at"]
+          for r in reviews:
+              r["kind"], r["at"] = "formal review", r.get("submitted_at")
+          attempts = [x for x in comments + [r for r in reviews if r["at"]] if is_attempt(x)]
+          attempts.sort(key=lambda x: (x["at"], x["kind"], x["id"]))
+          for x in attempts:
+              log("attempt (%s) %s by %s (%s) at %s: %s" % (
+                  x["kind"], x.get("html_url"), (x.get("user") or {}).get("login"),
+                  x.get("author_association"), x["at"],
+                  "counts" if x.get("author_association") in TRUSTED else "ignored, not a trusted author"))
+          trusted = [x for x in attempts if x.get("author_association") in TRUSTED]
+          # A Request changes review stands until it is dismissed
+          standing = [r for r in reviews
+                      if r.get("author_association") in TRUSTED and r.get("state") == "CHANGES_REQUESTED"]
+          for r in standing:
+              log("standing request for changes %s by %s (%s)" % (
+                  r.get("html_url"), (r.get("user") or {}).get("login"), r.get("author_association")))
+
+          url = ""
+          if not trusted:
+              state = "pending"
+              if attempts:
+                  seen = ", ".join(sorted({"%s (%s)" % ((c.get("user") or {}).get("login"),
+                                                         c.get("author_association")) for c in attempts}))
+                  text = "No review by a trusted author; seen: " + seen
+              else:
+                  text = "No adversarial review yet"
+          else:
+              newest = trusted[-1]
+              url = newest["html_url"]
+              reason = why_not(newest)
+              if newest["kind"] != "comment":
+                  state = "pending"
+                  text = ("Adversarial review: changes needed (a formal review)"
+                          if reason == "Adversarial review: changes needed"
+                          else "The newest review is a formal review: only a comment can approve")
+              elif newest["updated_at"] != newest["created_at"]:
+                  state, text = "pending", "The newest review was edited: a new verdict needs a new comment"
+              elif reason is not None:
+                  state, text = "pending", reason
+              elif standing:
+                  state, text, url = "pending", "A Request changes review stands until dismissed", standing[-1]["html_url"]
+              else:
+                  state, text = "success", "Adversarial review: approved for this commit"
+          log("decision: %s, %s" % (state, text))
+          print(json.dumps({"state": state, "text": text, "url": url}))
+          PY
+
+          export GATE_DIR="$work"
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            # Every open pull request, each on its own: one failure does not
+            # stop the others, and fails the run at the end.
+            numbers=$(gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" --jq '.[].number')
+            failed=0
+            for number in $numbers; do
+              bash "$work/gate.sh" "$number" "" || failed=1
+            done
+            exit "$failed"
+          fi
+          bash "$work/gate.sh" "${PR:-}" "${EVENT_HEAD:-}"

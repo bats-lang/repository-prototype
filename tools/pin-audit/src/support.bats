@@ -256,6 +256,32 @@ in
   | ~$R.err(_) => @(~1, Read_whole())
 end
 
+(* As capture_with, but the standard error is read into out and the standard output is shared
+   (the pin checker, bats-lang/repository-prototype#405: its failures are on its standard error) *)
+#pub fn capture_error_with {program_len:nat | program_len < 524288}
+  (program: string program_len, argv: $L.listv($P.arg_entry), extra: $L.listv($P.arg_entry),
+   out: !$B.builder(0) >> $B.builder_v): @(int, read_end)
+
+implement capture_error_with (program, argv, extra, out) = let
+  val @(nul | path) = $P.path_of_string_proved(program)
+  val @(frozen, view) = $A.barr_freeze(path)
+  val spawned = $P.spawn_inherit_env_with_proved(nul | view, argv, extra, $P.inherit(), $P.inherit(), $P.pipe_new())
+  val () = $A.cborrow_drop(frozen, view)
+  val () = $A.barr_free($A.barr_thaw(frozen))
+in
+  case+ spawned of
+  | ~$R.ok(spawned_process) => let
+      val+ ~$P.spawn_pipes_mk(child, sin_p, sout_p, serr_p) = spawned_process
+      val () = $P.pipe_end_close(sin_p)
+      val () = $P.pipe_end_close(sout_p)
+      val+ ~$P.pipe_fd(err_fd) = serr_p
+      val ended = _drain(err_fd, out)
+      val () = $R.discard<int><$F.io_error>($F.file_close(err_fd))
+      val status = (case+ $P.child_wait(child) of | ~$R.ok(n) => n | ~$R.err(_) => ~1): int
+    in @(status, ended) end
+  | ~$R.err(_) => @(~1, Read_whole())
+end
+
 (* ============================================================
    Hashes
    ============================================================ *)

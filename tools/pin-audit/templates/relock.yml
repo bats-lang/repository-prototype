@@ -21,4 +21,5 @@ jobs:
     with:
       workflow-pins: |
         bats-lang/repository-prototype/.github/workflows/publish.yml
+        bats-lang/repository-prototype/.github/workflows/package-check.yml
         bats-lang/repository-prototype/.github/workflows/relock-pins.yml

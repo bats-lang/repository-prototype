@@ -26,7 +26,6 @@ pwa/.github/workflows/android.yml f0ec46c5494646aac6a87fabf44aef99b99b90ef756fe0
 pwa/.github/workflows/check.yml bb05da2677cf669367a2a95b84732efcdcb768bcb2d1a7bdd02f564afc39a16e # pwa#168
 pwa/.github/workflows/play-release.yml c5c83aedfbce8c3f9ae8b9e3b61f5e15cbfcff45625872d488909fa45a16162d # pwa#168
 pwa/.github/workflows/review-gate.yml 323af6624dfd0026f47e18e46cb743ba9d8f782debb22fa01ec4fe7bcb7ba55c # pwa#170
-pwa/.github/workflows/review-gate-relay.yml 3909d2fd6cf9ab263f98e5a8dbb200bcc7ed7e172cc195fe6afaae5aa9fd0cc9 # pwa#170
 capacitor-plugins/.github/workflows/check.yml c86571eb37e4fa32b74704178a1fc889683fde111675cebeedaccab07cabfb27 # capacitor-plugins#31
 capacitor-plugins/.github/workflows/demo-apk.yml cedf77af672f97d459a0f44bd2ae68ccb5f21cdab110675eac15970dd8e41af9 # capacitor-plugins#31
 capacitor-plugins/.github/workflows/review-gate.yml c1595e949417989054653e1d2071893e24cef2456cd93384d3f720ef1233dfcb # capacitor-plugins#32
@@ -38,5 +37,4 @@ repository-prototype/.github/workflows/relock-pins.yml 4a70345b7012feaf5eb998896
 repository-prototype/.github/workflows/relock-pins-test.yml 0b7e27fc2446a150d9e47959ffc525fd6119cce28967daedf742f048f1a699f3 # repository-prototype#397
 repository-prototype/.github/workflows/tools-test.yml 6a0db1d658546c76389938d192342e0e59a0dcf1ff38c7cde54a119dc3edc9f1 # repository-prototype#397
 repository-prototype/.github/workflows/verify.yml 1a5c9600d9d3c6d6a5beaeefd3f386154eed17665b9caf3a921f25ca58c35290 # repository-prototype#397
-bridge/.github/workflows/review-gate.yml b15a17acc60004f27d6318fb62b234928b6bdaff437c644b941813cdbc7dfd10 # bridge#207
-bridge/.github/workflows/review-gate-relay.yml 3909d2fd6cf9ab263f98e5a8dbb200bcc7ed7e172cc195fe6afaae5aa9fd0cc9 # bridge#207
+repository-prototype/.github/workflows/pin-audit.yml 1804851257659f6dad3bb9f0b4029d3c39775a8614305c8c7e01e3b96a915ec6 # repository-prototype#397
