@@ -65,6 +65,15 @@
 # major as `major, not moved`; `gradle-current` relocks a fixture that already
 # holds 8.14.6 (changed is no, no patch, no body of a move); every other call
 # gives `gradle-ignore`, so the fixtures are left alone.
+# A repository with no package.json, no pnpm lockfile and no Gradle wrapper
+# (bats is one): `bare` relocks the scratch caller on the base commit 8d10188,
+# which tracks none of those files, and `bare-check` requires changed=yes and the
+# pin moved. The staging step once ran `git add -u -- ':(glob)**/package.json'`,
+# which fails ("did not match any files", exit 128) for a pathspec nothing
+# tracked matches; every other call has those fixtures tracked and cannot show
+# it. A dispatch with `refusal` `bare` runs this case alone (the workflow under
+# test is then the one of the dispatched ref, so a ref with the old staging
+# shows it red).
 # A dispatch with `refusal` runs only that case: the calls of the other jobs
 # share concurrency groups with the pull request's run and would cancel each
 # other's pending jobs.
@@ -83,7 +92,8 @@ on:
           Run the repin command of this case (outside, link, fails or
           bad-record) through relock-pins.yml: the run must be red, with the
           relock job not run. The case regenerate-fails runs a failing
-          regenerate command instead: the run must be red
+          regenerate command instead: the run must be red. The case bare runs
+          the repository with no package.json or Gradle wrapper: it must be green
         type: string
         default: ''
 
@@ -539,7 +549,7 @@ jobs:
       branch-prefix: relock-test-nothing/
 
   repin-refused:
-    if: github.event_name == 'workflow_dispatch' && inputs.refusal != '' && inputs.refusal != 'regenerate-fails'
+    if: github.event_name == 'workflow_dispatch' && inputs.refusal != '' && inputs.refusal != 'regenerate-fails' && inputs.refusal != 'bare'
     uses: ./.github/workflows/relock-pins.yml
     with:
       # this repository's own pin files are not part of a fixture (area: relock own repository)
@@ -599,6 +609,37 @@ jobs:
         tests/relock-pins/regenerate/derived.txt
       publish: 'false'
       branch-prefix: relock-test-regenerate-fails/
+
+  # the base is a commit that tracks no package.json, pnpm-lock.yaml or Gradle wrapper
+  bare:
+    if: inputs.refusal == '' || inputs.refusal == 'bare'
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      compiler-pin-file: tests/relock-pins/no-compiler-pin
+      repository-pin-file: tests/relock-pins/no-repository-pin
+      base: 8d10188a788326a4c29803cffd63723802e0a815
+      workflows-directory: tests/relock-pins/workflows
+      workflow-pins: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml
+      publish: 'false'
+      branch-prefix: relock-test-bare${{ inputs.refusal && '-dispatch' || '' }}/
+
+  bare-check:
+    needs: bare
+    runs-on: ubuntu-24.04
+    env:
+      CHANGED: ${{ needs.bare.outputs.changed }}
+      PATCH: ${{ needs.bare.outputs.patch }}
+    steps:
+      - name: A repository with none of those files relocks
+        run: |
+          set -eu
+          [ "$CHANGED" = yes ] || { echo "::error::the scratch caller's pin did not move (changed=$CHANGED)"; exit 1; }
+          printf '%s' "$PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/bare.patch"
+          cat "$RUNNER_TEMP/bare.patch"
+          grep -q '^+.*uses: bats-lang/repository-prototype/.github/workflows/publish.yml@[0-9a-f]\{40\} # repository-prototype main ' "$RUNNER_TEMP/bare.patch" \
+            || { echo "::error::the pin line did not move"; exit 1; }
+          echo "the pin moved in a repository with no package.json, pnpm lockfile or Gradle wrapper"
 
   regenerate-check:
     needs: regenerate
