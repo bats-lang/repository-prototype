@@ -1240,15 +1240,10 @@ jobs:
           grep -q '^changed=yes$' ~/relock/state || exit 0
           git add -A .github "$WORKFLOWS_DIRECTORY"
           if [ -f bats.lock ]; then git add bats.lock; fi
-          # The npm files pnpm rewrote and the Gradle wrapper's files: the tracked
-          # ones only (area: repin npm, repin gradle). `git add -u -- <pathspec>`
-          # fails ("did not match any files") for a pathspec nothing tracked
-          # matches, as in a repository with no package.json, so the tracked
-          # files are listed first and only those are staged (git ls-files
-          # answers an unmatched pathspec with nothing, and xargs -r runs nothing)
-          git ls-files -z -- ':(glob)**/package.json' ':(glob)**/pnpm-lock.yaml' \
-            ':(glob)**/gradle/wrapper/gradle-wrapper.properties' ':(glob)**/gradle/wrapper/gradle-wrapper.jar' ':(glob)**/gradlew' ':(glob)**/gradlew.bat' \
-            | xargs -0 -r git add -u --
+          # the npm files pnpm rewrote (tracked ones only; area: repin npm)
+          git add -u -- ':(glob)**/package.json' ':(glob)**/pnpm-lock.yaml'
+          # the Gradle wrapper's files (tracked ones only; area: repin gradle)
+          git add -u -- ':(glob)**/gradle/wrapper/gradle-wrapper.properties' ':(glob)**/gradle/wrapper/gradle-wrapper.jar' ':(glob)**/gradlew' ':(glob)**/gradlew.bat'
           # the repin command's paths: one path per line, never split or expanded
           printf '%s\n' "$REPIN_PATHS" | while IFS= read -r path; do
             [ -z "$path" ] || git add -A -- ":(literal)$path"
