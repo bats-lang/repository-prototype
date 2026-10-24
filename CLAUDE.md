@@ -77,10 +77,19 @@ the same CI.
   a candidate only when it was published at least 7 days, 604800 seconds, before `now`, which is
   always an argument and never the clock, so a fixture is exact) and the Markdown table of the
   relock pull request body. `repin table RECORDS` prints the table of a records file and names the
-  first bad line; `repin age NOW PUBLISHED` says whether a release is a candidate. It reads the
-  files it is given, makes no network call, reads no YAML and no file's time. Its tests are `bats
-  test` in `tools/repin`, run by `.github/workflows/tools-test.yml`; a record or time the tests
-  take as text is plain bytes, so they build their input in memory.
+  first bad line; `repin age NOW PUBLISHED` says whether a release is a candidate; `repin actions
+  DIR NOW RELEASES` moves the action pins of the workflow files of DIR. The releases file has one
+  line for each release, `<owner>/<repo> <tag> <commit> <published seconds>` (the commit a tag
+  points to, an annotated tag already followed). A pin is `uses: <owner>/<repo>[/<path>]@<40 hex>
+  # <version tag>`, the spelling `relock-pins.yml`'s awk accepts: it moves to the highest version of
+  its major that is a candidate and higher than the pin, with that tag as the comment; a higher
+  major is `major, not moved`, a higher version under 7 days is `too new`; `bats-lang/*` pins and
+  the lines between the `pin-rewrite` markers are left alone. A line that holds a pin in another
+  spelling is refused, and then no file is written (every file is rewritten in memory first). It
+  reads the files it is given, makes no network call, reads no YAML and no file's time. Its tests
+  are `bats test` in `tools/repin`, run by `.github/workflows/tools-test.yml`; a record or time the
+  tests take as text is plain bytes, so they build their input in memory, and the directory cases
+  plant files under `build/repin-tests`.
 
 This repository's own `verify` is the exception: it checks a new archive
 against every package's newest version, which is the point of it.

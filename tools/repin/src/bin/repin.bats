@@ -5,6 +5,11 @@
                               file RECORDS (the relock pull request's body)
      repin age NOW PUBLISHED  whether a release published at PUBLISHED (whole
                               seconds since the epoch) is a candidate at NOW
+     repin actions DIR NOW RELEASES
+                              the action pins of the workflow files of DIR
+                              moved by the releases file RELEASES at NOW
+                              (actions.bats, driver.bats); the move records
+                              are printed
 
    Exit status: 0 done, 1 a file that cannot be read or is not records, 2 the
    command line is not one of these. It reads the files it is given, makes no
@@ -18,6 +23,7 @@
 #use result as R
 
 staload "age.sats"
+staload "driver.sats"
 staload "records.sats"
 staload "support.sats"
 
@@ -88,8 +94,31 @@ in
   else let val () = prerrln! ("repin: NOW and PUBLISHED are each 1 to 12 digits") in 1 end
 end
 
+(* The directory of workflows at args[dir_start, dir_stop) repinned by the releases file
+   at args[releases_start, releases_stop) at the time args[now_start, now_stop) (whole
+   seconds): the move records on standard output; 1 when it failed (nothing written) *)
+fn _actions {l:agz}{n:pos | n <= 4096}
+  {dir_stop:nat | dir_stop <= n}{dir_start:nat | dir_start <= dir_stop}
+  {now_stop:nat | now_stop <= n}{now_start:nat | now_start <= now_stop}
+  {releases_stop:nat | releases_stop <= n}{releases_start:nat | releases_start <= releases_stop}
+  (args: !$A.borrow(byte, l, n), dir_start: int dir_start, dir_stop: int dir_stop,
+   now_start: int now_start, now_stop: int now_stop,
+   releases_start: int releases_start, releases_stop: int releases_stop)
+  : int = let
+  val @(now_ok, now) = parse_seconds(args, now_start, now_stop)
+in
+  if now_ok then let
+    val records = $B.sized_rope_create()
+    val status =
+      run_actions(args, dir_start, dir_stop, releases_start, releases_stop, now, records)
+    val () = if status = 0 then print_rope(records) else discard_rope(records)
+  in status end
+  else let val () = prerrln! ("repin: NOW is 1 to 12 digits") in 1 end
+end
+
 fn _usage (): int = let
   val () = prerrln! ("usage: repin table RECORDS | repin age NOW PUBLISHED")
+  val () = prerrln! ("       repin actions DIR NOW RELEASES")
 in 2 end
 
 (* The argument at index (the program is 0) of the NUL-separated arguments
@@ -108,6 +137,7 @@ fn _command {l:agz}{n:pos | n <= 4096}{args_len:nat | args_len <= n}
   val @(second_start, second_stop) = _argument(args, args_len, 2)
   val @(third_start, third_stop) = _argument(args, args_len, 3)
   val @(fourth_start, fourth_stop) = _argument(args, args_len, 4)
+  val @(fifth_start, _) = _argument(args, args_len, 5)
 in
   if command_start >= args_len then _usage()
   else if span_is(args, command_start, command_stop, "table") then
@@ -116,6 +146,11 @@ in
   else if span_is(args, command_start, command_stop, "age") then
     (if third_start < args_len && fourth_start >= args_len
      then _age(args, second_start, second_stop, third_start, third_stop) else _usage())
+  else if span_is(args, command_start, command_stop, "actions") then
+    (if fourth_start < args_len && fifth_start >= args_len
+     then _actions(args, second_start, second_stop, third_start, third_stop,
+       fourth_start, fourth_stop)
+     else _usage())
   else _usage()
 end
 
