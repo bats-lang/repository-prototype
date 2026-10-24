@@ -14,7 +14,7 @@
 #
 bats/.github/workflows/check.yml 86da1ad528c8e4254f93a3390109eb82b245fb8f0a5fd2f1cfc7432eeba602f5 # bats#499
 bats/.github/workflows/relock.yml 0a9694b116fb154564aa7a91c673a5d5b96e941f18413112210e152cf540e4f9 # bats#499
-quire/.github/workflows/check.yml 9df5c674c7e3133c3562cc332b2f286c166348537c6f90e529249966fee98d47 # quire#821
+quire/.github/workflows/check.yml 0e8f8e41921b7b61c68f668ee4e25c54d48ec04d962aa446a08ece95e2e28777 # quire#820
 quire/.github/workflows/deploy.yml d3c17a88df3b7fc9c94b81614eba01d9d0027755d685250ff8c029e75082de83 # quire#821
 quire/.github/workflows/mutation.yml 0b29f32b995ae0921e1d5f5dc02d186eafc1fb6c730bf7a14b9b8455febb00ef # quire#821
 quire/.github/workflows/relock.yml ecd8306e2027f8681971e7f44fe45551b99961850bf3163923e797bc6ae95ce7 # quire#821
