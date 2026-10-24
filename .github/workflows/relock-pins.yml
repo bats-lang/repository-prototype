@@ -922,6 +922,7 @@ jobs:
             if [ "$skip" = yes ]; then echo "left alone (gradle-ignore): $project"; continue; fi
             [ -x "$project/gradlew" ] || { echo "::error::$properties has no executable gradlew beside it: the wrapper cannot be run"; exit 1; }
             if [ "$fetched" = no ]; then
+              # unpinned: Gradle's versions/all is the source the pin is taken from; no checksum of it exists to check (check-pins keyword: source of truth, repository-prototype#439)
               # compact, so the text stays far under the 524288 bytes repin reads
               curl -fsSL --retry 3 --retry-delay 5 https://services.gradle.org/versions/all | jq -c . > "$work/versions.json"
               fetched=yes
@@ -934,6 +935,7 @@ jobs:
               case "$version" in
                 ''|*[!0-9A-Za-z.-]*) echo "::error::repin named a Gradle version that is refused: $version"; exit 1 ;;
               esac
+              # unpinned: this download is Gradle's own published .sha256 for the release, the checksum the pin copies; it has none of its own (check-pins keyword: source of truth, repository-prototype#439)
               # the checksum Gradle publishes for the target, copied and never computed
               curl -fsSL --retry 3 --retry-delay 5 -o "$checksum_file" "https://services.gradle.org/distributions/gradle-$version-bin.zip.sha256"
               "$repin" gradle "$properties" "$work/versions.json" "$checksum_file" "$now" "$updates" > "$records"
