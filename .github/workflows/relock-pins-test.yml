@@ -405,6 +405,23 @@ jobs:
       publish: 'false'
       branch-prefix: relock-test-moves/
 
+  # the Actions section and the repin records in one body: the records follow
+  repin-with-actions:
+    if: inputs.refusal == ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/actions/workflows
+      actions-releases: tests/relock-pins/actions/releases.txt
+      actions-now: '1700000000'
+      repin-command: |
+        printf 'new\n' > tests/relock-pins/repin/pin.txt
+        printf 'fixture\tpin.txt\told\tnew\t8\tmoved\n' >> "$REPIN_RECORDS"
+      repin-paths: |
+        tests/relock-pins/repin
+      publish: 'false'
+      branch-prefix: relock-test-with-actions/
+
   repin-nothing:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
@@ -431,7 +448,7 @@ jobs:
       branch-prefix: relock-test-refused-${{ inputs.refusal }}/
 
   repin:
-    needs: [repin-compat, repin-moves, repin-nothing]
+    needs: [repin-compat, repin-moves, repin-nothing, repin-with-actions]
     runs-on: ubuntu-24.04
     env:
       COMPAT_CHANGED: ${{ needs.repin-compat.outputs.changed }}
@@ -443,6 +460,7 @@ jobs:
       NOTHING_CHANGED: ${{ needs.repin-nothing.outputs.changed }}
       NOTHING_PATCH: ${{ needs.repin-nothing.outputs.patch }}
       NOTHING_BODY: ${{ needs.repin-nothing.outputs.body }}
+      BOTH_BODY: ${{ needs.repin-with-actions.outputs.body }}
     steps:
       - name: A command that moves a file and writes a record, the patch holds the file and the body the record
         run: |
@@ -463,6 +481,18 @@ jobs:
           grep -Fxq '| fixture | pin.txt | old | new | 8 days | moved |' "$RUNNER_TEMP/r/moves.md" \
             || { echo "::error::the body does not list the record"; exit 1; }
           echo "the patch holds the file's change and the body lists the record"
+
+      - name: The repin records follow the Actions section
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/r"
+          printf '%s' "$BOTH_BODY" | base64 -d > "$RUNNER_TEMP/r/both.md"
+          cat "$RUNNER_TEMP/r/both.md"
+          actions_line=$(grep -n '^### Actions$' "$RUNNER_TEMP/r/both.md" | cut -d: -f1)
+          repin_line=$(grep -n '^### Moved by the repin command$' "$RUNNER_TEMP/r/both.md" | cut -d: -f1)
+          [ -n "$actions_line" ] && [ -n "$repin_line" ] && [ "$actions_line" -lt "$repin_line" ] \
+            || { echo "::error::the sections are at lines '$actions_line' and '$repin_line', expected Actions first"; exit 1; }
+          echo "### Actions is at line $actions_line, the repin records at line $repin_line"
 
       - name: A command that moves nothing, changed is no
         run: |
