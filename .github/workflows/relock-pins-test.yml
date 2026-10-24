@@ -743,6 +743,8 @@ jobs:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      # a foreign caller: the fixture is relocked as any other repository's project is (area: relock own repository, #452)
+      hosting-repository: bats-lang/foreign-caller
       # this repository's own pin files are not part of a fixture (area: relock own repository)
       compiler-pin-file: tests/relock-pins/no-compiler-pin
       repository-pin-file: tests/relock-pins/no-repository-pin
@@ -759,6 +761,8 @@ jobs:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      # a foreign caller: the fixture is relocked as any other repository's project is (area: relock own repository, #452)
+      hosting-repository: bats-lang/foreign-caller
       # this repository's own pin files are not part of a fixture (area: relock own repository)
       compiler-pin-file: tests/relock-pins/no-compiler-pin
       repository-pin-file: tests/relock-pins/no-repository-pin
@@ -770,6 +774,60 @@ jobs:
       gradle-ignore: tests/relock-pins/gradle
       publish: 'false'
       branch-prefix: relock-test-npm-current/
+
+  # The repository that hosts relock-pins.yml (area: relock own repository,
+  # repository-prototype#452): with the template's no inputs, its own relock
+  # must leave the fixtures of the npm and Gradle tests alone. This call gives
+  # neither ignore input and keeps the default hosting repository; the checkout
+  # holds the outdated fixtures (npm/project, gradle/project), so a patch that
+  # names one of their files is the defect. `npm` and `gradle` above are the
+  # other side: a foreign caller with the same paths moves them.
+  fixtures-own:
+    if: inputs.refusal == ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      compiler-pin-file: tests/relock-pins/no-compiler-pin
+      repository-pin-file: tests/relock-pins/no-repository-pin
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      # the scratch caller's outdated pins are this run's own: it is not vacuous when they move
+      workflow-pins: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml
+        bats-lang/bats/.github/actions/setup
+      pin-copies: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml source-ref
+      npm-now: '1792800000'
+      npm-node-version-file: tests/relock-pins/npm/project/.nvmrc
+      gradle-now: '1792843200'
+      gradle-java-version-file: tests/relock-pins/gradle/project/.java-version
+      publish: 'false'
+      branch-prefix: relock-test-own/
+
+  fixtures-own-check:
+    needs: fixtures-own
+    runs-on: ubuntu-24.04
+    env:
+      OWN_CHANGED: ${{ needs.fixtures-own.outputs.changed }}
+      OWN_PATCH: ${{ needs.fixtures-own.outputs.patch }}
+      OWN_BODY: ${{ needs.fixtures-own.outputs.body }}
+    steps:
+      - name: The fixtures of the npm and Gradle tests are left alone
+        run: |
+          set -eu
+          [ "$OWN_CHANGED" = yes ] || { echo "::error::the scratch caller's pins did not move (changed=$OWN_CHANGED)"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/o"
+          printf '%s' "$OWN_PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/o/own.patch"
+          printf '%s' "$OWN_BODY" | base64 -d > "$RUNNER_TEMP/o/own.md"
+          grep '^diff --git' "$RUNNER_TEMP/o/own.patch"
+          if grep -E '^diff --git a/tests/relock-pins/(npm|gradle)/' "$RUNNER_TEMP/o/own.patch"; then
+            echo "::error::the relock of the hosting repository moved a fixture of its own tests"; exit 1
+          fi
+          if grep -E '^### (npm|Gradle)' "$RUNNER_TEMP/o/own.md"; then
+            echo "::error::the body lists a move of an npm or Gradle fixture"; exit 1
+          fi
+          grep -Fxq 'diff --git a/tests/relock-pins/workflows/scratch-caller.yml b/tests/relock-pins/workflows/scratch-caller.yml' "$RUNNER_TEMP/o/own.patch" \
+            || { echo "::error::the scratch caller's pins are not in the patch: the run did not relock"; exit 1; }
+          echo "the hosting repository's relock left the npm and Gradle fixtures alone"
 
   npm-check:
     needs: [relock, npm, npm-current]
@@ -838,6 +896,8 @@ jobs:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      # a foreign caller: the fixture is relocked as any other repository's project is (area: relock own repository, #452)
+      hosting-repository: bats-lang/foreign-caller
       # this repository's own pin files are not part of a fixture (area: relock own repository)
       compiler-pin-file: tests/relock-pins/no-compiler-pin
       repository-pin-file: tests/relock-pins/no-repository-pin
@@ -854,6 +914,8 @@ jobs:
     if: inputs.refusal == ''
     uses: ./.github/workflows/relock-pins.yml
     with:
+      # a foreign caller: the fixture is relocked as any other repository's project is (area: relock own repository, #452)
+      hosting-repository: bats-lang/foreign-caller
       # this repository's own pin files are not part of a fixture (area: relock own repository)
       compiler-pin-file: tests/relock-pins/no-compiler-pin
       repository-pin-file: tests/relock-pins/no-repository-pin

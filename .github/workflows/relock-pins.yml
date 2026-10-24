@@ -380,6 +380,16 @@ on:
           a test's fixtures are such (#416)
         type: string
         default: ''
+      hosting-repository:
+        description: >-
+          The repository that hosts this workflow (area: relock own repository,
+          repository-prototype#452). In a run of that repository the npm and Gradle
+          steps leave `tests/relock-pins` alone, since its projects are this
+          workflow's own fixtures, outdated on purpose; in any other repository
+          nothing is added to npm-ignore and gradle-ignore. A test names another
+          repository here to relock a fixture as a foreign caller would
+        type: string
+        default: bats-lang/repository-prototype
       branch-prefix:
         description: >-
           The relock branch is <prefix><date>; older pull requests from
@@ -626,6 +636,7 @@ jobs:
       NPM_IGNORE: ${{ inputs.npm-ignore }}
       GRADLE_NOW: ${{ inputs.gradle-now }}
       GRADLE_IGNORE: ${{ inputs.gradle-ignore }}
+      HOSTING_REPOSITORY: ${{ inputs.hosting-repository }}
       COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
       HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
     steps:
@@ -847,6 +858,8 @@ jobs:
           now=${NPM_NOW:-$(date -u +%s)}
           root=$PWD
           printf '%s\n' "$NPM_IGNORE" > "$work/ignored"
+          # area: relock own repository (repository-prototype#452): the fixtures of this workflow's own tests are not projects of the repository that hosts it
+          if [ "$GITHUB_REPOSITORY" = "$HOSTING_REPOSITORY" ]; then echo tests/relock-pins >> "$work/ignored"; fi
           find . -name pnpm-lock.yaml -not -path '*/node_modules/*' -not -path './.git/*' | LC_ALL=C sort > "$work/locks"
           count=0
           while IFS= read -r lock; do
@@ -919,6 +932,8 @@ jobs:
           now=${GRADLE_NOW:-$(date -u +%s)}
           root=$PWD
           printf '%s\n' "$GRADLE_IGNORE" > "$work/ignored"
+          # area: relock own repository (repository-prototype#452): the fixtures of this workflow's own tests are not projects of the repository that hosts it
+          if [ "$GITHUB_REPOSITORY" = "$HOSTING_REPOSITORY" ]; then echo tests/relock-pins >> "$work/ignored"; fi
           find . -path '*/gradle/wrapper/gradle-wrapper.properties' -not -path '*/node_modules/*' -not -path './.git/*' | LC_ALL=C sort > "$work/wrappers"
           # the first run of repin only learns the target: any 64 hex digits will do
           printf '%064d\n' 0 > "$work/placeholder"
