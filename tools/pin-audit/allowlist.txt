@@ -22,8 +22,8 @@ quire/.github/workflows/supersede.yml 48099ff84eaf66cae1cbe4945ee8576954471bb2ac
 quire/.github/workflows/sync-identity.yml d9c863258a94f8b87b38db5079c1973d18c03aad6f61f2c3b310edafe569c0ce # quire#815
 quire/.github/workflows/sync-providers.yml 430357c0bb07eb06c5a03f78a4a4a78deb68c08bc231652c9b768890fcfce049 # quire#815
 quire/.github/workflows/text-lint.yml 6a0a10d3cfd1831e24fb37aa07e923c79b3cbd0e83776af48f58b29535a039f8 # quire#815
-pwa/.github/workflows/android.yml f0ec46c5494646aac6a87fabf44aef99b99b90ef756fe07d80fcb7c876beb4ff # pwa#168
-pwa/.github/workflows/check.yml bb05da2677cf669367a2a95b84732efcdcb768bcb2d1a7bdd02f564afc39a16e # pwa#168
+pwa/.github/workflows/android.yml e0e5021491e9a54d13e5657c15299ea427125951aaa2bfafe6f2fa5d04c8df2a # pwa#190
+pwa/.github/workflows/check.yml 4e35587726d99d0660804ecca611c70c8ade02383306f0cf6dbf13f7c227ed4e # pwa#190
 pwa/.github/workflows/play-release.yml c5c83aedfbce8c3f9ae8b9e3b61f5e15cbfcff45625872d488909fa45a16162d # pwa#168
 pwa/.github/workflows/relock-android-test.yml 1d01c9fa1d73cce5032ff63ee1c37177dd95a5adde4de3e89d4094789f6dd2fc # pwa#185
 pwa/.github/workflows/relock.yml 53af07b5ec228d5ae19fb9016704a6016eaab506c0a08c40114450465797a523 # pwa#185
