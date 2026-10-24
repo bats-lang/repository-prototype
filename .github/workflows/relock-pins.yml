@@ -990,12 +990,24 @@ jobs:
             owner_repo=$(printf '%s' "$pin" | cut -d/ -f1-2)
             newest=$(git ls-remote "https://github.com/$owner_repo.git" refs/heads/main | cut -f1)
             test -n "$newest" || { echo "::error::no main in $owner_repo"; exit 1; }
-            old=$(grep -rhF -- "$pin@" "$WORKFLOWS_DIRECTORY" | awk -v pin="$pin@" '{ i = index($0, pin); if (i) { t = substr($0, i + length(pin)); sub(/[ \t].*/, "", t); print t; exit } }')
-            test -n "$old" || { echo "::error::no workflow in $WORKFLOWS_DIRECTORY calls $pin"; exit 1; }
+            # area: relock own repository (repository-prototype#448): in the repository that hosts the
+            # pin's workflow, a mention that is not a plain `uses:` line (a header comment saying how
+            # to call it) is documentation and is left as it is, and a pin that no plain line calls
+            # (this repository calls them by path, `./`) is skipped; everywhere else, as before, a
+            # line holding the pin that is not a plain call is refused, and a pin nobody calls is an error
+            own=no
+            if [ "$owner_repo" = "${GITHUB_REPOSITORY:-}" ]; then own=yes; fi
+            if [ "$own" = yes ]; then
+              old=$(grep -rhE '^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]+' "$WORKFLOWS_DIRECTORY" | grep -F -- "$pin@" | awk -v pin="$pin@" '{ i = index($0, pin); if (i) { t = substr($0, i + length(pin)); sub(/[ \t].*/, "", t); print t; exit } }' || true)
+              if [ -z "$old" ]; then echo "::notice::no workflow in $WORKFLOWS_DIRECTORY calls $pin by commit: it is in this repository, so it is left alone"; continue; fi
+            else
+              old=$(grep -rhF -- "$pin@" "$WORKFLOWS_DIRECTORY" | awk -v pin="$pin@" '{ i = index($0, pin); if (i) { t = substr($0, i + length(pin)); sub(/[ \t].*/, "", t); print t; exit } }')
+              test -n "$old" || { echo "::error::no workflow in $WORKFLOWS_DIRECTORY calls $pin"; exit 1; }
+            fi
             comment="${owner_repo#*/} main $(printf '%.7s' "$newest")"
             grep -rlF -- "$pin@" "$WORKFLOWS_DIRECTORY" > ~/relock/pin-files
             while IFS= read -r file; do
-              awk -v pin="$pin@" -v newest="$newest" -v comment="$comment" -v file="$file" '
+              awk -v pin="$pin@" -v newest="$newest" -v comment="$comment" -v file="$file" -v own="$own" '
                 # pin-rewrite begin
                 {
                   i = index($0, pin)
@@ -1004,6 +1016,7 @@ jobs:
                   tail = substr($0, i + length(pin))
                   match(tail, /^[A-Za-z0-9._-]*/)
                   rest = substr(tail, RLENGTH + 1)
+                  if (own == "yes" && before !~ /^[ \t]*(-[ \t]+)?uses:[ \t]+$/) { print; next }
                   if (before !~ /^[ \t]*(-[ \t]+)?uses:[ \t]+$/ || rest !~ /^[ \t]*(#.*)?$/) {
                     print "::error file=" file ",line=" NR "::refused, not a plain uses line of the pin: " $0
                     exit 1
@@ -1464,7 +1477,13 @@ jobs:
           # shows on the pull request. A token other than GITHUB_TOKEN
           # starts the pull request's checks by itself.
           if [ "$HAS_RELOCK_TOKEN" != true ]; then
-            gh workflow run "$CHECK_WORKFLOW" --repo "$repo" --ref "$branch"
+            # area: relock check workflow (repository-prototype#448): a repository with no workflow of
+            # that name (this one runs several, on their paths) has nothing to dispatch
+            if [ -f ".github/workflows/$CHECK_WORKFLOW" ]; then
+              gh workflow run "$CHECK_WORKFLOW" --repo "$repo" --ref "$branch"
+            else
+              echo "::notice::this repository has no .github/workflows/$CHECK_WORKFLOW to dispatch on $branch"
+            fi
           fi
 
           issue_title='Allow GitHub Actions to create pull requests, for the daily relock'

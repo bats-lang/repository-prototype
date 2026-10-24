@@ -202,6 +202,17 @@ jobs:
             || { echo "::error::a line already in the one form was changed"; exit 1; }
           echo "a line in the one form is byte-identical"
 
+          # the repository that hosts the workflow (area: relock own repository, repository-prototype#448):
+          # a mention that is not a plain call stays, the plain call moves
+          awk -v pin="$pin" -v newest="$newest" -v comment="$comment" -v file="$dir/own.yml" -v own=yes -f "$work/rewrite.awk" "$dir/own.yml" > "$work/own.out"
+          cmp "$work/own.out" "$dir/own.expected.yml" \
+            || { echo "::error::in the pin's own repository a mention was changed or the call was not moved"; diff "$dir/own.expected.yml" "$work/own.out" || true; exit 1; }
+          echo "own repository: comments and strings that mention the pin are byte-identical, the plain call moved"
+          if run_awk "$dir/own.yml" > "$work/own-other.out" 2> "$work/own-other.err"; then
+            echo "::error::another repository's caller was not refused for a mention that is not a call"; exit 1
+          fi
+          echo "any other repository: the same file is refused"
+
           # the copies: every line of the key moves, other keys stay, odd spellings are refused
           awk '/# copy-rewrite end/ { on = 0 } on { print } /# copy-rewrite begin/ { on = 1 }' \
             .github/workflows/relock-pins.yml > "$work/copy.awk"
