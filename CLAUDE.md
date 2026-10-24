@@ -90,6 +90,13 @@ the same CI.
   are `bats test` in `tools/repin`, run by `.github/workflows/tools-test.yml`; a record or time the
   tests take as text is plain bytes, so they build their input in memory, and the directory cases
   plant files under `build/repin-tests`.
+  `repin npm OUTDATED COMPATIBLE TIMES NOW UPDATES` decides the npm
+  moves (npm.bats): OUTDATED is `pnpm outdated --format json`, COMPATIBLE its `--compatible` form (whose
+  `latest` is the end of the range: pnpm's `wanted` is the lockfile's version), TIMES has a line
+  `<name> <version> <published seconds>` for each version; a dependency moves to the newest version of
+  its major, higher than the current one and inside the range, that is a candidate (7 days), the
+  `name@version` lines of the moves are written to the file UPDATES, and a `latest` of a higher
+  major is its own row, `major, not moved`, never a target (fixtures: `tools/repin/tests/npm`).
 
 This repository's own `verify` is the exception: it checks a new archive
 against every package's newest version, which is the point of it.

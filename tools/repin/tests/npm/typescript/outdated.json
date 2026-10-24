@@ -1,0 +1,9 @@
+{
+  "typescript": {
+    "current": "6.0.2",
+    "latest": "7.0.2",
+    "wanted": "6.0.2",
+    "isDeprecated": false,
+    "dependencyType": "devDependencies"
+  }
+}

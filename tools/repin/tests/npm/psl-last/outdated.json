@@ -1,0 +1,9 @@
+{
+  "psl": {
+    "current": "1.14.0",
+    "latest": "1.15.0",
+    "wanted": "1.14.0",
+    "isDeprecated": false,
+    "dependencyType": "devDependencies"
+  }
+}
