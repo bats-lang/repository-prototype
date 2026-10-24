@@ -79,6 +79,12 @@ on:
 
 permissions: {}
 
+# The pin files this repository now has (.github/bats-version, .github/repository-version,
+# repository-prototype#448) move with every relock, as in any repository that has them; the
+# checks of the fixtures' own patches read the patch without those two files (area: relock own repository).
+env:
+  WITHOUT_PIN_FILES: '/^diff --git / { skip = ($3 == "a/.github/bats-version" || $3 == "a/.github/repository-version") } !skip'
+
 jobs:
   relock:
     if: inputs.refusal == ''
@@ -287,7 +293,7 @@ jobs:
           set -eu
           [ "$MOVES_CHANGED" = yes ] || { echo "::error::the outdated pin did not move (changed=$MOVES_CHANGED)"; exit 1; }
           mkdir -p "$RUNNER_TEMP/a"
-          printf '%s' "$MOVES_PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/a/moves.patch"
+          printf '%s' "$MOVES_PATCH" | base64 -d | gunzip | LC_ALL=C awk "$WITHOUT_PIN_FILES" > "$RUNNER_TEMP/a/moves.patch"
           cat "$RUNNER_TEMP/a/moves.patch"
           cmp "$RUNNER_TEMP/a/moves.patch" tests/relock-pins/actions/expected.patch \
             || { echo "::error::the patch is not the expected one"; diff tests/relock-pins/actions/expected.patch "$RUNNER_TEMP/a/moves.patch" || true; exit 1; }
@@ -377,7 +383,7 @@ jobs:
           set -eu
           [ "$CHANGED" = yes ] || { echo "::error::the outdated pin did not move (changed=$CHANGED)"; exit 1; }
           mkdir -p "$RUNNER_TEMP/f"
-          printf '%s' "$PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/f/fetch.patch"
+          printf '%s' "$PATCH" | base64 -d | gunzip | LC_ALL=C awk "$WITHOUT_PIN_FILES" > "$RUNNER_TEMP/f/fetch.patch"
           printf '%s' "$BODY" | base64 -d > "$RUNNER_TEMP/f/fetch.md"
           cat "$RUNNER_TEMP/f/fetch.patch" "$RUNNER_TEMP/f/fetch.md"
           [ "$(grep -c '^diff --git' "$RUNNER_TEMP/f/fetch.patch")" = 1 ] \
@@ -514,7 +520,7 @@ jobs:
           set -eu
           [ "$MOVES_CHANGED" = yes ] || { echo "::error::the moved fixture was not seen (changed=$MOVES_CHANGED)"; exit 1; }
           mkdir -p "$RUNNER_TEMP/r"
-          printf '%s' "$MOVES_PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/r/moves.patch"
+          printf '%s' "$MOVES_PATCH" | base64 -d | gunzip | LC_ALL=C awk "$WITHOUT_PIN_FILES" > "$RUNNER_TEMP/r/moves.patch"
           printf '%s' "$MOVES_BODY" | base64 -d > "$RUNNER_TEMP/r/moves.md"
           cat "$RUNNER_TEMP/r/moves.patch" "$RUNNER_TEMP/r/moves.md"
           [ "$(grep -c '^diff --git' "$RUNNER_TEMP/r/moves.patch")" = 1 ] \
@@ -554,7 +560,7 @@ jobs:
           set -eu
           [ "$COMPAT_CHANGED" = yes ] || { echo "::error::the scratch caller's pin did not move (changed=$COMPAT_CHANGED)"; exit 1; }
           mkdir -p "$RUNNER_TEMP/r"
-          printf '%s' "$COMPAT_PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/r/compat.patch"
+          printf '%s' "$COMPAT_PATCH" | base64 -d | gunzip | LC_ALL=C awk "$WITHOUT_PIN_FILES" > "$RUNNER_TEMP/r/compat.patch"
           printf '%s' "$COMPAT_BODY" | base64 -d > "$RUNNER_TEMP/r/compat.md"
           grep -q '^+.*uses: bats-lang/repository-prototype/.github/workflows/publish.yml@[0-9a-f]\{40\} # repository-prototype main ' "$RUNNER_TEMP/r/compat.patch" \
             || { echo "::error::the pin line did not move"; exit 1; }
@@ -752,7 +758,7 @@ jobs:
           set -eu
           [ "$MOVES_CHANGED" = yes ] || { echo "::error::the in-range dependency did not move (changed=$MOVES_CHANGED)"; exit 1; }
           mkdir -p "$RUNNER_TEMP/n"
-          printf '%s' "$MOVES_PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/n/moves.patch"
+          printf '%s' "$MOVES_PATCH" | base64 -d | gunzip | LC_ALL=C awk "$WITHOUT_PIN_FILES" > "$RUNNER_TEMP/n/moves.patch"
           printf '%s' "$MOVES_BODY" | base64 -d > "$RUNNER_TEMP/n/moves.md"
           cat "$RUNNER_TEMP/n/moves.patch" "$RUNNER_TEMP/n/moves.md"
           # the files of the patch are the fixture's package.json and lock, and nothing else
@@ -852,7 +858,7 @@ jobs:
           {
             printf '%s' "$MOVES_PATCH"
             printf '%s' "$MOVES_PATCH_PART_2$MOVES_PATCH_PART_3$MOVES_PATCH_PART_4$MOVES_PATCH_PART_5$MOVES_PATCH_PART_6$MOVES_PATCH_PART_7$MOVES_PATCH_PART_8"
-          } | base64 -d | gunzip > "$RUNNER_TEMP/g/moves.patch"
+          } | base64 -d | gunzip | LC_ALL=C awk "$WITHOUT_PIN_FILES" > "$RUNNER_TEMP/g/moves.patch"
           printf '%s' "$MOVES_BODY" | base64 -d > "$RUNNER_TEMP/g/moves.md"
           echo "the first piece of the patch is ${#MOVES_PATCH} characters, the second ${#MOVES_PATCH_PART_2}"
           [ -n "$MOVES_PATCH_PART_2" ] || { echo "::error::the wrapper's patch fits one piece: the pieces are not exercised"; exit 1; }
