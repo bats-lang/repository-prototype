@@ -35,9 +35,18 @@
 # `repin-check` markers of relock-pins.yml on fixture repositories (a write
 # outside the paths, a link, a failing command, a refused path, a record file
 # removed), and a dispatch with the input `refusal` runs one such command
-# through the whole workflow, which must end red with relock and publish not
-# run. `repin-compat` runs the workflow with none of the repin inputs and
+# through the whole workflow, which must end red with relock not run.
+# `repin-compat` runs the workflow with none of the repin inputs and
 # reads the same outputs as before.
+# The regenerate command (bats#299, area: relock regenerate,
+# repository-prototype#344): `regenerate` runs the workflow with a command that
+# writes a file derived from the moved pin, deletes a tracked file and also
+# writes a file it does not list; `regenerate-check` requires the patch to hold
+# the written file (equal to the moved pin line) and the deletion and not the
+# unlisted file, and the body to be that of a plain relock. A dispatch with
+# `refusal` regenerate-fails runs a failing command through the whole workflow:
+# the run must end red, and nothing is pushed (publish is `false` there, so the
+# case shows the red; the push step comes after the command in the same job).
 # The npm dependencies (#415, area: repin npm): `npm` relocks the fixture
 # project tests/relock-pins/npm/project at a fixed time (`npm-now`) and `npm-check`
 # requires its package.json and lock to move semver within ^7 (the patch holds
@@ -73,7 +82,8 @@ on:
         description: >-
           Run the repin command of this case (outside, link, fails or
           bad-record) through relock-pins.yml: the run must be red, with the
-          relock and publish jobs not run
+          relock job not run. The case regenerate-fails runs a failing
+          regenerate command instead: the run must be red
         type: string
         default: ''
 
@@ -529,7 +539,7 @@ jobs:
       branch-prefix: relock-test-nothing/
 
   repin-refused:
-    if: github.event_name == 'workflow_dispatch' && inputs.refusal != ''
+    if: github.event_name == 'workflow_dispatch' && inputs.refusal != '' && inputs.refusal != 'regenerate-fails'
     uses: ./.github/workflows/relock-pins.yml
     with:
       # this repository's own pin files are not part of a fixture (area: relock own repository)
@@ -544,6 +554,89 @@ jobs:
         tests/relock-pins/repin
       publish: 'false'
       branch-prefix: relock-test-refused-${{ inputs.refusal }}/
+
+  # the regenerate command (area: relock regenerate, repository-prototype#344):
+  # it derives a file from the moved pin, deletes a tracked file, and writes one
+  # more file that it does not list
+  regenerate:
+    if: inputs.refusal == ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      # this repository's own pin files are not part of a fixture (area: relock own repository)
+      compiler-pin-file: tests/relock-pins/no-compiler-pin
+      repository-pin-file: tests/relock-pins/no-repository-pin
+      npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      workflow-pins: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml
+      regenerate: |
+        grep -h 'publish.yml@' tests/relock-pins/workflows/scratch-caller.yml | head -n 1 > tests/relock-pins/regenerate/derived.txt
+        rm tests/relock-pins/regenerate/stale.txt
+        echo unlisted > tests/relock-pins/regenerate/unlisted.txt
+      regenerate-paths: |
+        tests/relock-pins/regenerate/derived.txt
+        tests/relock-pins/regenerate/stale.txt
+      publish: 'false'
+      branch-prefix: relock-test-regenerate/
+
+  # a failing command: the run is red (read from the dispatch, as the repin refusals are)
+  regenerate-refused:
+    if: github.event_name == 'workflow_dispatch' && inputs.refusal == 'regenerate-fails'
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      compiler-pin-file: tests/relock-pins/no-compiler-pin
+      repository-pin-file: tests/relock-pins/no-repository-pin
+      npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
+      base: ${{ github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      workflow-pins: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml
+      regenerate: exit 3
+      regenerate-paths: |
+        tests/relock-pins/regenerate/derived.txt
+      publish: 'false'
+      branch-prefix: relock-test-regenerate-fails/
+
+  regenerate-check:
+    needs: regenerate
+    runs-on: ubuntu-24.04
+    env:
+      CHANGED: ${{ needs.regenerate.outputs.changed }}
+      PATCH: ${{ needs.regenerate.outputs.patch }}
+      BODY: ${{ needs.regenerate.outputs.body }}
+    steps:
+      - name: The patch holds the derived file and the deletion, not the unlisted file
+        run: |
+          set -eu
+          [ "$CHANGED" = yes ] || { echo "::error::the scratch caller's pin did not move (changed=$CHANGED)"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/g"
+          printf '%s' "$PATCH" | base64 -d | gunzip > "$RUNNER_TEMP/g/regenerate.patch"
+          printf '%s' "$BODY" | base64 -d > "$RUNNER_TEMP/g/regenerate.md"
+          cat "$RUNNER_TEMP/g/regenerate.patch"
+          patch=$RUNNER_TEMP/g/regenerate.patch
+          grep -Fxq 'diff --git a/tests/relock-pins/regenerate/derived.txt b/tests/relock-pins/regenerate/derived.txt' "$patch" \
+            || { echo "::error::the derived file is not in the patch"; exit 1; }
+          grep -Fxq 'diff --git a/tests/relock-pins/regenerate/stale.txt b/tests/relock-pins/regenerate/stale.txt' "$patch" \
+            && grep -Fxq 'deleted file mode 100644' "$patch" \
+            || { echo "::error::the deletion of the tracked file is not in the patch"; exit 1; }
+          if grep -Fq 'unlisted' "$patch"; then
+            echo "::error::a file the command wrote and did not list is in the patch"; exit 1
+          fi
+          if grep -Fq 'kept.txt' "$patch"; then
+            echo "::error::a file nobody touched is in the patch"; exit 1
+          fi
+          # the derived file is the moved pin line: the same added line is in the scratch caller's diff
+          line=$(awk '/^diff --git / { on = ($0 ~ /regenerate\/derived.txt/) } on && /^\+/ && !/^\+\+\+/ { print; exit }' "$patch")
+          [ -n "$line" ] || { echo "::error::the derived file holds no line"; exit 1; }
+          count=$(grep -Fxc -- "$line" "$patch")
+          [ "$count" = 2 ] || { echo "::error::the derived line is in the patch $count times, expected 2 (the file and the scratch caller): $line"; exit 1; }
+          if grep -q 'regenerat' "$RUNNER_TEMP/g/regenerate.md"; then
+            echo "::error::the pull request's text mentions the command"; exit 1
+          fi
+          echo "the patch holds the derived file (the moved pin line) and the deletion, and not the unlisted file"
 
   repin:
     needs: [repin-compat, repin-moves, repin-nothing, repin-with-actions]
