@@ -790,6 +790,12 @@ jobs:
       repository-pin-file: tests/relock-pins/no-repository-pin
       base: ${{ github.event.pull_request.head.sha || github.sha }}
       workflows-directory: tests/relock-pins/workflows
+      # the scratch caller's outdated pins are this run's own: it is not vacuous when they move
+      workflow-pins: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml
+        bats-lang/bats/.github/actions/setup
+      pin-copies: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml source-ref
       npm-now: '1792800000'
       npm-node-version-file: tests/relock-pins/npm/project/.nvmrc
       gradle-now: '1792843200'
