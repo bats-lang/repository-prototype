@@ -1,13 +1,17 @@
 # The scratch caller that .github/workflows/relock-pins-test.yml relocks (#395):
 # never run, never copied to .github/workflows. Three pin lines in the three
 # states a caller has: an older comment, the right form for an older commit,
-# and no comment.
+# and no comment. The first also repeats its commit in `source-ref`, a copy the
+# relock moves with the pin (`pin-copies`, #385); `other-ref` is not a copy.
 name: scratch
 on:
   workflow_dispatch:
 jobs:
   older-comment:
     uses: bats-lang/repository-prototype/.github/workflows/publish.yml@678ecb32ccab6a10bff3061dc7a6c6468d2b323d # v1
+    with:
+      source-ref: 678ecb32ccab6a10bff3061dc7a6c6468d2b323d
+      other-ref: 678ecb32ccab6a10bff3061dc7a6c6468d2b323d
   right-form-older-commit:
     uses: bats-lang/repository-prototype/.github/workflows/publish.yml@678ecb32ccab6a10bff3061dc7a6c6468d2b323d # repository-prototype main 678ecb3
   no-comment:

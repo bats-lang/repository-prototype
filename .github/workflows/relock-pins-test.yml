@@ -33,6 +33,8 @@ jobs:
       workflow-pins: |
         bats-lang/repository-prototype/.github/workflows/publish.yml
         bats-lang/bats/.github/actions/setup
+      pin-copies: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml source-ref
       publish: 'false'
       branch-prefix: relock-test/
 
@@ -83,6 +85,19 @@ jobs:
           sh "$RUNNER_TEMP/t/rule.sh" "$RUNNER_TEMP/t/good.patch"
           echo "the moved lines carry the comment"
 
+      - name: The copy of the pin moves with it and nothing else does
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP/t"
+          pin=$(awk '/^\+.*uses: bats-lang\/repository-prototype\/.github\/workflows\/publish.yml@/ { t = $0; sub(/^.*@/, "", t); sub(/ .*$/, "", t); print t; exit }' good.patch)
+          copy=$(awk '/^\+ *source-ref: / { print $3; exit }' good.patch)
+          [ -n "$pin" ] && [ "$copy" = "$pin" ] \
+            || { echo "::error::source-ref is '$copy', the pin moved to '$pin'"; exit 1; }
+          if grep -q '^+ *other-ref:' good.patch; then
+            echo "::error::a line that is not a copy was changed"; exit 1
+          fi
+          echo "source-ref moved with the pin to $pin; other-ref was left alone"
+
       - name: A missing, a doubled and a wrong comment are refused
         run: |
           set -eu
@@ -128,6 +143,24 @@ jobs:
           cmp "$work/keep.out" "$dir/keep.yml" \
             || { echo "::error::a line already in the one form was changed"; exit 1; }
           echo "a line in the one form is byte-identical"
+
+          # the copies: every line of the key moves, other keys stay, odd spellings are refused
+          awk '/# copy-rewrite end/ { on = 0 } on { print } /# copy-rewrite begin/ { on = 1 }' \
+            .github/workflows/relock-pins.yml > "$work/copy.awk"
+          [ -s "$work/copy.awk" ] || { echo "::error::no copy-rewrite program in relock-pins.yml"; exit 1; }
+          copies=tests/relock-pins/copies
+          awk -v input=pwa-ref -v newest="$newest" -v file="$copies/move.yml" -f "$work/copy.awk" "$copies/move.yml" > "$work/move.out"
+          cmp "$work/move.out" "$copies/move.expected.yml" \
+            || { echo "::error::the copies were not moved as the fixture expects"; diff "$copies/move.expected.yml" "$work/move.out" || true; exit 1; }
+          echo "every pwa-ref line moved to the newest commit; other lines are byte-identical"
+          for name in quoted short expression; do
+            if awk -v input=pwa-ref -v newest="$newest" -v file="$copies/refuse-$name.yml" -f "$work/copy.awk" "$copies/refuse-$name.yml" > "$work/c-$name.out"; then
+              echo "::error::the $name copy was not refused"; exit 1
+            fi
+            grep -Fq "file=$copies/refuse-$name.yml,line=2" "$work/c-$name.out" \
+              || { echo "::error::the $name copy refusal does not name the file and line"; cat "$work/c-$name.out"; exit 1; }
+            echo "the $name copy is refused: $(grep -F '::error' "$work/c-$name.out")"
+          done
 
           for name in quoted flow commented comma; do
             if run_awk "$dir/refuse-$name.yml" > "$work/$name.out" 2> "$work/$name.err"; then
