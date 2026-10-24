@@ -632,7 +632,8 @@ jobs:
           line=$(awk '/^diff --git / { on = ($0 ~ /regenerate\/derived.txt/) } on && /^\+/ && !/^\+\+\+/ { print; exit }' "$patch")
           [ -n "$line" ] || { echo "::error::the derived file holds no line"; exit 1; }
           count=$(grep -Fxc -- "$line" "$patch")
-          [ "$count" = 2 ] || { echo "::error::the derived line is in the patch $count times, expected 2 (the file and the scratch caller): $line"; exit 1; }
+          # three: the derived file, and the scratch caller's two publish.yml lines, which both move to the one form
+          [ "$count" = 3 ] || { echo "::error::the derived line is in the patch $count times, expected 3 (the file and the scratch caller's two lines): $line"; exit 1; }
           if grep -q 'regenerat' "$RUNNER_TEMP/g/regenerate.md"; then
             echo "::error::the pull request's text mentions the command"; exit 1
           fi
