@@ -68,10 +68,10 @@
 # `.gitattributes`, at any depth.
 #
 # Limits, a change from before regenerate existed: the change handed on
-# (the patch, gzipped and base64) is under 100000 characters and the pull
-# request's text under 20000, because a job output goes to a step as an
-# environment variable (128 KiB); a relock larger than that fails with a
-# message. The regenerated files are at most `regenerate-max-bytes`.
+# (the patch, gzipped and base64) is under 800000 characters, in pieces of
+# 100000, and the pull request's text under 20000, because a job output goes
+# to a step as an environment variable (128 KiB); a relock larger than that
+# fails with a message. The regenerated files are at most `regenerate-max-bytes`.
 #
 # Concurrency: the group is `relock-pins-<repository>-<branch-prefix>` (never
 # cancelled), so one relock per repository and prefix runs at a time and a
@@ -163,6 +163,37 @@
 # seconds) replaces the clock for a test and `npm-ignore` (directories, one
 # per line) leaves fixtures out; both default to off. The step runs in the
 # `relock` job, which has no RELOCK_TOKEN: a lock needs none.
+#
+# The Gradle wrapper (#416, area: repin gradle, piece 7 of 7 of #392): each
+# `gradle/wrapper/gradle-wrapper.properties` (found with `find`, `node_modules`
+# and `.git` left out, `gradle-ignore` directories left out) is moved to the
+# newest stable release of its major that is at least 7 days old, never to a new
+# major. The step fetches `https://services.gradle.org/versions/all` once (as
+# compact JSON), runs tools/repin's `gradle` command (#413) at the clock's time
+# with a placeholder checksum to learn the target, fetches the target's own
+# `.sha256` (`gradle-<version>-bin.zip.sha256`), runs the command again with it
+# (repin refuses anything but 64 lowercase hex digits) and then Gradle itself
+# writes the files: `./gradlew wrapper --gradle-version <version>
+# --gradle-distribution-sha256-sum <sha256>`, twice (the first run is the old
+# wrapper's and writes the properties; the second is the new Gradle's and
+# writes the scripts and the jar), under the JDK of the repository's
+# `.java-version` (the file `gradle-java-version-file` names, when the checkout
+# has it). The properties are then required to hold exactly the target's url and
+# the published checksum, as lines. The wrapper's files (properties, jar,
+# `gradlew`, `gradlew.bat`, tracked ones only) are in the relock patch and the
+# records are the section `### Gradle` of the pull request body (a newer major
+# is `major, not moved`); the relock pull request is dispatched to the
+# repository's check workflow as always, so its whole CI runs on the result. A
+# repository with no wrapper is untouched. `gradle-now` (whole seconds)
+# replaces the clock for a test and `gradle-ignore` (directories, one per line)
+# leaves fixtures out; both default to off.
+#
+# The patch can be larger than one output: a wrapper's jar alone is about 100000
+# characters once gzipped and base64 (the diff holds it in both directions).
+# So the patch travels in up to 8 pieces of 100000 characters, the first as
+# `patch` (the whole patch when it is under 100000, as before) and the others as
+# `patch-part-2` to `patch-part-8`; a change over 800000 characters fails with a
+# message, as one over the old limit did.
 #
 # The caller's pins, each moved only when the caller has it:
 #
@@ -314,6 +345,27 @@ on:
           a test's fixtures are such (#415)
         type: string
         default: ''
+      gradle-now:
+        description: >-
+          Whole seconds since the epoch that the release age of a Gradle
+          release is counted at; empty reads the clock. A test gives a fixed
+          time (#416)
+        type: string
+        default: ''
+      gradle-java-version-file:
+        description: >-
+          The file whose Java version runs the Gradle wrapper (setup-java's
+          java-version-file); when the checkout has no such file the runner's
+          Java is used (#416)
+        type: string
+        default: .java-version
+      gradle-ignore:
+        description: >-
+          Directories (relative to the checkout, one per line, each with
+          everything under it) whose Gradle wrapper the relock leaves alone;
+          a test's fixtures are such (#416)
+        type: string
+        default: ''
       branch-prefix:
         description: >-
           The relock branch is <prefix><date>; older pull requests from
@@ -344,8 +396,29 @@ on:
         description: yes when a pin or the lock moved, else no
         value: ${{ jobs.relock.outputs.changed }}
       patch:
-        description: The change as a patch, gzipped and base64 (empty when nothing moved)
+        description: The change as a patch, gzipped and base64 (empty when nothing moved); its first 100000 characters when it is longer, the rest in patch-part-2 to patch-part-8
         value: ${{ jobs.relock.outputs.patch }}
+      patch-part-2:
+        description: Piece 2 of the patch (the next 100000 characters; empty when the patch is shorter)
+        value: ${{ jobs.relock.outputs.patch-part-2 }}
+      patch-part-3:
+        description: Piece 3 of the patch (the next 100000 characters; empty when the patch is shorter)
+        value: ${{ jobs.relock.outputs.patch-part-3 }}
+      patch-part-4:
+        description: Piece 4 of the patch (the next 100000 characters; empty when the patch is shorter)
+        value: ${{ jobs.relock.outputs.patch-part-4 }}
+      patch-part-5:
+        description: Piece 5 of the patch (the next 100000 characters; empty when the patch is shorter)
+        value: ${{ jobs.relock.outputs.patch-part-5 }}
+      patch-part-6:
+        description: Piece 6 of the patch (the next 100000 characters; empty when the patch is shorter)
+        value: ${{ jobs.relock.outputs.patch-part-6 }}
+      patch-part-7:
+        description: Piece 7 of the patch (the next 100000 characters; empty when the patch is shorter)
+        value: ${{ jobs.relock.outputs.patch-part-7 }}
+      patch-part-8:
+        description: Piece 8 of the patch (the next 100000 characters; empty when the patch is shorter)
+        value: ${{ jobs.relock.outputs.patch-part-8 }}
       body:
         description: The pull request's text, base64 (empty when nothing moved)
         value: ${{ jobs.relock.outputs.body }}
@@ -511,6 +584,13 @@ jobs:
       compiler: ${{ steps.newest.outputs.compiler }}
       repository: ${{ steps.newest.outputs.repository }}
       patch: ${{ steps.hand.outputs.patch }}
+      patch-part-2: ${{ steps.hand.outputs.patch-part-2 }}
+      patch-part-3: ${{ steps.hand.outputs.patch-part-3 }}
+      patch-part-4: ${{ steps.hand.outputs.patch-part-4 }}
+      patch-part-5: ${{ steps.hand.outputs.patch-part-5 }}
+      patch-part-6: ${{ steps.hand.outputs.patch-part-6 }}
+      patch-part-7: ${{ steps.hand.outputs.patch-part-7 }}
+      patch-part-8: ${{ steps.hand.outputs.patch-part-8 }}
       body: ${{ steps.hand.outputs.body }}
     env:
       PINS: ${{ inputs.workflow-pins }}
@@ -528,6 +608,8 @@ jobs:
       ACTIONS_NOW: ${{ inputs.actions-now }}
       NPM_NOW: ${{ inputs.npm-now }}
       NPM_IGNORE: ${{ inputs.npm-ignore }}
+      GRADLE_NOW: ${{ inputs.gradle-now }}
+      GRADLE_IGNORE: ${{ inputs.gradle-ignore }}
       COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
       HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
     steps:
@@ -800,6 +882,77 @@ jobs:
           done < "$work/locks"
           echo "looked at $count pnpm projects; $(wc -l < ~/relock/npm-records) records"
 
+      # The JDK of the repository's .java-version when the checkout has one
+      # (else the runner's), for the wrapper that runs Gradle (area: repin gradle)
+      - name: Set up Java for the Gradle wrapper
+        if: hashFiles(inputs.gradle-java-version-file) != ''
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version-file: ${{ inputs.gradle-java-version-file }}
+
+      # The Gradle wrapper (area: repin gradle): see the header. Gradle writes
+      # the files; this step decides nothing, repin does.
+      - name: Move the Gradle wrapper within its major
+        run: |
+          set -euo pipefail
+          repin=$BATS_REPOSITORY/tools/repin/dist/debug/repin
+          work=~/relock/gradle
+          mkdir -p "$work"
+          : > ~/relock/gradle-records
+          now=${GRADLE_NOW:-$(date -u +%s)}
+          root=$PWD
+          printf '%s\n' "$GRADLE_IGNORE" > "$work/ignored"
+          find . -path '*/gradle/wrapper/gradle-wrapper.properties' -not -path '*/node_modules/*' -not -path './.git/*' | LC_ALL=C sort > "$work/wrappers"
+          # the first run of repin only learns the target: any 64 hex digits will do
+          printf '%064d\n' 0 > "$work/placeholder"
+          count=0
+          fetched=no
+          while IFS= read -r properties; do
+            wrapper_directory=${properties%/gradle-wrapper.properties}
+            project=${wrapper_directory%/gradle/wrapper}
+            case "$project" in
+              *[!A-Za-z0-9._/-]*) echo "::error::a directory with a Gradle wrapper has a name that is refused: $project"; exit 1 ;;
+            esac
+            skip=no
+            while IFS= read -r ignored; do
+              [ -n "$ignored" ] || continue
+              case "$project" in "./$ignored"|"./$ignored"/*) skip=yes ;; esac
+            done < "$work/ignored"
+            if [ "$skip" = yes ]; then echo "left alone (gradle-ignore): $project"; continue; fi
+            [ -x "$project/gradlew" ] || { echo "::error::$properties has no executable gradlew beside it: the wrapper cannot be run"; exit 1; }
+            if [ "$fetched" = no ]; then
+              # compact, so the text stays far under the 524288 bytes repin reads
+              curl -fsSL --retry 3 --retry-delay 5 https://services.gradle.org/versions/all | jq -c . > "$work/versions.json"
+              fetched=yes
+            fi
+            count=$((count + 1))
+            updates=$work/$count.updates; records=$work/$count.records; checksum_file=$work/$count.sha256
+            "$repin" gradle "$properties" "$work/versions.json" "$work/placeholder" "$now" "$updates" > "$records"
+            if [ -s "$updates" ]; then
+              read -r version < "$updates"
+              case "$version" in
+                ''|*[!0-9A-Za-z.-]*) echo "::error::repin named a Gradle version that is refused: $version"; exit 1 ;;
+              esac
+              # the checksum Gradle publishes for the target, copied and never computed
+              curl -fsSL --retry 3 --retry-delay 5 -o "$checksum_file" "https://services.gradle.org/distributions/gradle-$version-bin.zip.sha256"
+              "$repin" gradle "$properties" "$work/versions.json" "$checksum_file" "$now" "$updates" > "$records"
+              { read -r version; read -r checksum; } < "$updates"
+              echo "moving $properties to Gradle $version, distributionSha256Sum $checksum"
+              # the old wrapper writes the properties, the new Gradle then writes the scripts and the jar
+              for pass in 1 2; do
+                (cd "$project" && ./gradlew --no-daemon --console=plain --project-cache-dir "$work/$count.cache" \
+                  wrapper --gradle-version "$version" --gradle-distribution-sha256-sum "$checksum")
+              done
+              grep -Fxq 'distributionUrl=https\://services.gradle.org/distributions/gradle-'"$version"'-bin.zip' "$properties" \
+                || { echo "::error::$properties does not name Gradle $version after the wrapper task"; exit 1; }
+              grep -Fxq "distributionSha256Sum=$checksum" "$properties" \
+                || { echo "::error::$properties does not hold the published checksum $checksum after the wrapper task"; exit 1; }
+            fi
+            cat "$records" >> ~/relock/gradle-records
+          done < "$work/wrappers"
+          echo "looked at $count Gradle wrappers; $(wc -l < ~/relock/gradle-records) records"
+
       - name: Relock and move the pins
         env:
           COMPILER_NEWEST: ${{ steps.newest.outputs.compiler }}
@@ -1016,6 +1169,12 @@ jobs:
               echo
               "$repin" table ~/relock/npm-records
             fi
+            if [ -s ~/relock/gradle-records ]; then
+              echo
+              echo "### Gradle"
+              echo
+              "$repin" table ~/relock/gradle-records
+            fi
             if [ -s ~/relock/repin-table.md ]; then
               echo
               echo "### Moved by the repin command"
@@ -1047,6 +1206,8 @@ jobs:
           if [ -f bats.lock ]; then git add bats.lock; fi
           # the npm files pnpm rewrote (tracked ones only; area: repin npm)
           git add -u -- ':(glob)**/package.json' ':(glob)**/pnpm-lock.yaml'
+          # the Gradle wrapper's files (tracked ones only; area: repin gradle)
+          git add -u -- ':(glob)**/gradle/wrapper/gradle-wrapper.properties' ':(glob)**/gradle/wrapper/gradle-wrapper.jar' ':(glob)**/gradlew' ':(glob)**/gradlew.bat'
           # one path per line, never split or expanded
           printf '%s\n' "$REPIN_PATHS" | while IFS= read -r path; do
             [ -z "$path" ] || git add -A -- ":(literal)$path"
@@ -1054,9 +1215,13 @@ jobs:
           patch=$(git diff --cached --binary | gzip -9n | base64 -w0)
           body=$(base64 -w0 ~/relock/body.md)
           # an environment variable of a later step is limited to 128 KiB
-          [ ${#patch} -lt 100000 ] && [ ${#body} -lt 20000 ] \
+          [ ${#patch} -lt 800000 ] && [ ${#body} -lt 20000 ] \
             || { echo "::error::the relock's change is larger than the jobs hand on (patch ${#patch}, text ${#body})"; exit 1; }
-          { echo "patch=$patch"; echo "body=$body"; } >> "$GITHUB_OUTPUT"
+          # the patch in pieces of 100000 characters (an environment variable holds 128 KiB)
+          { echo "patch=${patch:0:100000}"; echo "body=$body"; } >> "$GITHUB_OUTPUT"
+          for piece in 2 3 4 5 6 7 8; do
+            echo "patch-part-$piece=${patch:$(((piece - 1) * 100000)):100000}" >> "$GITHUB_OUTPUT"
+          done
 
   # Job 2: the caller's command, with nothing to steal and nothing later
   # that trusts it (see the header)
@@ -1083,6 +1248,13 @@ jobs:
       - name: Apply the relock, run the command and pack the listed paths
         env:
           PATCH: ${{ needs.relock.outputs.patch }}
+          PATCH_PART_2: ${{ needs.relock.outputs.patch-part-2 }}
+          PATCH_PART_3: ${{ needs.relock.outputs.patch-part-3 }}
+          PATCH_PART_4: ${{ needs.relock.outputs.patch-part-4 }}
+          PATCH_PART_5: ${{ needs.relock.outputs.patch-part-5 }}
+          PATCH_PART_6: ${{ needs.relock.outputs.patch-part-6 }}
+          PATCH_PART_7: ${{ needs.relock.outputs.patch-part-7 }}
+          PATCH_PART_8: ${{ needs.relock.outputs.patch-part-8 }}
           REGENERATE: ${{ inputs.regenerate }}
           REGENERATE_PATHS: ${{ inputs.regenerate-paths }}
           MAX_BYTES: ${{ inputs.regenerate-max-bytes }}
@@ -1107,7 +1279,7 @@ jobs:
               echo "::error::regenerate-paths names a path that is refused: $path"; exit 1
             fi
           done
-          printf '%s' "$PATCH" | base64 -d | gunzip | git apply --binary
+          { printf '%s' "$PATCH"; printf '%s' "$PATCH_PART_2$PATCH_PART_3$PATCH_PART_4$PATCH_PART_5$PATCH_PART_6$PATCH_PART_7$PATCH_PART_8"; } | base64 -d | gunzip | git apply --binary
           sh -eu -c "$REGENERATE"
           printf '%s\n' "$REGENERATE_PATHS" | while IFS= read -r path; do
             [ -n "$path" ] || continue
@@ -1148,6 +1320,13 @@ jobs:
       REGENERATE_PATHS: ${{ inputs.regenerate-paths }}
       MAX_BYTES: ${{ inputs.regenerate-max-bytes }}
       PATCH: ${{ needs.relock.outputs.patch }}
+      PATCH_PART_2: ${{ needs.relock.outputs.patch-part-2 }}
+      PATCH_PART_3: ${{ needs.relock.outputs.patch-part-3 }}
+      PATCH_PART_4: ${{ needs.relock.outputs.patch-part-4 }}
+      PATCH_PART_5: ${{ needs.relock.outputs.patch-part-5 }}
+      PATCH_PART_6: ${{ needs.relock.outputs.patch-part-6 }}
+      PATCH_PART_7: ${{ needs.relock.outputs.patch-part-7 }}
+      PATCH_PART_8: ${{ needs.relock.outputs.patch-part-8 }}
       BODY: ${{ needs.relock.outputs.body }}
       HAS_RELOCK_TOKEN: ${{ secrets.RELOCK_TOKEN != '' }}
       GH_TOKEN: ${{ secrets.RELOCK_TOKEN || github.token }}
@@ -1161,7 +1340,7 @@ jobs:
       - name: Apply the relock
         run: |
           set -eu
-          printf '%s' "$PATCH" | base64 -d | gunzip | git apply --binary --index
+          { printf '%s' "$PATCH"; printf '%s' "$PATCH_PART_2$PATCH_PART_3$PATCH_PART_4$PATCH_PART_5$PATCH_PART_6$PATCH_PART_7$PATCH_PART_8"; } | base64 -d | gunzip | git apply --binary --index
           mkdir -p ~/relock
           printf '%s' "$BODY" | base64 -d > ~/relock/body.md
 
