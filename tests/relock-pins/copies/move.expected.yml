@@ -1,0 +1,12 @@
+# every pwa-ref line moves; other lines, other keys and comments stay
+jobs:
+  android:
+    uses: bats-lang/pwa/.github/workflows/android.yml@1111111111111111111111111111111111111111 # pwa main 1111111
+    with:
+      pwa-ref: 1111111111111111111111111111111111111111
+      other-ref: 0000000000000000000000000000000000000000
+  play:
+    uses: bats-lang/pwa/.github/workflows/play-release.yml@0000000000000000000000000000000000000000 # pwa main 0000000
+    with:
+      # pwa-ref: not a line of the key
+      pwa-ref: 1111111111111111111111111111111111111111   # same commit as the pin
