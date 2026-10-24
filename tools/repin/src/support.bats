@@ -167,3 +167,123 @@ implement print_rope (text) = _print_chunks($B.sized_rope_chunks(text))
 #pub fn discard_rope (text: $B.sized_rope): void
 
 implement discard_rope (text) = $B.rope_sized_list_free($B.sized_rope_chunks(text))
+
+fun _spans_equal {l1,l2:agz}{n1,n2:pos}{a,b:nat | a <= n1; b <= n2}
+  {span:nat | a + span <= n1; b + span <= n2}{i:nat | i <= span} .<span - i>.
+  (first: !$A.borrow(byte, l1, n1), a: int a, second: !$A.borrow(byte, l2, n2), b: int b,
+   span: int span, i: int i): bool =
+  if i >= span then true
+  else if byte2int0($A.read<byte>(first, a + i)) = byte2int0($A.read<byte>(second, b + i)) then
+    _spans_equal(first, a, second, b, span, i + 1)
+  else false
+
+(* Whether first[first_start, first_stop) and second[second_start, second_stop) are the
+   same bytes; the two may be one array *)
+#pub fn spans_equal {l1,l2:agz}{n1,n2:pos}{first_stop:nat | first_stop <= n1}
+  {first_start:nat | first_start <= first_stop}{second_stop:nat | second_stop <= n2}
+  {second_start:nat | second_start <= second_stop}
+  (first: !$A.borrow(byte, l1, n1), first_start: int first_start, first_stop: int first_stop,
+   second: !$A.borrow(byte, l2, n2), second_start: int second_start, second_stop: int
+       second_stop): bool
+
+implement spans_equal (first, first_start, first_stop, second, second_start, second_stop) =
+  if first_stop - first_start = second_stop - second_start then
+    _spans_equal(first, first_start, second, second_start, first_stop - first_start, 0)
+  else false
+
+fun _contains {l:agz}{n:pos}{limit:nat | limit <= n}{at:nat | at <= limit}{literal_len:pos}
+    .<limit - at>.
+  (bytes: !$A.borrow(byte, l, n), limit: int limit, at: int at, literal: string literal_len,
+   literal_len: int literal_len): bool =
+  if at + literal_len > limit then false
+  else if span_is(bytes, at, at + literal_len, literal) then true
+  else _contains(bytes, limit, at + 1, literal, literal_len)
+
+(* Whether the text literal is somewhere in bytes[start, limit) *)
+#pub fn contains_text {l:agz}{n:pos}{limit:nat | limit <= n}{start:nat | start <= limit}
+  {literal_len:pos}
+  (bytes: !$A.borrow(byte, l, n), limit: int limit, start: int start, literal: string
+      literal_len): bool
+
+implement contains_text (bytes, limit, start, literal) =
+  _contains(bytes, limit, start, literal, g1u2i(string1_length(literal)))
+
+(* The entries of the directory at the path path[0, path_len), sorted by name; the path
+   is copied into an array of its own length and a zero, which dir_read takes. *)
+#pub fn list_directory {l:agz}{n:pos}{path_len:nat | path_len <= n; path_len < 524288}
+  (path: !$A.borrow(byte, l, n), path_len: int path_len)
+  : $R.result([k:nat] $F.entries(k), $F.io_error)
+
+implement list_directory (path, path_len) = let
+  val path_copy = $A.alloc<byte>(path_len + 1)
+  val () = _copy_path(path, path_len, path_copy, 0)
+  val @(frozen, view) = $A.freeze<byte>(path_copy)
+  val listed = $F.dir_read(view, path_len + 1)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+in listed end
+
+fun _copy_bytes {l,other_loc:agz}{n:pos}{m:nat | m <= n}{capacity:pos | m <= capacity}
+  {i:nat | i <= m} .<m - i>.
+  (bytes: !$A.borrow(byte, l, n), m: int m, destination: !$A.arr(byte, other_loc, capacity),
+   i: int i): void =
+  if i >= m then ()
+  else let
+    val () = $A.set<byte>(destination, i, $A.read<byte>(bytes, i))
+  in _copy_bytes(bytes, m, destination, i + 1) end
+
+(* One chunk's first used bytes written to the open file, as an array of exactly that
+   length (file_write takes all of an array); the chunk is freed. Whether they were all
+   written. *)
+fn _write_chunk {cap:pos | cap <= 524288}{lb:agz}{used:nat | used <= cap}
+  (fd: !$F.fd, chunk: $A.arr(byte, lb, cap), used: int used): bool =
+  if used <= 0 then let val () = $A.free<byte>(chunk) in true end
+  else let
+    val piece = $A.alloc<byte>(used)
+    val @(source_frozen, source_view) = $A.freeze<byte>(chunk)
+    val () = _copy_bytes(source_view, used, piece, 0)
+    val () = $A.drop<byte>(source_frozen, source_view)
+    val () = $A.free<byte>($A.thaw<byte>(source_frozen))
+    val @(piece_frozen, piece_view) = $A.freeze<byte>(piece)
+    val written = $F.file_write(fd, piece_view, used)
+    val () = $A.drop<byte>(piece_frozen, piece_view)
+    val () = $A.free<byte>($A.thaw<byte>(piece_frozen))
+  in
+    case+ written of
+    | ~$R.ok(_) => true
+    | ~$R.err(_) => false
+  end
+
+fun _write_chunks {chunk_count:nat} .<chunk_count>.
+  (fd: !$F.fd, chunks: $B.rope_sized_list(chunk_count), ok: bool): bool =
+  case+ chunks of
+  | ~$B.rope_sized_nil() => ok
+  | ~$B.rope_sized_cons(chunk, used, rest) => let
+      val written = (if ok then _write_chunk(fd, chunk, used) else let
+                       val () = $A.free<byte>(chunk) in false end): bool
+    in _write_chunks(fd, rest, written) end
+
+(* The text of the rope written over the existing file at the path path[0, path_len)
+   (its permission bits stay): whether it was written whole. The rope is consumed. *)
+#pub fn write_rope_file {l:agz}{n:pos}{path_len:nat | path_len <= n; path_len < 524288}
+  (path: !$A.borrow(byte, l, n), path_len: int path_len, text: $B.sized_rope): bool
+
+implement write_rope_file (path, path_len, text) = let
+  val path_copy = $A.alloc<byte>(path_len + 1)
+  val () = _copy_path(path, path_len, path_copy, 0)
+  val @(frozen, view) = $A.freeze<byte>(path_copy)
+  val opened = $F.file_open(view, path_len + 1, $F.WriteOnly(), $F.TruncateExisting(), 0)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+in
+  case+ opened of
+  | ~$R.err(_) => let val () = discard_rope(text) in false end
+  | ~$R.ok(fd) => let
+      val ok = _write_chunks(fd, $B.sized_rope_chunks(text), true)
+      val closed = $F.file_close(fd)
+    in
+      case+ closed of
+      | ~$R.ok(_) => ok
+      | ~$R.err(_) => false
+    end
+end
