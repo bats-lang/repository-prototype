@@ -141,6 +141,14 @@ on:
         description: Reusable workflows the caller pins by commit, <owner>/<repo>/<path> one per line
         type: string
         default: ''
+      pin-copies:
+        description: >-
+          Inputs of a caller that repeat a workflow pin's commit (a reusable
+          workflow cannot read its own ref), `<owner>/<repo>/<path> <input>`
+          one per line: every `<input>: <40 hex>` line of the files that
+          call the pin moves to the commit the pin moves to (#385)
+        type: string
+        default: ''
       check-workflow:
         description: The workflow dispatched on the relock branch
         type: string
@@ -225,6 +233,7 @@ jobs:
       body: ${{ steps.hand.outputs.body }}
     env:
       PINS: ${{ inputs.workflow-pins }}
+      PIN_COPIES: ${{ inputs.pin-copies }}
       CHECK_WORKFLOW: ${{ inputs.check-workflow }}
       PACKAGE_REPOSITORY: ${{ inputs.package-repository }}
       COMPILER_REPOSITORY: ${{ inputs.compiler-repository }}
@@ -342,6 +351,42 @@ jobs:
               ' "$file" > ~/relock/pin-file.new || exit 1
               cat ~/relock/pin-file.new > "$file"
             done < ~/relock/pin-files
+            # The caller's copies of the pin's commit (pin-copies, #385): each
+            # `<input>: <40 hex>` line of the files that call the pin gets the
+            # commit the pin got; any other spelling of that key is refused
+            # (file, line number and line named, nothing written). The program
+            # between the copy-rewrite markers is run on fixtures by
+            # relock-pins-test.yml.
+            printf '%s\n' "$PIN_COPIES" | while read -r copy_pin copy_input copy_extra; do
+              [ "$copy_pin" = "$pin" ] || continue
+              case "$copy_input" in
+                ''|*[!A-Za-z0-9_-]*) echo "::error::pin-copies names an input that is refused: '$copy_input'"; exit 1 ;;
+              esac
+              [ -z "$copy_extra" ] || { echo "::error::pin-copies line has more than a pin and an input: $copy_pin $copy_input $copy_extra"; exit 1; }
+              while IFS= read -r file; do
+                awk -v input="$copy_input" -v newest="$newest" -v file="$file" '
+                  # copy-rewrite begin
+                  {
+                    if ($0 !~ ("^[ \t]*" input ":")) { print; next }
+                    if ($0 !~ ("^[ \t]*" input ":[ \t]+[0-9a-f][0-9a-f]*[ \t]*(#.*)?$")) {
+                      print "::error file=" file ",line=" NR "::refused, not a plain " input " line: " $0
+                      exit 1
+                    }
+                    match($0, ":[ \t]+[0-9a-f]+")
+                    value = $0
+                    sub(/^[^:]*:[ \t]+/, "", value)
+                    sub(/[^0-9a-f].*$/, "", value)
+                    if (length(value) != 40) {
+                      print "::error file=" file ",line=" NR "::refused, not a 40 hex digit commit: " $0
+                      exit 1
+                    }
+                    print substr($0, 1, RSTART + RLENGTH - 41) newest substr($0, RSTART + RLENGTH)
+                  }
+                  # copy-rewrite end
+                ' "$file" > ~/relock/copy-file.new || exit 1
+                cat ~/relock/copy-file.new > "$file"
+              done < ~/relock/pin-files
+            done
             if [ "$old" != "$newest" ]; then
               printf '%s %s %s %s\n' "$pin" "$owner_repo" "$old" "$newest" >> ~/relock/pins
             fi
