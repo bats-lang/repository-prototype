@@ -270,6 +270,20 @@ on:
         description: The bats compiler's repository, whose main .github/bats-version moves to
         type: string
         default: bats-lang/bats
+      compiler-pin-file:
+        description: >-
+          The file holding the compiler's commit, moved when the checkout has it
+          (area: relock own repository, repository-prototype#448); a test of this
+          workflow names a file that does not exist, so that the repository's own
+          pin file is not part of the fixture it relocks
+        type: string
+        default: .github/bats-version
+      repository-pin-file:
+        description: >-
+          The file holding the package repository's commit, moved when the checkout
+          has it; named like compiler-pin-file
+        type: string
+        default: .github/repository-version
       regenerate:
         description: >-
           Shell command run in the caller's checkout after the pins moved, when
@@ -598,6 +612,8 @@ jobs:
       CHECK_WORKFLOW: ${{ inputs.check-workflow }}
       PACKAGE_REPOSITORY: ${{ inputs.package-repository }}
       COMPILER_REPOSITORY: ${{ inputs.compiler-repository }}
+      COMPILER_PIN_FILE: ${{ inputs.compiler-pin-file }}
+      REPOSITORY_PIN_FILE: ${{ inputs.repository-pin-file }}
       BASE: ${{ inputs.base }}
       BRANCH_PREFIX: ${{ inputs.branch-prefix }}
       WORKFLOWS_DIRECTORY: ${{ inputs.workflows-directory }}
@@ -964,14 +980,14 @@ jobs:
           mkdir -p ~/relock
           # What was pinned, for the pull request's lists
           if [ -f bats.lock ]; then cp bats.lock ~/relock/old.lock; else : > ~/relock/old.lock; fi
-          compiler_old=$(tr -d '[:space:]' < .github/bats-version 2>/dev/null || true)
+          compiler_old=$(tr -d '[:space:]' < "$COMPILER_PIN_FILE" 2>/dev/null || true)
           compiler_new=$COMPILER_NEWEST
           repository_new=$REPOSITORY_NEWEST
-          repository_old=$(tr -d '[:space:]' < .github/repository-version 2>/dev/null || true)
+          repository_old=$(tr -d '[:space:]' < "$REPOSITORY_PIN_FILE" 2>/dev/null || true)
           # A package with no dependencies has no lock, and gets none
           if [ -f bats.lock ]; then bats lock --repository "$BATS_REPOSITORY"; fi
-          if [ -f .github/bats-version ]; then printf '%s\n' "$compiler_new" > .github/bats-version; fi
-          if [ -f .github/repository-version ]; then printf '%s\n' "$repository_new" > .github/repository-version; fi
+          if [ -f "$COMPILER_PIN_FILE" ]; then printf '%s\n' "$compiler_new" > "$COMPILER_PIN_FILE"; fi
+          if [ -f "$REPOSITORY_PIN_FILE" ]; then printf '%s\n' "$repository_new" > "$REPOSITORY_PIN_FILE"; fi
 
           # Each workflow pin, to its repository's newest main commit, with
           # the comment `# <repo> main <7 hex>` that bats check-pins requires
@@ -1132,9 +1148,9 @@ jobs:
             else
               echo "No package moved."
             fi
-            if [ -f .github/bats-version ]; then
+            if [ -f "$COMPILER_PIN_FILE" ]; then
               echo
-              echo "### Compiler (\`.github/bats-version\`)"
+              echo "### Compiler (\`$COMPILER_PIN_FILE\`)"
               echo
               if [ "$compiler_old" = "$compiler_new" ]; then
                 echo "Unchanged: \`$compiler_new\`."
@@ -1142,9 +1158,9 @@ jobs:
                 echo "\`${compiler_old:-(none)}\` → \`$compiler_new\` ([changes](https://github.com/$COMPILER_REPOSITORY/compare/$compiler_old...$compiler_new))"
               fi
             fi
-            if [ -f .github/repository-version ]; then
+            if [ -f "$REPOSITORY_PIN_FILE" ]; then
               echo
-              echo "### Package repository (\`.github/repository-version\`)"
+              echo "### Package repository (\`$REPOSITORY_PIN_FILE\`)"
               echo
               if [ "$repository_old" = "$repository_new" ]; then
                 echo "Unchanged: \`$repository_new\`."
