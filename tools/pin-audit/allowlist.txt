@@ -24,10 +24,9 @@ quire/.github/workflows/sync-providers.yml 430357c0bb07eb06c5a03f78a4a4a78deb68c
 quire/.github/workflows/text-lint.yml 6a0a10d3cfd1831e24fb37aa07e923c79b3cbd0e83776af48f58b29535a039f8 # quire#815
 pwa/.github/workflows/android.yml e0e5021491e9a54d13e5657c15299ea427125951aaa2bfafe6f2fa5d04c8df2a # pwa#190
 pwa/.github/workflows/check.yml 4e35587726d99d0660804ecca611c70c8ade02383306f0cf6dbf13f7c227ed4e # pwa#190
-pwa/.github/workflows/play-release.yml c5c83aedfbce8c3f9ae8b9e3b61f5e15cbfcff45625872d488909fa45a16162d # pwa#168
+pwa/.github/workflows/play-release.yml 9a72b1428a0b40624307da9249ff7c236fa74109ad5e0d803bb839a81ed1dd4a # repository-prototype#462
 pwa/.github/workflows/relock-android-test.yml 1d01c9fa1d73cce5032ff63ee1c37177dd95a5adde4de3e89d4094789f6dd2fc # pwa#185
-pwa/.github/workflows/relock.yml 53af07b5ec228d5ae19fb9016704a6016eaab506c0a08c40114450465797a523 # pwa#185
-pwa/.github/workflows/review-gate.yml 323af6624dfd0026f47e18e46cb743ba9d8f782debb22fa01ec4fe7bcb7ba55c # pwa#170
+pwa/.github/workflows/relock.yml 41c5237b329e9dfb6319aa17c82bcd4ef80c6d3cd388436c98593b37f38c6db9 # repository-prototype#461
 capacitor-plugins/.github/workflows/check.yml c86571eb37e4fa32b74704178a1fc889683fde111675cebeedaccab07cabfb27 # capacitor-plugins#31
 capacitor-plugins/.github/workflows/demo-apk.yml cedf77af672f97d459a0f44bd2ae68ccb5f21cdab110675eac15970dd8e41af9 # capacitor-plugins#31
 capacitor-plugins/.github/workflows/review-gate.yml c1595e949417989054653e1d2071893e24cef2456cd93384d3f720ef1233dfcb # capacitor-plugins#32
