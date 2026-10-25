@@ -26,7 +26,7 @@ pwa/.github/workflows/android.yml e0e5021491e9a54d13e5657c15299ea427125951aaa2bf
 pwa/.github/workflows/check.yml 4e35587726d99d0660804ecca611c70c8ade02383306f0cf6dbf13f7c227ed4e # pwa#190
 pwa/.github/workflows/play-release.yml 9a72b1428a0b40624307da9249ff7c236fa74109ad5e0d803bb839a81ed1dd4a # repository-prototype#462
 pwa/.github/workflows/relock-android-test.yml 1d01c9fa1d73cce5032ff63ee1c37177dd95a5adde4de3e89d4094789f6dd2fc # pwa#185
-pwa/.github/workflows/relock.yml 41c5237b329e9dfb6319aa17c82bcd4ef80c6d3cd388436c98593b37f38c6db9 4c3c50e249ee7c55651bccc01b0157e35ac79decf939027030679931f11a0a25 # repository-prototype#461
+pwa/.github/workflows/relock.yml 41c5237b329e9dfb6319aa17c82bcd4ef80c6d3cd388436c98593b37f38c6db9 5ab5fa3b422dcd855b5695ff24824453ce365e9b1323e2d799f062dcc7ac6106 # repository-prototype#461
 capacitor-plugins/.github/workflows/check.yml c86571eb37e4fa32b74704178a1fc889683fde111675cebeedaccab07cabfb27 # capacitor-plugins#31
 capacitor-plugins/.github/workflows/demo-apk.yml cedf77af672f97d459a0f44bd2ae68ccb5f21cdab110675eac15970dd8e41af9 # capacitor-plugins#31
 capacitor-plugins/.github/workflows/review-gate.yml c1595e949417989054653e1d2071893e24cef2456cd93384d3f720ef1233dfcb # capacitor-plugins#32
