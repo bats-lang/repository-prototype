@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   relock:
-    uses: bats-lang/repository-prototype/.github/workflows/relock-pins.yml@6611dbbedfb172230bdd13481edf3a8d60249326 # repository-prototype main 6611dbb
+    uses: bats-lang/repository-prototype/.github/workflows/relock-pins.yml@648bd8abb5114ee15899d8cfa4b2dbd58b78d016 # repository-prototype main 648bd8a
     secrets: inherit
     with:
       workflow-pins: |
