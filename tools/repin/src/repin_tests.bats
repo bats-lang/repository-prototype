@@ -25,6 +25,7 @@ staload "npm.sats"
 staload "npm_driver.sats"
 staload "npm.sats"
 staload "npm_driver.sats"
+staload "pathrule.sats"
 staload "records.sats"
 staload "support.sats"
 staload "version.sats"
@@ -447,6 +448,44 @@ fn _bad_times_line {times_len:nat | times_len < 4096} (times: string times_len):
   val () = $A.drop<byte>(frozen, view)
   val () = $A.free<byte>($A.thaw<byte>(frozen))
 in bad end
+
+(* ============================================================
+   The repin path rule (#466): helpers
+   ============================================================ *)
+
+(* The paths text checked: its status and message are the expected ones *)
+fn _paths_are {paths_len,expected_len:nat | paths_len < 4096}
+  (paths: string paths_len, status: int, expected: string expected_len): bool = let
+  val @(paths_array, paths_used) = _text_array(paths)
+  val @(frozen, view) = $A.freeze<byte>(paths_array)
+  val message = $B.sized_rope_create()
+  val got = check_paths(view, paths_used, message)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+  val same = _rope_is(message, expected)
+in got = status && same end
+
+(* Whether one path passes the rule, as a paths text of its own *)
+fn _path_passes {path_len:nat | path_len < 4096} (path: string path_len): bool =
+  _paths_are(path, 0, "")
+
+(* The tar listing checked against the paths and the cap: the status and message are the
+   expected ones *)
+fn _members_are {listing_len,paths_len,expected_len:nat | listing_len < 4096; paths_len < 4096}
+  (listing: string listing_len, paths: string paths_len, cap: lint, status: int,
+   expected: string expected_len): bool = let
+  val @(listing_array, listing_used) = _text_array(listing)
+  val @(listing_frozen, listing_view) = $A.freeze<byte>(listing_array)
+  val @(paths_array, paths_used) = _text_array(paths)
+  val @(paths_frozen, paths_view) = $A.freeze<byte>(paths_array)
+  val message = $B.sized_rope_create()
+  val got = check_members(listing_view, listing_used, paths_view, paths_used, cap, message)
+  val () = $A.drop<byte>(paths_frozen, paths_view)
+  val () = $A.free<byte>($A.thaw<byte>(paths_frozen))
+  val () = $A.drop<byte>(listing_frozen, listing_view)
+  val () = $A.free<byte>($A.thaw<byte>(listing_frozen))
+  val same = _rope_is(message, expected)
+in got = status && same end
 
 $UNITTEST.run begin
 
@@ -1672,5 +1711,152 @@ fn test_gradle_the_version_of_the_distribution_url_is_found (): bool =
   && _properties_version_is("# distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n", "")
   && _properties_version_is("", "")
   && _properties_version_is("distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\nb=2\n", "8.5")
+
+
+(* ============================================================
+   The repin path rule (#466)
+   ============================================================ *)
+
+fn test_path_rule_accepts_plain_paths (): bool =
+  true
+  && _path_passes("fixture")
+  && _path_passes("tests/relock-pins/repin")
+  && _path_passes("a/b.c@d+e=f,g-h_i")
+  && _path_passes("fixture/pin.txt\nfixture/other.txt\n")
+  && _path_passes("fixture\n\n\nother\n")
+  && _path_passes(".gitignore")
+  && _path_passes("a.git/b")
+  && _path_passes("..a/b..")
+  && _path_passes(".github2")
+  && _path_passes(".gitmodulesx")
+
+fn test_path_rule_refuses_no_path (): bool =
+  true
+  && _paths_are("", 1, "::error::repin-paths is empty: nothing would be committed\n")
+  && _paths_are("\n\n", 1, "::error::repin-paths is empty: nothing would be committed\n")
+
+fn test_path_rule_refuses_the_start_and_the_end (): bool =
+  true
+  && _paths_are("/etc", 1, "::error::repin-paths names a path that is refused: /etc\n")
+  && _paths_are("-fixture", 1, "::error::repin-paths names a path that is refused: -fixture\n")
+  && _paths_are("fixture/", 1, "::error::repin-paths names a path that is refused: fixture/\n")
+  && _paths_are("/", 1, "::error::repin-paths names a path that is refused: /\n")
+
+fn test_path_rule_refuses_an_empty_dot_or_dotdot_component (): bool =
+  true
+  && _paths_are("a//b", 1, "::error::repin-paths names a path that is refused: a//b\n")
+  && _paths_are("./a", 1, "::error::repin-paths names a path that is refused: ./a\n")
+  && _paths_are("a/./b", 1, "::error::repin-paths names a path that is refused: a/./b\n")
+  && _paths_are("a/.", 1, "::error::repin-paths names a path that is refused: a/.\n")
+  && _paths_are("..", 1, "::error::repin-paths names a path that is refused: ..\n")
+  && _paths_are("../x", 1, "::error::repin-paths names a path that is refused: ../x\n")
+  && _paths_are("a/../b", 1, "::error::repin-paths names a path that is refused: a/../b\n")
+  && _paths_are("a/..", 1, "::error::repin-paths names a path that is refused: a/..\n")
+
+fn test_path_rule_refuses_a_name_git_reads_at_any_depth_in_any_case (): bool =
+  true
+  && _paths_are(".git", 1, "::error::repin-paths names a path that is refused: .git\n")
+  && _paths_are(".github", 1, "::error::repin-paths names a path that is refused: .github\n")
+  && _paths_are(".gitmodules", 1, "::error::repin-paths names a path that is refused: .gitmodules\n")
+  && _paths_are(".gitattributes", 1, "::error::repin-paths names a path that is refused: .gitattributes\n")
+  && _paths_are("fixture/.GIT", 1, "::error::repin-paths names a path that is refused: fixture/.GIT\n")
+  && _paths_are("a/.GitHub/b", 1, "::error::repin-paths names a path that is refused: a/.GitHub/b\n")
+  && _paths_are("a/b/.GITMODULES", 1, "::error::repin-paths names a path that is refused: a/b/.GITMODULES\n")
+  && _paths_are("x/.gitAttributes/y", 1, "::error::repin-paths names a path that is refused: x/.gitAttributes/y\n")
+
+fn test_path_rule_refuses_a_character_outside_the_set (): bool =
+  true
+  && _paths_are("a b", 1, "::error::repin-paths names a path that is refused: a b\n")
+  && _paths_are("a\tb", 1, "::error::repin-paths names a path that is refused: a\tb\n")
+  && _paths_are("a\\b", 1, "::error::repin-paths names a path that is refused: a\\b\n")
+  && _paths_are("a:b", 1, "::error::repin-paths names a path that is refused: a:b\n")
+  && _paths_are("a*", 1, "::error::repin-paths names a path that is refused: a*\n")
+  && _paths_are("a\r", 1, "::error::repin-paths names a path that is refused: a\r\n")
+  && _paths_are(" ", 1, "::error::repin-paths names a path that is refused:  \n")
+
+fn test_path_rule_names_the_first_refused_path_after_good_ones (): bool =
+  _paths_are("fixture\nother\n../x\n/etc\n", 1,
+    "::error::repin-paths names a path that is refused: ../x\n")
+
+(* ============================================================
+   The members of a tar (#466)
+   ============================================================ *)
+
+fn test_members_of_a_whole_tar_pass (): bool =
+  true
+  && _members_are(
+       "drwxr-xr-x 0/0               0 2026-10-25 23:32 fx/\n-rw-r--r-- 0/0               2 2026-10-25 23:32 fx/sub/o.txt\n-rw-r--r-- 0/0               2 2026-10-25 23:32 fx/pin.txt\n",
+       "fx\n", 100L, 0, "")
+  && _members_are("-rwxr-xr-x 0/0 4 2026-10-25 23:32 fx.txt\n", "fx.txt\n", 4L, 0, "")
+  && _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 fx\n", "fx\n", 0L, 0, "")
+
+fn test_members_with_a_link_are_refused (): bool =
+  _members_are(
+    "drwxr-xr-x 0/0               0 2026-10-25 23:32 fx/\nlrwxrwxrwx 0/0               0 2026-10-25 23:32 fx/lnk -> /etc/passwd\n",
+    "fx\n", 100L, 1,
+    "::error::a member that is not a regular file or a directory: lrwxrwxrwx 0/0               0 2026-10-25 23:32 fx/lnk -> /etc/passwd\n")
+
+fn test_members_that_are_devices_pipes_and_hard_links_are_refused (): bool =
+  true
+  && _members_are("crw-r--r-- 0/0 1,3 2026-10-25 23:32 fx/dev\n", "fx\n", 100L, 1,
+       "::error::a member that is not a regular file or a directory: crw-r--r-- 0/0 1,3 2026-10-25 23:32 fx/dev\n")
+  && _members_are("prw-r--r-- 0/0 0 2026-10-25 23:32 fx/pipe\n", "fx\n", 100L, 1,
+       "::error::a member that is not a regular file or a directory: prw-r--r-- 0/0 0 2026-10-25 23:32 fx/pipe\n")
+  && _members_are("hrw-r--r-- 0/0 0 2026-10-25 23:32 fx/h link to fx/a\n", "fx\n", 100L, 1,
+       "::error::a member that is not a regular file or a directory: hrw-r--r-- 0/0 0 2026-10-25 23:32 fx/h link to fx/a\n")
+
+fn test_members_outside_the_listed_paths_are_refused (): bool =
+  true
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 outside.txt\n", "fx\n", 100L, 1,
+       "::error::a member outside the listed paths or with a refused name: outside.txt\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx-two/x\n", "fx\n", 100L, 1,
+       "::error::a member outside the listed paths or with a refused name: fx-two/x\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 f\n", "fx\n", 100L, 1,
+       "::error::a member outside the listed paths or with a refused name: f\n")
+
+fn test_members_with_a_name_the_rule_refuses_are_refused (): bool =
+  true
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/../x\n", "fx\n", 100L, 1,
+       "::error::a member outside the listed paths or with a refused name: fx/../x\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/.github/x\n", "fx\n", 100L, 1,
+       "::error::a member outside the listed paths or with a refused name: fx/.github/x\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 /fx/x\n", "fx\n", 100L, 1,
+       "::error::a member outside the listed paths or with a refused name: /fx/x\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/a b\n", "fx\n", 100L, 1,
+       "::error::a member outside the listed paths or with a refused name: fx/a b\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/a\\nb\n", "fx\n", 100L, 1,
+       "::error::a member outside the listed paths or with a refused name: fx/a\\nb\n")
+
+fn test_members_over_the_cap_are_refused (): bool =
+  true
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx\n", "fx\n", 1L, 1,
+       "::error::the repinned files are over repin-max-bytes\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/a\n-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/b\ndrwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", "fx\n", 3L, 1,
+       "::error::the repinned files are over repin-max-bytes\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/a\n-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/b\ndrwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", "fx\n", 4L, 0, "")
+
+fn test_members_that_do_not_hold_a_listed_path_are_refused (): bool =
+  true
+  && _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", "fx\ngone\n", 100L, 1,
+       "::error::the repinned files do not hold gone\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/a\n", "fx\n", 100L, 1,
+       "::error::the repinned files do not hold fx\n")
+  && _members_are("", "fx\n", 100L, 1, "::error::the repinned files do not hold fx\n")
+
+fn test_members_check_the_paths_with_the_rule_first (): bool =
+  true
+  && _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", "", 100L, 1,
+       "::error::repin-paths is empty: nothing would be committed\n")
+  && _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 .github/\n", ".github\n", 100L, 1,
+       "::error::repin-paths names a path that is refused: .github\n")
+
+fn test_a_line_that_is_no_member_is_refused (): bool =
+  true
+  && _members_are("-rw-r--r-- 0/0 x 2026-10-25 23:32 fx\n", "fx\n", 100L, 1,
+       "::error::a line of the tar listing that is no member: -rw-r--r-- 0/0 x 2026-10-25 23:32 fx\n")
+  && _members_are("-rw-r--r--\n", "fx\n", 100L, 1,
+       "::error::a line of the tar listing that is no member: -rw-r--r--\n")
+  && _members_are("\n", "fx\n", 100L, 1,
+       "::error::a line of the tar listing that is no member: \n")
 
 end
