@@ -120,20 +120,26 @@ the same CI.
   checksum, a line each, are written to the file UPDATES (an empty file when nothing moves), and the highest stable
   release of a higher major is its own row, `major, not moved` (fixtures: `tools/repin/tests/gradle`).
   `repin paths-check PATHS` and `repin members-check LISTING PATHS MAX_BYTES` are the repin path rule (#420) written once, in
-  `pathrule.bats` and `pathrule_driver.bats` (#466; keyword: repin path rule): a path is refused when it is empty, starts with `/` or `-`,
-  ends with `/`, has an empty, `.` or `..` component, has a character other than letters, digits and `._/@+=,-`, or has a
-  component that is, in any case, `.git`, `.github`, `.gitmodules` or `.gitattributes`. `paths-check` reads the lines of the
-  file PATHS (at least one path, none refused). `members-check` reads the listing of a tar (`tar -tv --numeric-owner
-  --quoting-style=escape`) and refuses, as the workflow's Python did: more than 100000 members, a member that is not a regular
-  file or a directory, a name the rule refuses (a directory's name has every trailing slash stripped, as tarfile does), a name
-  that is neither a listed path nor under one, sizes (any number of digits) that add up to more than MAX_BYTES, a listed path
-  that is no member, and a line that is no member. The files are streams read a byte at a time, so any size is read: the
-  paths file is read again for each member and the listing for each listed path, and no list of either is held. A refusal is
-  printed as a workflow `::error::` command and the status is 1. The one refusal the Python did not make: a name or a path
-  over 8192 bytes (PATH_MAX is 4096, so no file has one and its write would fail). The workflow's two copies of the rule (the
-  shell of job `repin`, the Python of `repin-take`) move to these calls in the next piece of #466. The bats `file` package has no
-  unlink, lstat or tar reader, so removing a path, the link check of a parent and extracting stay `rm`, `realpath` and `tar` in
-  that step; only the rule is ours.
+  `pathrule.bats`, `pathrule_driver.bats`, `sizes.bats` and `fuel.bats` (#466; keyword: repin path rule): a path is refused when it
+  is empty, starts with `/` or `-`, ends with `/`, has an empty, `.` or `..` component, has a character other than letters,
+  digits and `._/@+=,-`, or has a component that is, in any case, `.git`, `.github`, `.gitmodules` or `.gitattributes`.
+  `paths-check` reads the lines of the file PATHS (at least one path, none refused; blank lines are skipped). `members-check`
+  reads the listing of a tar (`tar -tv --numeric-owner --quoting-style=escape`) and refuses, as the workflow's Python does:
+  more than 100000 members, a line that is no member, a member that is not a regular file or a directory, a name the rule
+  refuses (a directory's name has every trailing slash stripped, as tarfile does), a name that is neither a listed path nor
+  under one, sizes of regular files that add up to more than MAX_BYTES, and a listed path that is no member. A size and
+  MAX_BYTES are digit strings of any length compared exactly (leading zeros stripped, then the length, then the digits; the
+  room left is kept as digits and the sizes are subtracted from it; a cap of more than 8200 significant digits is larger than
+  any total, so it is unlimited). The files are streams read a byte at a time into one line of 8192 bytes, so any size is
+  read; each loop ends on the end of the file and is made total by a fuel of three ints with a lexicographic metric
+  (`fuel.bats`, 2^93 - 1 units, a platform assumption that no stream is longer; a gone fuel refuses and never accepts). The
+  paths file is read again for each member and the listing for each listed path, so no list of either is held. A refusal is
+  printed as a workflow `::error::` command and the status is 1. A name or a path over 8192 bytes is refused: a tree under a
+  listed directory can have member names that long, the Python's rule accepts them and its write then fails with ENAMETOOLONG,
+  so the run is red in both and nothing is committed. The workflow's two copies of the rule (the shell of job `repin`, the
+  Python of `repin-take`) move to these calls in the next piece of #466. The bats `file` package has no unlink, lstat or tar
+  reader, so removing a path, the link check of a parent and extracting stay `rm`, `realpath` and `tar` in that step; only the
+  rule is ours.
 
 * **The relock moves the action pins (#414):** after the workflow pins, `relock-pins.yml` builds `tools/repin` (from the package repository its setup step cloned) and runs `repin actions` over `workflows-directory` at the clock's time. Its releases file is written by the step `Collect the releases of the actions`: the third-party `owner/repo` of the `uses:` lines (found as text; `bats-lang/*` is left to the workflow pins), `gh api` for each repository's releases (no draft, no prerelease) and `git ls-remote --tags` for the commit of each tag (the peeled `^{}` line when the tag is annotated). A move is a line of the relock patch like a workflow pin's; the move records (kind, name, old, new, release age, status) are the section `### Actions` of the pull request body, rendered by `repin table`, one row for each pin examined (a newer major is `major, not moved`, a newer release under 7 days `too new`). Without a `RELOCK_TOKEN` a workflow file cannot be changed (and a run that publishes nothing keeps the moves), so the records with status `moved` are not in the table: they are a list of `not moved` lines with the reason, as the workflow pins are (the awk programs between the `actions-left` and `actions-bullet` markers). The inputs `actions-releases` (a file of the checkout in repin's releases format) and `actions-now` (whole seconds) replace the two sources for a test and default to off; the output `body` is the pull request's text, base64. `relock-pins-test.yml` runs the workflow on `tests/relock-pins/actions` (patch and section compared with `expected.patch` and `expected-section.md`; a directory whose pins are all current gives `changed` no), on a real outdated `actions/checkout` pin with the releases fetched from GitHub, and the awk programs on fixture records. Records of other kinds (quire#821's `pwa-ref`, pwa#173's Android SDK pins, repository-prototype#420's `repin-command`) join the same pull request body as sections of their own.
 

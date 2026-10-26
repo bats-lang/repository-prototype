@@ -85,28 +85,18 @@ implement path_refused (bytes, start, stop) =
   else if _byte(bytes, start) = 45 then true
   else _components_refused(bytes, stop, start, start)
 
-(* Letters of a size: its digits as a number, saturating at 200000000000000000 *)
-fun _size_value {l:agz}{n:pos}{stop:nat | stop <= n}{i:nat | i <= stop} .<stop - i>.
-  (bytes: !$A.borrow(byte, l, n), stop: int stop, i: int i, value: lint): lint =
-  if i >= stop then value
-  else if value > 10000000000000000L then 200000000000000000L
-  else _size_value(bytes, stop, i + 1, value * 10L + g0int2int_int_lint(_byte(bytes, i) - 48))
-
 fun _all_digits {l:agz}{n:pos}{stop:nat | stop <= n}{i:nat | i <= stop} .<stop - i>.
   (bytes: !$A.borrow(byte, l, n), stop: int stop, i: int i): bool =
   if i >= stop then true
   else if _byte(bytes, i) >= 48 && _byte(bytes, i) <= 57 then _all_digits(bytes, stop, i + 1)
   else false
 
-(* The number written as the digits bytes[start, stop): whether there is at least one digit
-   and nothing else, and the value (saturating) *)
-#pub fn parse_size {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
-  (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop): @(bool, lint)
+(* Whether bytes[start, stop) are at least one digit and nothing else *)
+#pub fn digits_only {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
+  (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop): bool
 
-implement parse_size (bytes, start, stop) =
-  if stop <= start then @(false, 0L)
-  else if _all_digits(bytes, stop, start) then @(true, _size_value(bytes, stop, start, 0L))
-  else @(false, 0L)
+implement digits_only (bytes, start, stop) =
+  if stop <= start then false else _all_digits(bytes, stop, start)
 
 fun _skip_spaces {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit} .<limit - i>.
   (bytes: !$A.borrow(byte, l, n), limit: int limit, i: int i)
@@ -125,19 +115,20 @@ fun _skip_token {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit} .<lim
 (* One line of `tar -tv --numeric-owner` as bytes[line, stop): the mode (whose first letter
    is the type), owner/group, size, date, time and the name, separated by spaces. The kind
    is 0 for a regular file, 1 for a directory, 2 for any other type, and -1 when the line
-   has not that shape; the size is the third word; the name is bytes[name_start,
-   name_stop). *)
+   has not that shape; the size is the digits bytes[size_start, size_stop) of the third word
+   (any number of them); the name is bytes[name_start, name_stop). *)
 #pub fn parse_member {l:agz}{n:pos}{stop:nat | stop <= n}{line:nat | line <= stop}
   (bytes: !$A.borrow(byte, l, n), line: int line, stop: int stop)
-  : [name_start,name_stop:nat | line <= name_start; name_start <= name_stop; name_stop <= stop]
-    @(int, lint, int name_start, int name_stop)
+  : [size_start,size_stop,name_start,name_stop:nat | line <= size_start; size_start <= size_stop;
+     size_stop <= name_start; name_start <= name_stop; name_stop <= stop]
+    @(int, int size_start, int size_stop, int name_start, int name_stop)
 
 implement parse_member (bytes, line, stop) =
-  if line >= stop then @(~1, 0L, line, line)
+  if line >= stop then @(~1, line, line, line, line)
   else let
     val first = _byte(bytes, line)
   in
-    if first != 45 && first != 100 then @(2, 0L, line, line)
+    if first != 45 && first != 100 then @(2, line, line, line, line)
     else let
       val mode_stop = _skip_token(bytes, stop, line)
       val owner_start = _skip_spaces(bytes, stop, mode_stop)
@@ -150,15 +141,13 @@ implement parse_member (bytes, line, stop) =
       val time_stop = _skip_token(bytes, stop, time_start)
       val kind = (if first = 100 then 1 else 0): int
     in
-      if time_stop >= stop then @(~1, 0L, line, line)
+      if time_stop >= stop then @(~1, line, line, line, line)
       else if mode_stop = line || owner_stop = owner_start || size_stop = size_start
               || date_stop = date_start || time_stop = time_start then
-        @(~1, 0L, line, line)
-      else let
-        val @(size_ok, size) = parse_size(bytes, size_start, size_stop)
-      in
-        if size_ok then @(kind, size, time_stop + 1, stop) else @(~1, 0L, line, line)
-      end
+        @(~1, line, line, line, line)
+      else if digits_only(bytes, size_start, size_stop) then
+        @(kind, size_start, size_stop, time_stop + 1, stop)
+      else @(~1, line, line, line, line)
     end
   end
 
