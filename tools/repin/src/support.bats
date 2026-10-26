@@ -132,6 +132,12 @@ fn _open_read {l:agz}{n:pos}{path_len:nat | path_len <= n; path_len < 524288}
   val () = $A.free<byte>($A.thaw<byte>(frozen))
 in opened end
 
+(* The file at the path path[0, path_len) opened for reading, or why not; the caller closes it *)
+#pub fn open_read_file {l:agz}{n:pos}{path_len:nat | path_len <= n; path_len < 524288}
+  (path: !$A.borrow(byte, l, n), path_len: int path_len): $R.result($F.fd, $F.io_error)
+
+implement open_read_file (path, path_len) = _open_read(path, path_len)
+
 (* The bytes of the file at the path path[0, path_len), read into out: how the read
    ended, and the words of the error when it failed (an empty text
    otherwise) *)

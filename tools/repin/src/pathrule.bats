@@ -6,18 +6,12 @@
    `._/@+=,-` (a newline included), or has a component that is, in any case, `.git`,
    `.github`, `.gitmodules` or `.gitattributes`, at any depth.
 
-   Two checks use it, and relock-pins.yml calls them and states no rule of its own:
-
-     check_paths    the lines of repin-paths: at least one path, none refused
-     check_members  a tar's listing (`tar -tv --numeric-owner --quoting-style=escape`): every
-                    member is a regular file or a directory, its name passes the rule and is a
-                    listed path or under one, the sizes add up to at most the cap, and every
-                    listed path is a member
-
-   Both append the workflow command `::error::...` to a message when they refuse and return
-   1; they return 0 and write nothing when the input is whole. A text is read whole, so the
-   listing and the paths are each at most 524288 bytes (a listing is about 60 bytes for each
-   member). *)
+   This module is the pure part: the rule on a span of bytes, and the reading of one line of
+   a tar's listing (`tar -tv --numeric-owner --quoting-style=escape`). The streams (the
+   paths file and the listing, read a byte at a time, any size) are in pathrule_driver.bats.
+   A directory's name has every trailing slash stripped, as tarfile does. A size is any
+   number of digits, saturating at 200000000000000000 (20 petabytes of bytes; no file
+   system holds a file near it). *)
 
 #include "share/atspre_staload.hats"
 
@@ -80,59 +74,39 @@ fun _components_refused {l:agz}{n:pos}{stop:nat | stop <= n}{component:nat | com
      else _components_refused(bytes, stop, i + 1, i + 1))
   else _components_refused(bytes, stop, component, i + 1)
 
-(* Whether the path bytes[start, stop) is refused by the rule *)
+(* Whether the path bytes[start, stop) is refused by the rule (a path that starts or ends with
+   `/` has an empty component, which the components refuse) *)
 #pub fn path_refused {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
   (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop): bool
 
 implement path_refused (bytes, start, stop) =
   if stop <= start then true
   else if ~_all_path_chars(bytes, stop, start) then true
-  else if _byte(bytes, start) = 47 || _byte(bytes, start) = 45 then true
-  else if _byte(bytes, stop - 1) = 47 then true
+  else if _byte(bytes, start) = 45 then true
   else _components_refused(bytes, stop, start, start)
 
-(* The paths text bytes[0, len), a path on each line (an empty line is none), scanned from
-   i: 0 when there is a path and none is refused, 1 when there is no path, 2 with the span
-   of the first refused path *)
-fun _paths_scan {l:agz}{n:pos}{len:nat | len <= n}{i:nat | i <= len} .<len - i>.
-  (bytes: !$A.borrow(byte, l, n), len: int len, i: int i, seen: int)
-  : [s,e:nat | s <= e; e <= len] @(int, int s, int e) =
-  if i >= len then (if seen > 0 then @(0, 0, 0) else @(1, 0, 0))
-  else let
-    val stop = find_byte(bytes, len, i, 10)
-    val next = (if stop >= len then len else stop + 1): [k:nat | i < k; k <= len] int k
-  in
-    if stop = i then _paths_scan(bytes, len, next, seen)
-    else if path_refused(bytes, i, stop) then @(2, i, stop)
-    else _paths_scan(bytes, len, next, seen + 1)
-  end
+(* Letters of a size: its digits as a number, saturating at 200000000000000000 *)
+fun _size_value {l:agz}{n:pos}{stop:nat | stop <= n}{i:nat | i <= stop} .<stop - i>.
+  (bytes: !$A.borrow(byte, l, n), stop: int stop, i: int i, value: lint): lint =
+  if i >= stop then value
+  else if value > 10000000000000000L then 200000000000000000L
+  else _size_value(bytes, stop, i + 1, value * 10L + g0int2int_int_lint(_byte(bytes, i) - 48))
 
-fn _put_span {l:agz}{n:pos}{start,stop:nat | start <= stop; stop <= n}
-  (message: !$B.sized_rope, bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop): void =
-  $B.sized_rope_copy(message, bytes, start, stop)
+fun _all_digits {l:agz}{n:pos}{stop:nat | stop <= n}{i:nat | i <= stop} .<stop - i>.
+  (bytes: !$A.borrow(byte, l, n), stop: int stop, i: int i): bool =
+  if i >= stop then true
+  else if _byte(bytes, i) >= 48 && _byte(bytes, i) <= 57 then _all_digits(bytes, stop, i + 1)
+  else false
 
-(* The paths text bytes[0, len) checked: 0 when there is a path and none is refused, else 1
-   with the command `::error::` and its words appended to message *)
-#pub fn check_paths {l:agz}{n:pos}{len:nat | len <= n}
-  (bytes: !$A.borrow(byte, l, n), len: int len, message: !$B.sized_rope): int
+(* The number written as the digits bytes[start, stop): whether there is at least one digit
+   and nothing else, and the value (saturating) *)
+#pub fn parse_size {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
+  (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop): @(bool, lint)
 
-implement check_paths (bytes, len, message) = let
-  val @(code, start, stop) = _paths_scan(bytes, len, 0, 0)
-in
-  if code = 0 then 0
-  else if code = 1 then let
-    val () = $B.sized_rope_bput(message, "::error::repin-paths is empty: nothing would be committed\n")
-  in 1 end
-  else let
-    val () = $B.sized_rope_bput(message, "::error::repin-paths names a path that is refused: ")
-    val () = _put_span(message, bytes, start, stop)
-    val () = $B.sized_rope_bput(message, "\n")
-  in 1 end
-end
-
-(* ============================================================
-   A tar's listing
-   ============================================================ *)
+implement parse_size (bytes, start, stop) =
+  if stop <= start then @(false, 0L)
+  else if _all_digits(bytes, stop, start) then @(true, _size_value(bytes, stop, start, 0L))
+  else @(false, 0L)
 
 fun _skip_spaces {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit} .<limit - i>.
   (bytes: !$A.borrow(byte, l, n), limit: int limit, i: int i)
@@ -151,12 +125,14 @@ fun _skip_token {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit} .<lim
 (* One line of `tar -tv --numeric-owner` as bytes[line, stop): the mode (whose first letter
    is the type), owner/group, size, date, time and the name, separated by spaces. The kind
    is 0 for a regular file, 1 for a directory, 2 for any other type, and -1 when the line
-   has not that shape; the size is the third word (at most 12 digits); the name is
-   bytes[name_start, name_stop). *)
-fn _parse_line {l:agz}{n:pos}{stop:nat | stop <= n}{line:nat | line <= stop}
+   has not that shape; the size is the third word; the name is bytes[name_start,
+   name_stop). *)
+#pub fn parse_member {l:agz}{n:pos}{stop:nat | stop <= n}{line:nat | line <= stop}
   (bytes: !$A.borrow(byte, l, n), line: int line, stop: int stop)
   : [name_start,name_stop:nat | line <= name_start; name_start <= name_stop; name_stop <= stop]
-    @(int, lint, int name_start, int name_stop) =
+    @(int, lint, int name_start, int name_stop)
+
+implement parse_member (bytes, line, stop) =
   if line >= stop then @(~1, 0L, line, line)
   else let
     val first = _byte(bytes, line)
@@ -179,179 +155,45 @@ fn _parse_line {l:agz}{n:pos}{stop:nat | stop <= n}{line:nat | line <= stop}
               || date_stop = date_start || time_stop = time_start then
         @(~1, 0L, line, line)
       else let
-        val @(size_ok, size) = parse_seconds(bytes, size_start, size_stop)
+        val @(size_ok, size) = parse_size(bytes, size_start, size_stop)
       in
         if size_ok then @(kind, size, time_stop + 1, stop) else @(~1, 0L, line, line)
       end
     end
   end
 
-(* The name of a member without the slash that ends a directory's *)
-fn _member_end {l:agz}{n:pos}{stop:nat | stop <= n}{name_start:nat | name_start <= stop}
-  (bytes: !$A.borrow(byte, l, n), kind: int, name_start: int name_start, name_stop: int stop)
-  : [e:nat | name_start <= e; e <= stop] int e =
-  if kind != 1 then name_stop
-  else if name_stop <= name_start then name_stop
-  else if _byte(bytes, name_stop - 1) = 47 then name_stop - 1
-  else name_stop
+(* The end of the name of a member: a directory's name loses every trailing slash (as
+   tarfile does), a file's is as it is *)
+fun _strip_slashes {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop} .<stop - start>.
+  (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop)
+  : [e:nat | start <= e; e <= stop] int e =
+  if stop <= start then stop
+  else if _byte(bytes, stop - 1) = 47 then _strip_slashes(bytes, start, stop - 1)
+  else stop
 
-(* Whether the name bytes[name_start, name_stop) is the listed path paths[path_start, path_stop)
-   or under it *)
-fn _under {listing_loc,paths_loc:agz}{listing_size,paths_size:pos}
-  {name_stop:nat | name_stop <= listing_size}{name_start:nat | name_start <= name_stop}
-  {path_stop:nat | path_stop <= paths_size}{path_start:nat | path_start <= path_stop}
-  (listing: !$A.borrow(byte, listing_loc, listing_size), name_start: int name_start,
+#pub fn member_end {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
+  (bytes: !$A.borrow(byte, l, n), kind: int, start: int start, stop: int stop)
+  : [e:nat | start <= e; e <= stop] int e
+
+implement member_end (bytes, kind, start, stop) =
+  if kind = 1 then _strip_slashes(bytes, start, stop) else stop
+
+(* Whether the name bytes[name_start, name_stop) is the listed path paths[path_start,
+   path_stop) or under it *)
+#pub fn name_under_path {name_loc,path_loc:agz}{name_size,path_size:pos}
+  {name_stop:nat | name_stop <= name_size}{name_start:nat | name_start <= name_stop}
+  {path_stop:nat | path_stop <= path_size}{path_start:nat | path_start <= path_stop}
+  (name: !$A.borrow(byte, name_loc, name_size), name_start: int name_start,
    name_stop: int name_stop,
-   paths: !$A.borrow(byte, paths_loc, paths_size), path_start: int path_start,
-   path_stop: int path_stop): bool =
+   paths: !$A.borrow(byte, path_loc, path_size), path_start: int path_start,
+   path_stop: int path_stop): bool
+
+implement name_under_path (name, name_start, name_stop, paths, path_start, path_stop) =
   if name_stop - name_start = path_stop - path_start then
-    spans_equal(listing, name_start, name_stop, paths, path_start, path_stop)
+    spans_equal(name, name_start, name_stop, paths, path_start, path_stop)
   else if name_stop - name_start > path_stop - path_start then
-    (if _byte(listing, name_start + (path_stop - path_start)) = 47 then
-       spans_equal(listing, name_start, name_start + (path_stop - path_start),
+    (if _byte(name, name_start + (path_stop - path_start)) = 47 then
+       spans_equal(name, name_start, name_start + (path_stop - path_start),
          paths, path_start, path_stop)
      else false)
   else false
-
-(* Whether the name is a listed path or under one: the paths text paths[0, paths_len)
-   searched from i *)
-fun _under_any {listing_loc,paths_loc:agz}{listing_size,paths_size:pos}
-  {name_stop:nat | name_stop <= listing_size}{name_start:nat | name_start <= name_stop}
-  {paths_len:nat | paths_len <= paths_size}{i:nat | i <= paths_len} .<paths_len - i>.
-  (listing: !$A.borrow(byte, listing_loc, listing_size), name_start: int name_start,
-   name_stop: int name_stop,
-   paths: !$A.borrow(byte, paths_loc, paths_size), paths_len: int paths_len, i: int i): bool =
-  if i >= paths_len then false
-  else let
-    val stop = find_byte(paths, paths_len, i, 10)
-    val next = (if stop >= paths_len then paths_len else stop + 1)
-      : [k:nat | i < k; k <= paths_len] int k
-  in
-    if stop > i && _under(listing, name_start, name_stop, paths, i, stop) then true
-    else _under_any(listing, name_start, name_stop, paths, paths_len, next)
-  end
-
-(* The members of listing[0, listing_len) from i: 0 when each is a regular file or a
-   directory whose name passes the rule and is a listed path or under one, and the sizes
-   add up to at most the cap; else the code and the span of the finding: 1 a name (the
-   name), 2 a type (the line), 3 the cap (empty), 4 a line of another shape (the line) *)
-fun _members_scan {listing_loc,paths_loc:agz}{listing_size,paths_size:pos}
-  {listing_len:nat | listing_len <= listing_size}{paths_len:nat | paths_len <= paths_size}
-  {i:nat | i <= listing_len} .<listing_len - i>.
-  (listing: !$A.borrow(byte, listing_loc, listing_size), listing_len: int listing_len,
-   paths: !$A.borrow(byte, paths_loc, paths_size), paths_len: int paths_len,
-   cap: lint, i: int i, total: lint)
-  : [s,e:nat | s <= e; e <= listing_len] @(int, int s, int e) =
-  if i >= listing_len then @(0, 0, 0)
-  else let
-    val stop = find_byte(listing, listing_len, i, 10)
-    val next = (if stop >= listing_len then listing_len else stop + 1)
-      : [k:nat | i < k; k <= listing_len] int k
-    val @(kind, size, name_start, name_stop) = _parse_line(listing, i, stop)
-  in
-    if kind < 0 then @(4, i, stop)
-    else if kind = 2 then @(2, i, stop)
-    else let
-      val name_end = _member_end(listing, kind, name_start, name_stop)
-    in
-      if path_refused(listing, name_start, name_end) then @(1, name_start, name_end)
-      else if ~_under_any(listing, name_start, name_end, paths, paths_len, 0) then
-        @(1, name_start, name_end)
-      else if total + size > cap then @(3, 0, 0)
-      else _members_scan(listing, listing_len, paths, paths_len, cap, next, total + size)
-    end
-  end
-
-(* Whether a member of listing[0, listing_len), from i, is exactly the path
-   paths[path_start, path_stop) *)
-fun _holds {listing_loc,paths_loc:agz}{listing_size,paths_size:pos}
-  {listing_len:nat | listing_len <= listing_size}
-  {path_stop:nat | path_stop <= paths_size}{path_start:nat | path_start <= path_stop}
-  {i:nat | i <= listing_len} .<listing_len - i>.
-  (listing: !$A.borrow(byte, listing_loc, listing_size), listing_len: int listing_len,
-   paths: !$A.borrow(byte, paths_loc, paths_size), path_start: int path_start,
-   path_stop: int path_stop, i: int i): bool =
-  if i >= listing_len then false
-  else let
-    val stop = find_byte(listing, listing_len, i, 10)
-    val next = (if stop >= listing_len then listing_len else stop + 1)
-      : [k:nat | i < k; k <= listing_len] int k
-    val @(kind, _, name_start, name_stop) = _parse_line(listing, i, stop)
-  in
-    if kind < 0 || kind = 2 then _holds(listing, listing_len, paths, path_start, path_stop, next)
-    else let
-      val name_end = _member_end(listing, kind, name_start, name_stop)
-    in
-      if spans_equal(listing, name_start, name_end, paths, path_start, path_stop) then true
-      else _holds(listing, listing_len, paths, path_start, path_stop, next)
-    end
-  end
-
-(* The first listed path of paths[0, paths_len), from i, that is no member of the listing:
-   its span, empty when every one is a member *)
-fun _first_missing {listing_loc,paths_loc:agz}{listing_size,paths_size:pos}
-  {listing_len:nat | listing_len <= listing_size}{paths_len:nat | paths_len <= paths_size}
-  {i:nat | i <= paths_len} .<paths_len - i>.
-  (listing: !$A.borrow(byte, listing_loc, listing_size), listing_len: int listing_len,
-   paths: !$A.borrow(byte, paths_loc, paths_size), paths_len: int paths_len, i: int i)
-  : [s,e:nat | s <= e; e <= paths_len] @(int s, int e) =
-  if i >= paths_len then @(0, 0)
-  else let
-    val stop = find_byte(paths, paths_len, i, 10)
-    val next = (if stop >= paths_len then paths_len else stop + 1)
-      : [k:nat | i < k; k <= paths_len] int k
-  in
-    if stop = i then _first_missing(listing, listing_len, paths, paths_len, next)
-    else if _holds(listing, listing_len, paths, i, stop, 0) then
-      _first_missing(listing, listing_len, paths, paths_len, next)
-    else @(i, stop)
-  end
-
-(* The listing listing[0, listing_len) of a tar checked against the listed paths
-   paths[0, paths_len) and the cap on the sizes of its files: 0 when the paths pass the
-   rule and every member is a regular file or a directory that passes it, is a listed path
-   or under one, within the cap, and every listed path is a member; else 1 with the command
-   `::error::` and its words appended to message *)
-#pub fn check_members {listing_loc,paths_loc:agz}{listing_size,paths_size:pos}
-  {listing_len:nat | listing_len <= listing_size}{paths_len:nat | paths_len <= paths_size}
-  (listing: !$A.borrow(byte, listing_loc, listing_size), listing_len: int listing_len,
-   paths: !$A.borrow(byte, paths_loc, paths_size), paths_len: int paths_len,
-   cap: lint, message: !$B.sized_rope): int
-
-implement check_members (listing, listing_len, paths, paths_len, cap, message) =
-  if check_paths(paths, paths_len, message) != 0 then 1
-  else let
-    val @(code, start, stop) = _members_scan(listing, listing_len, paths, paths_len, cap, 0, 0L)
-  in
-    if code = 1 then let
-      val () = $B.sized_rope_bput(message,
-        "::error::a member outside the listed paths or with a refused name: ")
-      val () = _put_span(message, listing, start, stop)
-      val () = $B.sized_rope_bput(message, "\n")
-    in 1 end
-    else if code = 2 then let
-      val () = $B.sized_rope_bput(message,
-        "::error::a member that is not a regular file or a directory: ")
-      val () = _put_span(message, listing, start, stop)
-      val () = $B.sized_rope_bput(message, "\n")
-    in 1 end
-    else if code = 3 then let
-      val () = $B.sized_rope_bput(message,
-        "::error::the repinned files are over repin-max-bytes\n")
-    in 1 end
-    else if code = 4 then let
-      val () = $B.sized_rope_bput(message, "::error::a line of the tar listing that is no member: ")
-      val () = _put_span(message, listing, start, stop)
-      val () = $B.sized_rope_bput(message, "\n")
-    in 1 end
-    else let
-      val @(missing_start, missing_stop) = _first_missing(listing, listing_len, paths, paths_len, 0)
-    in
-      if missing_stop > missing_start then let
-        val () = $B.sized_rope_bput(message, "::error::the repinned files do not hold ")
-        val () = _put_span(message, paths, missing_start, missing_stop)
-        val () = $B.sized_rope_bput(message, "\n")
-      in 1 end
-      else 0
-    end
-  end
