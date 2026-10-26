@@ -298,6 +298,19 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # the setup action names a pull request's head, the merge's second parent (bats#283)
+          fetch-depth: 2
+      # the stand-in git is a bats program (tools/pin-audit/src/bin/git_stand_in.bats), built as tools-test.yml builds the audit
+      - name: Set up bats
+        uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
+        with:
+          require-lock: 'false'
+      - name: Build the stand-in git
+        working-directory: tools/pin-audit
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
       - name: Pins of one repository agree when its main moves between two resolutions
         run: |
           set -eu
@@ -309,19 +322,10 @@ jobs:
           awk '/# pin-moves end/ { on = 0 } on { print } /# pin-moves begin/ { on = 1 }' \
             .github/workflows/relock-pins.yml > "$work/moves.sh"
           [ -s "$work/moves.sh" ] || { echo "::error::no pin-moves program in relock-pins.yml"; exit 1; }
-          # a git whose main moves at every answer (area: relock heads)
-          cat > "$work/bin/git" <<'STUB'
-          #!/bin/sh
-          [ "$1" = ls-remote ] || { echo "stub git: unexpected $*" >&2; exit 2; }
-          n=$(cat "$SKEW_COUNT" 2>/dev/null || echo 0)
-          n=$((n + 1))
-          echo "$n" > "$SKEW_COUNT"
-          printf '%s\trefs/heads/main\n' "$(printf '%040d' 0 | tr 0 "$n")"
-          STUB
-          chmod +x "$work/bin/git"
-          export SKEW_COUNT="$work/count"
-          : > "$SKEW_COUNT"
-          printf '0\n' > "$SKEW_COUNT"
+          # a git whose main moves at every answer (area: relock heads): the first answer is all 1, the next all 2
+          cp tools/pin-audit/dist/debug/git_stand_in "$work/bin/git"
+          expected="$PWD/tests/relock-pins/skew/workflows/expected.yml"
+          cd "$work"
           PATH="$work/bin:$PATH" HOME="$work/home" GITHUB_REPOSITORY=bats-lang/skew \
           WORKFLOWS_DIRECTORY="$work/workflows" \
           PINS="bats-lang/repository-prototype/.github/workflows/package-check.yml
@@ -330,11 +334,11 @@ jobs:
           PIN_COPIES="bats-lang/repository-prototype/.github/workflows/package-check.yml pwa-ref
           bats-lang/repository-prototype/.github/workflows/publish.yml pwa-ref" \
             bash -eu "$work/moves.sh"
-          cmp "$work/workflows/caller.yml" tests/relock-pins/skew/workflows/expected.yml \
-            || { echo "::error::the pins and copies of one repository do not agree"; diff -u tests/relock-pins/skew/workflows/expected.yml "$work/workflows/caller.yml" || true; exit 1; }
-          calls=$(cat "$SKEW_COUNT")
-          [ "$calls" = 2 ] || { echo "::error::$calls ls-remote calls for two repositories, expected 2"; exit 1; }
-          echo "2 ls-remote calls for 2 repositories; both repository-prototype pins and both pwa-ref copies hold one commit"
+          cmp "$work/workflows/caller.yml" "$expected" \
+            || { echo "::error::the pins and copies of one repository do not agree"; diff -u "$expected" "$work/workflows/caller.yml" || true; exit 1; }
+          calls=$(wc -c < "$work/git-calls")
+          [ "$calls" -eq 2 ] || { echo "::error::$calls ls-remote calls for two repositories, expected 2"; exit 1; }
+          echo "$calls ls-remote calls for 2 repositories; both repository-prototype pins and both pwa-ref copies hold one commit"
           cat "$work/workflows/caller.yml"
 
   actions:
