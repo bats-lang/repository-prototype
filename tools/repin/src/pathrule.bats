@@ -9,9 +9,7 @@
    This module is the pure part: the rule on a span of bytes, and the reading of one line of
    a tar's listing (`tar -tv --numeric-owner --quoting-style=escape`). The streams (the
    paths file and the listing, read a byte at a time, any size) are in pathrule_driver.bats.
-   A directory's name has every trailing slash stripped, as tarfile does. A size is any
-   number of digits, saturating at 200000000000000000 (20 petabytes of bytes; no file
-   system holds a file near it). *)
+   A directory's name has every trailing slash stripped, as tarfile does. *)
 
 #include "share/atspre_staload.hats"
 
