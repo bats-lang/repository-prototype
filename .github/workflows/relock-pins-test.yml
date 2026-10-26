@@ -331,7 +331,7 @@ jobs:
           bats-lang/repository-prototype/.github/workflows/publish.yml pwa-ref" \
             bash -eu "$work/moves.sh"
           cmp "$work/workflows/caller.yml" tests/relock-pins/skew/workflows/expected.yml \
-            || { echo "::error::the pins and copies of one repository do not agree"; diff tests/relock-pins/skew/workflows/expected.yml "$work/workflows/caller.yml" || true; exit 1; }
+            || { echo "::error::the pins and copies of one repository do not agree"; diff -u tests/relock-pins/skew/workflows/expected.yml "$work/workflows/caller.yml" || true; exit 1; }
           calls=$(cat "$SKEW_COUNT")
           [ "$calls" = 2 ] || { echo "::error::$calls ls-remote calls for two repositories, expected 2"; exit 1; }
           echo "2 ls-remote calls for 2 repositories; both repository-prototype pins and both pwa-ref copies hold one commit"
