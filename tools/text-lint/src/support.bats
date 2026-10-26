@@ -1,9 +1,8 @@
 (* support -- bytes and files for text-lint (bats-lang/repository-prototype#487).
    Keyword: text-lint bounds.
 
-   A file is read whole into a builder, so a text of text-lint is at most
-   524288 bytes; a file that does not fit is the outcome Read_too_long, never
-   a cut one. text-lint reads no YAML and makes no network call: what is here
+   A file is read whole into a builder, so a text of text-lint is bounded by the
+   builder; a file that does not fit is the outcome Read_too_long, never a cut one. text-lint reads no YAML and makes no network call: what is here
    is bytes and files. The helpers are tools/repin's support.bats (a package
    of its own shares no module with another). *)
 
@@ -15,7 +14,7 @@
 #use file as F
 #use result as R
 
-(* How reading a file ended: it all fit, it did not fit the 524288-byte
+(* How reading a file ended: it all fit, it did not fit the
    buffer, or a read failed. Every caller matches all three (case+). *)
 #pub datatype read_end =
   | Read_whole

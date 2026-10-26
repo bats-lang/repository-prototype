@@ -1,0 +1,21 @@
+# The form of every pull request body of this repository (bats-lang/repository-prototype#487,
+# keyword: text-lint): the caller of the shared lint, which this repository hosts, so it is
+# called by path as package-check.yml is, not by commit; the tools are checked out at the
+# commit of the base branch, the one this workflow file is from (pull_request_target runs the
+# default branch's files, never the pull request's). Every other repository's text-lint.yml is
+# the template tools/pin-audit/templates/text-lint.yml, which calls it by commit.
+name: text-lint
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  text-lint:
+    uses: ./.github/workflows/text-lint-check.yml
+    with:
+      tools-ref: ${{ github.sha }}

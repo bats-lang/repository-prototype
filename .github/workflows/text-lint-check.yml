@@ -33,7 +33,7 @@ on:
   workflow_call:
     inputs:
       tools-ref:
-        description: The commit of bats-lang/repository-prototype this workflow is called at (40 hex digits).
+        description: The full commit SHA of bats-lang/repository-prototype this workflow is called at.
         required: true
         type: string
 

@@ -1,25 +1,67 @@
 # The phrases a pull request body may not hold (bats-lang/repository-prototype#487,
 # keyword: text-lint phrases).
 #
-# One phrase on each line, matched without regard to case and only at word edges (a phrase
-# inside a longer word is not a hit). A line that starts with # is not a phrase. They are the
-# literal ones of the text rows of bats-lang/quire's tests/static/guidelines/phrases.tsv
-# (the ones that are one fixed text; the patterns of that file stay in quire's own lint).
-provisional verdict
-instead of fixes
-or narrow
-hand-picked
-handpicked
-nothing touches it
-contention
-honest
-honestly
-frankly
-not run locally
-or say what is true
-wait and see
-holding the slot
-blocked on evidence
-waiting for evidence
-stop measuring
-narrow the measurement
+# One line each, four fields separated by tabs: a label, a pattern, an example the pattern
+# matches (a dash when the example is built in the tests), and what to do instead. The patterns
+# are the phrases of the text kind of bats-lang/quire's tests/static/guidelines/phrases.tsv,
+# in the pattern language of src/pattern.bats (no group and no alternation, so an alternative
+# is a line of its own), searched without regard to case. Two patterns spell a letter as a class
+# so that this file does not hold the words the briefs forbid. A line that starts with # is
+# not a phrase.
+verdict	provisional verdict	my provisional verdict is approved	A verdict is the posted review; one anywhere else is no review.
+narrowing	instead of fixes	change refs instead of fixes	Nobody offers a way to ship less than the ticket says: the Done-when as written is the standard.
+narrowing	unless narrow	refs unless narrows it	Nobody offers a way to ship less than the ticket says: the Done-when as written is the standard.
+narrowing	unless the narrow	refs unless the narrows it	Nobody offers a way to ship less than the ticket says: the Done-when as written is the standard.
+narrowing	unless owner narrow	refs unless owner narrows it	Nobody offers a way to ship less than the ticket says: the Done-when as written is the standard.
+narrowing	unless the owner narrow	refs unless the owner narrows it	Nobody offers a way to ship less than the ticket says: the Done-when as written is the standard.
+narrowing	or narrow\b	do it or narrow	Narrowing is the owner's, never offered.
+narrowing	or narrowing\b	do it or narrowing	Narrowing is the owner's, never offered.
+refs	fixes\s+#?\d+\s+to\s+refs	change fixes #12 to refs	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
+refs	fixes\s+#?[nx]\s+to\s+refs	change fixes #n to refs	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
+refs	fixes\s+#?<[^>\s]*>\s+to\s+refs	change fixes #<ticket> to refs	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
+refs	\bas refs\b	open it as refs	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
+refs	\buse refs\b	use refs here	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
+refs	\bopen it as refs\b	then open it as refs	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
+refs	\bopened it as refs\b	we opened it as refs	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
+half-done	\bpar[t]ly\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	\bpar[t]ially\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	hand-?picked	a hand-picked sample	A local sample is random, with its seed and size named; the whole population is CI's.
+rerun	passed this time	it passed this time	A red test is root-caused; passing again is not a cause.
+rerun	passed alone	it passed alone	A red test is root-caused; passing again is not a cause.
+rerun	passed on re-?run	it passed on rerun	A red test is root-caused; passing again is not a cause.
+rerun	passed on a re-?run	it passed on a re-run	A red test is root-caused; passing again is not a cause.
+rerun	pass alone	it will pass alone	A red test is root-caused; passing again is not a cause.
+rerun	passes alone	it passes alone	A red test is root-caused; passing again is not a cause.
+rerun	pass this time	it will pass this time	A red test is root-caused; passing again is not a cause.
+rerun	passes this time	it passes this time	A red test is root-caused; passing again is not a cause.
+rerun	pass on re-?run	it can pass on rerun	A red test is root-caused; passing again is not a cause.
+rerun	pass on a re-?run	it can pass on a re-run	A red test is root-caused; passing again is not a cause.
+rerun	passes on re-?run	it passes on rerun	A red test is root-caused; passing again is not a cause.
+rerun	passes on a re-?run	it passes on a re-run	A red test is root-caused; passing again is not a cause.
+rerun	nothing touches it	contention, nothing touches it	A red test is root-caused; passing again is not a cause.
+cause	\bcontention\b	failed under contention	A red test is root-caused or made robust; the word is not a cause.
+unverified	honest	honest points	State the fact; the word adds nothing and offers an exit.
+unverified	\bfrank\b	to be frank it works	State the fact; the word adds nothing and offers an exit.
+unverified	\bfrankly\b	frankly it works	State the fact; the word adds nothing and offers an exit.
+unverified	not run locally	not run locally: the e2e	Run what the change needs; what CI runs is CI's and is not a caveat.
+unverified	haven'?t verified	we haven't verified it	Run what the change needs; what CI runs is CI's and is not a caveat.
+alternative	or say what is true	do x or say what is true	A claim is never weakened: the code is changed until it holds.
+alternative	or remove the claim	or remove the claim	A claim is never weakened: the code is changed until it holds.
+alternative	or remove the sentence	or remove the sentence	A claim is never weakened: the code is changed until it holds.
+alternative	or remove the line	or remove the line	A claim is never weakened: the code is changed until it holds.
+waiting	after a day\b	after a day of sessions	A step that waits for time or a recurrence is done now.
+waiting	after a week\b	after a week of sessions	A step that waits for time or a recurrence is done now.
+waiting	after a month\b	after a month of sessions	A step that waits for time or a recurrence is done now.
+waiting	after a sessions?\b	after a session	A step that waits for time or a recurrence is done now.
+waiting	after \d+ sessions?\b	after 3 sessions	A step that waits for time or a recurrence is done now.
+waiting	next capture\b	at the next capture	A step that waits for time or a recurrence is done now.
+waiting	next run\b	at the next run	A step that waits for time or a recurrence is done now.
+waiting	next occurrence\b	at the next occurrence	A step that waits for time or a recurrence is done now.
+waiting	wait and see	wait and see	A step that waits for time or a recurrence is done now.
+slot	holding the slot	holding the slot	Hold nothing: do the work or hand it back.
+evidence-wait	blocked on evidence	blocked on evidence	Evidence is produced, not waited for: produce it.
+evidence-wait	waiting for evidence	waiting for evidence	Evidence is produced, not waited for: produce it.
+waiting-go	waiting for a "?go"?\b	waiting for a go	No step waits for a go: do it as written.
+waiting-go	waiting for the "?go"?\b	waiting for the "go"	No step waits for a go: do it as written.
+measure	stop measuring	stop measuring	Measure as the Done-when says; do not stop or narrow it.
+measure	narrow the measurement	narrow the measurement	Measure as the Done-when says; do not stop or narrow it.

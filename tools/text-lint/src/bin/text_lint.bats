@@ -13,9 +13,9 @@
                       text-lint, description, target_url URL). A relock branch and a bot
                       are exempt (success).
 
-   Exit status: 0 done (body: no finding; event: the status is written, whatever its state),
-   1 a finding (body) or a file that cannot be read or written or an event that is refused,
-   2 the command line is not one of these. It reads the files it is given, makes no network
+   Exit status: success when done (body: no finding; event: the status is written, whatever
+   its state), failure for a finding (body), a file that cannot be read or written or an event
+   that is refused, and a usage failure for a command line that is none of these. It reads the files it is given, makes no network
    call, reads no YAML and no clock. *)
 
 #include "share/atspre_staload.hats"

@@ -5,10 +5,10 @@
    taken from it, pull_request.body, pull_request.head.sha, pull_request.head.ref and
    pull_request.user.login; a missing or null body is an empty one. The status is the commit
    status the workflow posts: state, context text-lint, a description of ASCII with no quote
-   or backslash and at most 140 bytes (the first finding), and the run's URL. A pull request
-   of a relock branch (relock/<date>) or of a bot (a login that ends with [bot]) is exempt:
-   its status is success and says so. The event is at most 524288 bytes and the body 262144
-   decoded bytes; a larger one is refused (the status is not written). *)
+   or backslash and cut short (the first finding), and the run's URL. A pull request of a
+   relock branch (relock/<date>) or of a bot (a login that ends with [bot]) is exempt: its
+   status is success and says so. The event and the body are bounded by the types (an event or
+   a body that does not fit is refused, and the status is not written). *)
 
 #include "share/atspre_staload.hats"
 
@@ -97,7 +97,7 @@ fun _copy_exact {l,other_loc:agz}{n:pos}{m:nat | m <= n}{capacity:pos | m <= cap
   in _copy_exact(source, m, destination, i + 1) end
 
 (* The first line of a text to the rope, ASCII only: a quote or a backslash becomes an
-   apostrophe, any other byte outside 32 to 126 a question mark; at most cap bytes *)
+   apostrophe, any other byte that is not printable ASCII a question mark; cut short at cap *)
 fun _put_clean {l:agz}{n:pos}{used:nat | used <= n}{i:nat | i <= used}{count:nat} .<used - i>.
   (bytes: !$A.borrow(byte, l, n), used: int used, i: int i, count: int count, cap: int,
    out: !$B.sized_rope): void =
@@ -115,7 +115,7 @@ fun _put_clean {l:agz}{n:pos}{used:nat | used <= n}{i:nat | i <= used}{count:nat
     in _put_clean(bytes, used, i + 1, count + 1, cap, out) end
   end
 
-(* The first line (140 bytes at most) of the rope, cleaned, to out; the rope is consumed *)
+(* The first line of the rope, cleaned and cut short, to out; the rope is consumed *)
 fn _first_finding (text: $B.sized_rope, out: !$B.sized_rope): void =
   case+ $B.sized_rope_chunks(text) of
   | ~$B.rope_sized_nil() => ()

@@ -1,32 +1,33 @@
 (* lint -- the form of a pull request body (bats-lang/repository-prototype#487).
    Keyword: text-lint rows.
 
-   The rows are the ones of bats-lang/quire's tests/static/guidelines.py --pr-body, ported:
+   The checks are the ones of bats-lang/quire's tests/static/guidelines.py --pr-body, ported;
+   a finding is one line of ASCII with no double quote, and ends with the name of its check:
 
-     row 1  the first line is "Fixes #N" (or "Fixes owner/repo#N"): a pull request that
-            does not meet its Done-when as written is not opened as Refs
-     row 2  the body names one ticket: every "Fixes <ticket>" is the same ticket
-     row 3  a line "Head: <40 hex digits>" is there, and the last one is the head
-     row 4  an Evidence heading, and a fenced block that starts with "$ <command>"
-     row 5  the body ends with the footer of the template (one of three lines, below),
-            holds exactly one, and no session URL
-     row 6  none of the phrases of the phrases file (one text for each line, matched
-            without regard to case, at word edges) is in the body
+     first-line   the first line is "Fixes #N" (or "Fixes owner/repo#N"): a pull request that
+                  does not meet its Done-when as written is not opened as Refs
+     one-ticket   every "Fixes <ticket>" of the body is the same ticket
+     head         a line "Head: <commit SHA>" is there, and the last one is the head
+     evidence     an Evidence heading, and a fenced block that starts with "$ <command>"
+     footer       the body ends with the footer of the template (one of three lines, below),
+                  holds exactly one, and no session URL
+     phrases      none of the phrases of the phrases file (pattern.bats) is in the body
 
-   A finding is one line of ASCII with no double quote. Lines end with LF or CRLF. The
-   body, the head and the phrases are each in a buffer of at most 524288 bytes. *)
+   Lines end with LF or CRLF. The body, the head and the phrases are each in a buffer of the
+   builder's capacity. *)
 
 #include "share/atspre_staload.hats"
 
 #use array as A
 #use builder as B
 
+staload "pattern.sats"
 staload "support.sats"
 
 fn _low (c: int): int = if c >= 65 && c <= 90 then c + 32 else c
 
-(* kind 0: a word, a dot or a dash; 1: a digit; 2: a space or a tab; 3: a lowercase
-   hex digit; 4: a word character (letter, digit, underscore); 5: a number sign *)
+(* The kinds of byte, in the order of their numbers: a word, a dot or a dash; a digit; a space
+   or a tab; a lowercase hex digit; a word character (letter, digit, underscore); a number sign *)
 fn _is_class (c: int, kind: int): bool =
   if kind = 0 then
     ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c = 95
@@ -150,7 +151,7 @@ fn _ticket_at {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit}
     in if e <= j then @(0, 0) else @(j, e) end
   end
 
-(* Row 1: whether the first line starts with "Fixes <ticket>" *)
+(* first-line: whether the first line starts with "Fixes <ticket>" *)
 fn _first_line_fixes {l:agz}{n:pos}{limit:nat | limit <= n}
   (bytes: !$A.borrow(byte, l, n), limit: int limit): bool = let
   val s = _first_line(bytes, limit, 0)
@@ -174,7 +175,7 @@ fn _word_before {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit}
   (bytes: !$A.borrow(byte, l, n), limit: int limit, i: int i): bool =
   if i <= 0 then false else _kind_at(bytes, limit, i - 1, 4)
 
-(* Row 2: whether a ticket named by "Fixes" anywhere in the body is not the first one named *)
+(* one-ticket: whether a ticket named by "Fixes" anywhere in the body is not the first one named *)
 fun _differs {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit}
   {fs,fe:nat | fs <= fe; fe <= limit} .<limit - i>.
   (bytes: !$A.borrow(byte, l, n), limit: int limit, i: int i, fs: int fs, fe: int fe): bool =
@@ -191,7 +192,7 @@ fun _differs {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit}
     else true
   end
 
-(* Row 3: the start of the 40 digits of the last "Head:" line, else a negative number *)
+(* head: the start of the digits of the last "Head:" line, else a negative number *)
 fun _head_line {l:agz}{n:pos}{limit:nat | limit <= n}{start:nat | start <= limit}
   {last:int | last < 0 || (last >= 0 && last + 40 <= limit)} .<limit - start>.
   (bytes: !$A.borrow(byte, l, n), limit: int limit, start: int start, last: int last)
@@ -211,7 +212,7 @@ in
   if raw >= limit then here else _head_line(bytes, limit, raw + 1, here)
 end
 
-(* Row 4 heading: a line of "#"s, blanks, then Evidence at a word edge *)
+(* evidence heading: a line of "#"s, blanks, then Evidence at a word edge *)
 fn _is_heading {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
   (bytes: !$A.borrow(byte, l, n), stop: int stop, start: int start): bool = let
   val h = _run(bytes, stop, start, 5)
@@ -227,7 +228,8 @@ in
   end
 end
 
-(* Row 4: bit 1 when a heading is there, bit 2 when a line "$ ..." follows a fence line *)
+(* evidence: whether a heading is there and whether a line "$ ..." follows a fence line (the
+   result adds the first as a one and the second as a two) *)
 fun _evidence {l:agz}{n:pos}{limit:nat | limit <= n}{start:nat | start <= limit}
   .<limit - start>.
   (bytes: !$A.borrow(byte, l, n), limit: int limit, start: int start, after_fence: bool,
@@ -253,7 +255,7 @@ fun _rstrip {l:agz}{n:pos}{a:nat}{e:nat | a <= e; e <= n} .<e - a>.
   else if _is_class(byte2int0($A.read<byte>(bytes, e - 1)), 2) then _rstrip(bytes, a, e - 1)
   else e
 
-(* Row 5: the number of lines that are a footer, and whether the last line that is not blank
+(* footer: the number of lines that are a footer, and whether the last line that is not blank
    is one *)
 fun _footers {l:agz}{n:pos}{limit:nat | limit <= n}{start:nat | start <= limit}
   .<limit - start>.
@@ -276,57 +278,82 @@ fun _footers {l:agz}{n:pos}{limit:nat | limit <= n}{start:nat | start <= limit}
     else _footers(bytes, limit, raw + 1, count2, last2)
   end
 
-(* Row 6: whether the phrase phrase[ps, pe) (compared without regard to case) is in the body
-   at a word edge on each side *)
-fun _ci_at {bl,pl:agz}{bn,pn:pos}{blimit:nat | blimit <= bn}{i:nat}{ps,plen:nat}
-  {k:nat | k <= plen; i + plen <= blimit; ps + plen <= pn} .<plen - k>.
-  (body: !$A.borrow(byte, bl, bn), blimit: int blimit, i: int i,
-   phrase: !$A.borrow(byte, pl, pn), ps: int ps, plen: int plen, k: int k): bool =
-  if k >= plen then true
-  else if _low(byte2int0($A.read<byte>(body, i + k)))
-          = _low(byte2int0($A.read<byte>(phrase, ps + k))) then
-    _ci_at(body, blimit, i, phrase, ps, plen, k + 1)
-  else false
+fun _count_lf {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit} .<limit - i>.
+  (bytes: !$A.borrow(byte, l, n), limit: int limit, i: int i, count: int): int =
+  if i >= limit then count
+  else if byte2int0($A.read<byte>(bytes, i)) = 10 then _count_lf(bytes, limit, i + 1, count + 1)
+  else _count_lf(bytes, limit, i + 1, count)
 
-fun _find_phrase {bl,pl:agz}{bn,pn:pos}{blimit:nat | blimit <= bn}{i:nat | i <= blimit}
-  {ps:nat}{plen:pos | ps + plen <= pn} .<blimit - i>.
-  (body: !$A.borrow(byte, bl, bn), blimit: int blimit, i: int i,
-   phrase: !$A.borrow(byte, pl, pn), ps: int ps, plen: int plen): bool =
-  if i + plen > blimit then false
-  else if ~_word_before(body, blimit, i) && _ci_at(body, blimit, i, phrase, ps, plen, 0)
-          && ~_kind_at(body, blimit, i + plen, 4) then true
-  else _find_phrase(body, blimit, i + 1, phrase, ps, plen)
+fn _put_number (out: !$B.sized_rope, n: int): void = let
+  var digits : $B.builder(0) = $B.create()
+  val () = $B.put_int(digits, n)
+  val @(chunk, used) = $B.to_arr(digits)
+  val @(frozen, view) = $A.freeze<byte>(chunk)
+  val () = $B.sized_rope_copy(out, view, 0, used)
+  val () = $A.drop<byte>(frozen, view)
+in $A.free<byte>($A.thaw<byte>(frozen)) end
 
-(* Appends the findings of the phrases file lines starting at start: a line is a phrase
-   unless it is blank or starts with "#" *)
+fn _malformed (out: !$B.sized_rope, line: int): int = let
+  val () = $B.sized_rope_bput(out, "PR body: line ")
+  val () = _put_number(out, line)
+  val () = $B.sized_rope_bput(out, " of tools/text-lint/phrases.txt is not a label, a pattern, an example and a reason separated by tabs (phrases)\n")
+in 1 end
+
+(* phrases: the findings of the phrases file lines from start (line is the number of that line,
+   from 1). A line is blank, a comment (it starts with "#"), or four fields separated by tabs:
+   a label, a pattern (pattern.bats), an example the pattern matches, and what to do instead.
+   A pattern found in the body is a finding that names the body's line, the label and the line of
+   the file, and says what to do instead; a line of another form is a finding of its own. *)
 fun _phrases {bl,pl:agz}{bn,pn:pos}{blimit:nat | blimit <= bn}{plimit:nat | plimit <= pn}
   {start:nat | start <= plimit} .<plimit - start>.
   (body: !$A.borrow(byte, bl, bn), blimit: int blimit,
-   phrases: !$A.borrow(byte, pl, pn), plimit: int plimit, start: int start,
-   out: !$B.sized_rope): int =
-  if start >= plimit then 0
-  else let
-    val raw = find_byte(phrases, plimit, start, 10)
-    val stop = _trim_cr(phrases, start, raw)
-    val a = _run(phrases, stop, start, 2)
-    val e = _rstrip(phrases, a, stop)
-    val found = (if e <= a then false
-      else if byte2int0($A.read<byte>(phrases, a)) = 35 then false
-      else _find_phrase(body, blimit, 0, phrases, a, e - a)): bool
-    val () = if found then let
-        val () = $B.sized_rope_bput(out, "PR body: it holds the phrase '")
-        val () = $B.sized_rope_copy(out, phrases, a, e)
-        val () = $B.sized_rope_bput(out, "', which the lint refuses (the phrases file)\n")
-      in () end else ()
-    val here = (if found then 1 else 0): int
-  in
-    if raw >= plimit then here
-    else here + _phrases(body, blimit, phrases, plimit, raw + 1, out)
-  end
+   phrases: !$A.borrow(byte, pl, pn), plimit: int plimit, start: int start, line: int,
+   out: !$B.sized_rope): int = let
+  val raw = find_byte(phrases, plimit, start, 10)
+  val stop = _trim_cr(phrases, start, raw)
+  val e = _rstrip(phrases, start, stop)
+  val here =
+    (if e <= start then 0
+     else if byte2int0($A.read<byte>(phrases, start)) = 35 then 0
+     else let
+       val t1 = find_byte(phrases, e, start, 9)
+     in
+       if t1 >= e then _malformed(out, line)
+       else let
+         val t2 = find_byte(phrases, e, t1 + 1, 9)
+       in
+         if t2 >= e then _malformed(out, line)
+         else let
+           val t3 = find_byte(phrases, e, t2 + 1, 9)
+         in
+           if t3 >= e then _malformed(out, line)
+           else let
+             val found = pattern_search(phrases, t2, t1 + 1, body, 0, blimit)
+           in
+             if found < 0 then 0
+             else let
+               val () = $B.sized_rope_bput(out, "PR body:")
+               val () = _put_number(out, 1 + _count_lf(body, found, 0, 0))
+               val () = $B.sized_rope_bput(out, ": ")
+               val () = $B.sized_rope_copy(out, phrases, start, t1)
+               val () = $B.sized_rope_bput(out, ": a refused phrase (tools/text-lint/phrases.txt line ")
+               val () = _put_number(out, line)
+               val () = $B.sized_rope_bput(out, "): ")
+               val () = $B.sized_rope_copy(out, phrases, t3 + 1, e)
+               val () = $B.sized_rope_bput(out, "\n")
+             in 1 end
+           end
+         end
+       end
+     end): int
+in
+  if raw >= plimit then here
+  else here + _phrases(body, blimit, phrases, plimit, raw + 1, line + 1, out)
+end
 
 (* The findings of the body body[0, len) for the head head[0, head_len) (an empty head is not
    compared) and the phrases phrases[0, phrases_len), one line each appended to out: how
-   many *)
+   many (the phrases alone are phrase_findings) *)
 #pub fn lint_body {bl,hl,pl:agz}{bn,hn,pn:pos}{len:nat | len <= bn}{head_len:nat | head_len <= hn}
   {phrases_len:nat | phrases_len <= pn}
   (body: !$A.borrow(byte, bl, bn), len: int len, head: !$A.borrow(byte, hl, hn),
@@ -336,10 +363,10 @@ fun _phrases {bl,pl:agz}{bn,pn:pos}{blimit:nat | blimit <= bn}{plimit:nat | plim
 implement lint_body (body, len, head, head_len, phrases, phrases_len, out) = let
   val first_ok = _first_line_fixes(body, len)
   val () = if first_ok then () else
-    $B.sized_rope_bput(out, "PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (row 1)\n")
+    $B.sized_rope_bput(out, "PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (first-line)\n")
   val tickets_differ = _differs(body, len, 0, 0, 0)
   val () = if tickets_differ then
-    $B.sized_rope_bput(out, "PR body: Fixes names more than one ticket; one ticket, one PR, and a dependency is its own ticket and PR (row 2)\n") else ()
+    $B.sized_rope_bput(out, "PR body: Fixes names more than one ticket; one ticket, one PR, and a dependency is its own ticket and PR (one-ticket)\n") else ()
   val head_at = _head_line(body, len, 0, ~1)
   val head_wrong = (if head_at < 0 then false
     else if head_len <= 0 then false
@@ -347,29 +374,29 @@ implement lint_body (body, len, head, head_len, phrases, phrases_len, out) = let
     else true): bool
   val head_missing = (head_at < 0): bool
   val () = if head_missing then
-    $B.sized_rope_bput(out, "PR body: no line Head: <40-character SHA>; the body names the head it describes (row 3)\n") else ()
+    $B.sized_rope_bput(out, "PR body: no line Head: <the commit SHA>; the body names the head it describes (head)\n") else ()
   val () = if head_at < 0 then () else if head_wrong then let
       val () = $B.sized_rope_bput(out, "PR body: it describes head ")
       val () = $B.sized_rope_copy(out, body, head_at, head_at + 40)
       val () = $B.sized_rope_bput(out, " but the head is ")
       val () = $B.sized_rope_copy(out, head, 0, head_len)
-      val () = $B.sized_rope_bput(out, "; rewrite the body for the head (row 3)\n")
+      val () = $B.sized_rope_bput(out, "; rewrite the body for the head (head)\n")
     in () end else ()
   val evidence = _evidence(body, len, 0, false, false, false)
   val () = if evidence = 0 || evidence = 2 then
-    $B.sized_rope_bput(out, "PR body: no Evidence heading; every claim has its command and raw output (row 4)\n")
+    $B.sized_rope_bput(out, "PR body: no Evidence heading; every claim has its command and raw output (evidence)\n")
     else if evidence = 1 then
-    $B.sized_rope_bput(out, "PR body: no fenced block that starts with $ <command> and holds its raw output (row 4)\n")
+    $B.sized_rope_bput(out, "PR body: no fenced block that starts with $ <command> and holds its raw output (evidence)\n")
     else ()
   val @(footer_count, last_is_footer) = _footers(body, len, 0, 0, false)
   val () = if ~last_is_footer then
-    $B.sized_rope_bput(out, "PR body: it does not end with the generated-by footer of the template (row 5)\n") else ()
+    $B.sized_rope_bput(out, "PR body: it does not end with the generated-by footer of the template (footer)\n") else ()
   val () = if footer_count > 1 then
-    $B.sized_rope_bput(out, "PR body: it holds more than one generated-by footer; exactly one (row 5)\n") else ()
+    $B.sized_rope_bput(out, "PR body: it holds more than one generated-by footer; exactly one (footer)\n") else ()
   val session = contains_text(body, len, 0, "/code/session_")
   val () = if session then
-    $B.sized_rope_bput(out, "PR body: it holds a session URL; the footer is the generated-by line alone (row 5)\n") else ()
-  val phrase_count = _phrases(body, len, phrases, phrases_len, 0, out)
+    $B.sized_rope_bput(out, "PR body: it holds a session URL; the footer is the generated-by line alone (footer)\n") else ()
+  val phrase_count = _phrases(body, len, phrases, phrases_len, 0, 1, out)
 in
   let
     val a = (if first_ok then 0 else 1): int
@@ -393,3 +420,11 @@ implement is_exempt (ref, ref_len, login, login_len) =
   if _starts(ref, ref_len, 0, "relock/", false) then true
   else if login_len >= 5 then span_is(login, login_len - 5, login_len, "[bot]")
   else false
+
+(* The findings of the phrases alone, as lint_body gives them *)
+#pub fn phrase_findings {bl,pl:agz}{bn,pn:pos}{len:nat | len <= bn}{phrases_len:nat | phrases_len <= pn}
+  (body: !$A.borrow(byte, bl, bn), len: int len, phrases: !$A.borrow(byte, pl, pn),
+   phrases_len: int phrases_len, out: !$B.sized_rope): int
+
+implement phrase_findings (body, len, phrases, phrases_len, out) =
+  _phrases(body, len, phrases, phrases_len, 0, 1, out)
