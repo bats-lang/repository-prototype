@@ -25,9 +25,10 @@
 # A draft pull request runs no job (#525, keyword: draft-ci): every job carries
 # the condition `github.event_name != 'pull_request' ||
 # !github.event.pull_request.draft` (the caller's event, as a called workflow
-# sees it), so push, workflow_dispatch and the merge queue run unchanged, the caller's `check / check` is reported as
-# skipped (not missing) for a draft, and `ready_for_review` in the caller's
-# types starts the check on the head when the pull request is marked ready.
+# sees it), so push, workflow_dispatch and the merge queue run unchanged, the
+# caller's `check / check` is reported as skipped (not missing) for a draft,
+# and `ready_for_review` in the caller's types starts the check on the head
+# when the pull request is marked ready.
 name: package-check
 
 on:
