@@ -301,7 +301,7 @@ jobs:
         with:
           # the setup action names a pull request's head, the merge's second parent (bats#283)
           fetch-depth: 2
-      # the stand-in git is a bats program (tools/pin-audit/src/bin/git_stand_in.bats), built as tools-test.yml builds the audit
+      # the stand-in git and the checking program are bats programs of tools/pin-audit, built as tools-test.yml builds the audit
       - name: Set up bats
         uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
         with:
@@ -311,35 +311,16 @@ jobs:
         env:
           REPOSITORY: ${{ github.workspace }}
         run: bats build --repository "$REPOSITORY"
+      # area: relock heads; the checking program is tools/pin-audit/src/bin/skew_check.bats
       - name: Pins of one repository agree when its main moves between two resolutions
         run: |
           set -eu
-          work="$RUNNER_TEMP/skew"
-          rm -rf "$work"
-          mkdir -p "$work/bin" "$work/home/relock" "$work/workflows"
-          cp tests/relock-pins/skew/workflows/caller.yml "$work/workflows/caller.yml"
-          # the pin moves as relock-pins.yml has them, between its pin-moves markers
-          awk '/# pin-moves end/ { on = 0 } on { print } /# pin-moves begin/ { on = 1 }' \
-            .github/workflows/relock-pins.yml > "$work/moves.sh"
-          [ -s "$work/moves.sh" ] || { echo "::error::no pin-moves program in relock-pins.yml"; exit 1; }
-          # a git whose main moves at every answer (area: relock heads): the first answer is all 1, the next all 2
-          cp tools/pin-audit/dist/debug/git_stand_in "$work/bin/git"
-          expected="$PWD/tests/relock-pins/skew/workflows/expected.yml"
-          cd "$work"
-          PATH="$work/bin:$PATH" HOME="$work/home" GITHUB_REPOSITORY=bats-lang/skew \
-          WORKFLOWS_DIRECTORY="$work/workflows" \
-          PINS="bats-lang/repository-prototype/.github/workflows/package-check.yml
-          bats-lang/repository-prototype/.github/workflows/publish.yml
-          bats-lang/bats/.github/actions/setup" \
-          PIN_COPIES="bats-lang/repository-prototype/.github/workflows/package-check.yml pwa-ref
-          bats-lang/repository-prototype/.github/workflows/publish.yml pwa-ref" \
-            bash -eu "$work/moves.sh"
-          cmp "$work/workflows/caller.yml" "$expected" \
-            || { echo "::error::the pins and copies of one repository do not agree"; diff -u "$expected" "$work/workflows/caller.yml" || true; exit 1; }
-          calls=$(wc -c < "$work/git-calls")
-          [ "$calls" -eq 2 ] || { echo "::error::$calls ls-remote calls for two repositories, expected 2"; exit 1; }
-          echo "$calls ls-remote calls for 2 repositories; both repository-prototype pins and both pwa-ref copies hold one commit"
-          cat "$work/workflows/caller.yml"
+          mkdir -p "$RUNNER_TEMP/skew"
+          cd "$RUNNER_TEMP/skew"
+          "$GITHUB_WORKSPACE/tools/pin-audit/dist/debug/skew_check" \
+            "$GITHUB_WORKSPACE/.github/workflows/relock-pins.yml" \
+            "$GITHUB_WORKSPACE/tests/relock-pins/skew" \
+            "$GITHUB_WORKSPACE/tools/pin-audit/dist/debug/git_stand_in"
 
   actions:
     if: inputs.refusal == ''
