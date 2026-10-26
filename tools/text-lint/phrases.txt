@@ -1,11 +1,11 @@
 # The phrases a pull request body may not hold (bats-lang/repository-prototype#487,
 # keyword: text-lint phrases).
 #
-# One line each, four fields separated by tabs: a label, a pattern, an example the pattern
+# One line each, fields separated by tabs: a label, a pattern, an example the pattern
 # matches (a dash when the example is built in the tests), and what to do instead. The patterns
 # are the phrases of the text kind of bats-lang/quire's tests/static/guidelines/phrases.tsv,
 # in the pattern language of src/pattern.bats (no group and no alternation, so an alternative
-# is a line of its own), searched without regard to case. Two patterns spell a letter as a class
+# is a line of its own), searched without regard to case. Some patterns spell a letter as a class
 # so that this file does not hold the words the briefs forbid. A line that starts with # is
 # not a phrase.
 verdict	provisional verdict	my provisional verdict is approved	A verdict is the posted review; one anywhere else is no review.

@@ -9,12 +9,11 @@
      one-ticket   every "Fixes <ticket>" of the body is the same ticket
      head         a line "Head: <commit SHA>" is there, and the last one is the head
      evidence     an Evidence heading, and a fenced block that starts with "$ <command>"
-     footer       the body ends with the footer of the template (one of three lines, below),
-                  holds exactly one, and no session URL
+     footer       the body ends with the footer of the template (one of the footers below),
+                  holds a single footer, and no session URL
      phrases      none of the phrases of the phrases file (pattern.bats) is in the body
 
-   Lines end with LF or CRLF. The body, the head and the phrases are each in a buffer of the
-   builder's capacity. *)
+   Lines end with LF or CRLF. The body, the head and the phrases are texts in arrays. *)
 
 #include "share/atspre_staload.hats"
 
@@ -229,7 +228,7 @@ in
 end
 
 (* evidence: whether a heading is there and whether a line "$ ..." follows a fence line (the
-   result adds the first as a one and the second as a two) *)
+   result says which of the heading and the command block is there) *)
 fun _evidence {l:agz}{n:pos}{limit:nat | limit <= n}{start:nat | start <= limit}
   .<limit - start>.
   (bytes: !$A.borrow(byte, l, n), limit: int limit, start: int start, after_fence: bool,
@@ -300,7 +299,7 @@ fn _malformed (out: !$B.sized_rope, line: int): int = let
 in 1 end
 
 (* phrases: the findings of the phrases file lines from start (line is the number of that line,
-   from 1). A line is blank, a comment (it starts with "#"), or four fields separated by tabs:
+   counted from the first). A line is blank, a comment (it starts with "#"), or fields separated by tabs:
    a label, a pattern (pattern.bats), an example the pattern matches, and what to do instead.
    A pattern found in the body is a finding that names the body's line, the label and the line of
    the file, and says what to do instead; a line of another form is a finding of its own. *)

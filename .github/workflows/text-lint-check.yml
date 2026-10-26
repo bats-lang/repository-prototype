@@ -17,7 +17,7 @@
 #
 # What it does: builds tools/text-lint of this repository at tools-ref (a reusable workflow
 # cannot read its own ref, so the caller repeats the commit; relock-pins.yml's pin-copies
-# keeps the two equal), runs `text_lint event` on the event's file, and posts the commit
+# keeps them equal), runs `text_lint event` on the event's file, and posts the commit
 # status `text-lint` on the pull request's head: success when the body is in form (the
 # rows are in tools/text-lint/src/lint.bats), failure with the first finding as its
 # description, success saying exempt for a relock/ branch and for a bot's pull request.

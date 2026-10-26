@@ -528,7 +528,7 @@ fn _require {repository_loc,listing_loc:agz}{repository_start,repository_end,lis
      | Read_whole() => _require_lines(repository_text, repository_start, repository_end, listing_text, listing_len, required_view, required_len, 0, offenders, counts)
      | Read_too_long() => let
          val () = _repository_error(repository_text, repository_start, repository_end)
-       in (println! ("tools/pin-audit/required.txt is longer than the 524288 bytes the audit reads"); _bump(counts, Column_repository())) end
+       in (println! ("tools/pin-audit/required.txt is longer than the audit reads"); _bump(counts, Column_repository())) end
      | Read_failed() => let
          val () = _repository_error(repository_text, repository_start, repository_end)
        in (println! ("tools/pin-audit/required.txt could not be read: ", why); _bump(counts, Column_repository())) end): tally

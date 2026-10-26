@@ -1,7 +1,7 @@
 (* event -- the pull request event the text-lint workflow reads
    (bats-lang/repository-prototype#487). Keyword: text-lint event.
 
-   The event is the JSON file GitHub writes for the run (GITHUB_EVENT_PATH). Four strings are
+   The event is the JSON file GitHub writes for the run (GITHUB_EVENT_PATH). These strings are
    taken from it, pull_request.body, pull_request.head.sha, pull_request.head.ref and
    pull_request.user.login; a missing or null body is an empty one. The status is the commit
    status the workflow posts: state, context text-lint, a description of ASCII with no quote
@@ -73,7 +73,7 @@ fun _find_in_one {entries_size:nat}{first_len,key_len:nat} .<entries_size>.
        | _ => false)
     else _find_in_one(rest, first, key, out)
 
-(* The same two objects deep *)
+(* The same for nested objects *)
 fun _find_in_two {entries_size:nat}{first_len,second_len,key_len:nat} .<entries_size>.
   (entries: !$J.json_entries(entries_size), first: string first_len,
    second: string second_len, key: string key_len,
@@ -167,8 +167,8 @@ fn _empty_rope (): $B.sized_rope = $B.sized_rope_create()
 
 (* The event's pull request lint: the findings (one line each) appended to findings and
    the status object to status, from the event event[0, len), the phrases and the run's URL.
-   0 when it went well (a failing lint is a status of state failure), 1 when the event is
-   refused (said on standard error; nothing useful appended). *)
+   The result says whether it went well (a failing lint is a status of state failure) or the event
+   is refused (said on standard error; nothing useful appended). *)
 #pub fn lint_event {el,pl,ul:agz}{pn,un:pos}{len:nat | len <= 524288}
   {plen:nat | plen <= pn}{ulen:nat | ulen <= un}
   (event: !$A.borrow(byte, el, 524288), len: int len, phrases: !$A.borrow(byte, pl, pn),

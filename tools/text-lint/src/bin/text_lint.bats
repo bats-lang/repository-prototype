@@ -3,7 +3,7 @@
 
      text_lint body BODY HEAD [PHRASES]
                       the findings of the body in the file BODY for the head HEAD (a
-                      40-digit commit), one line each on standard output; "ok" when
+                      commit SHA), one line each on standard output; "ok" when
                       there is none. PHRASES is a file of the phrases the body may not
                       hold, one on each line.
      text_lint event EVENT STATUS URL [PHRASES]
@@ -41,7 +41,7 @@ fun _skip_arguments {l:agz}{n:pos}{args_len:nat | args_len <= n}
     else _skip_arguments(args, args_len, stop + 1, count - 1)
   end
 
-(* The argument at index (the program is 0): where it starts and ends; absent when it starts
+(* The argument at index (the program's own name comes first): where it starts and ends; absent when it starts
    at args_len *)
 fn _argument {l:agz}{n:pos}{args_len:nat | args_len <= n}{index:nat}
   (args: !$A.borrow(byte, l, n), args_len: int args_len, index: int index)
@@ -50,7 +50,7 @@ fn _argument {l:agz}{n:pos}{args_len:nat | args_len <= n}{index:nat}
   val stop = find_byte(args, args_len, start, 0)
 in @(start, stop) end
 
-(* The file at args[start, stop) read whole, as an array of 524288 bytes and its length; the
+(* The file at args[start, stop) read whole, as an array of the builder's size and its length; the
    words of the failure when it failed (the array is then empty) *)
 fn _read {l:agz}{n:pos | n <= 4096}{stop:nat | stop <= n}{start:nat | start <= stop}
   (args: !$A.borrow(byte, l, n), start: int start, stop: int stop, what: string)
@@ -68,7 +68,7 @@ in
   case+ ended of
   | Read_whole() => @(true, array, used)
   | Read_too_long() => let
-      val () = prerrln! ("text-lint: the ", what, " file is over 524288 bytes")
+      val () = prerrln! ("text-lint: the ", what, " file is longer than the lint reads")
     in @(false, array, 0) end
   | Read_failed() => let
       val () = prerrln! ("text-lint: cannot read the ", what, " file: ", words)

@@ -76,7 +76,7 @@ fn _text {text_len:nat | text_len < 4096} (text: string text_len)
 in $B.to_arr(builder) end
 
 (* Whether the lint of the body in the file (head the constant, phrases the file
-   tests/bodies/phrases.txt when phrases) gives that many findings and exactly that text *)
+   tests/bodies/phrases.txt when phrases) gives that many findings and that text *)
 fn _fixture_is {path_len,head_len0,phrases_path_len,expected_len:nat | path_len < 200; head_len0 < 4096; phrases_path_len < 200}
   (path: string path_len, head: string head_len0, phrases_path: string phrases_path_len, count: int, expected: string expected_len)
   : bool = let
@@ -171,7 +171,7 @@ fn _hits {phrases_len,body_len:nat | phrases_len < 4096; body_len < 4096}
   val () = $A.free<byte>($A.thaw<byte>(phrases_frozen))
 in found end
 
-(* The phrases found in the body made of the two pieces by the phrases file of the lint *)
+(* The phrases found in the body made of the pieces by the phrases file of the lint *)
 fn _real_hits {first_len,second_len:nat | first_len < 4096; second_len < 4096}
   (first: string first_len, second: string second_len): int = let
   var body : $B.builder(0) = $B.create()
@@ -271,6 +271,293 @@ in
   else _examples(phrases, used, raw + 1)
 end
 
+(* The original rows (keyword: text-lint original). tests/original/phrases.tsv is a copy of the
+   phrases of quire's guidelines, corpus.txt has a text on each line that starts with a tag (the
+   line of phrases.txt, the original row, and a plus when the text is refused or a minus when it
+   passes), and oracle.txt is the output of quire's program on the corpus. *)
+
+(* The end of the digits that start at i *)
+fun _digits_end {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit} .<limit - i>.
+  (bytes: !$A.borrow(byte, l, n), limit: int limit, i: int i): [j:nat | i <= j; j <= limit] int j =
+  if i >= limit then i
+  else let
+    val c = byte2int0($A.read<byte>(bytes, i))
+  in
+    if c >= 48 && c <= 57 then _digits_end(bytes, limit, i + 1) else i
+  end
+
+(* The number the digits bytes[i, stop) write, added to what was read before them *)
+fun _digits_value {l:agz}{n:pos}{stop:nat | stop <= n}{i:nat | i <= stop} .<stop - i>.
+  (bytes: !$A.borrow(byte, l, n), stop: int stop, i: int i, before: int): int =
+  if i >= stop then before
+  else _digits_value(bytes, stop, i + 1, before * 10 + (byte2int0($A.read<byte>(bytes, i)) - 48))
+
+(* The tag of the corpus line bytes[start, stop): the line of phrases.txt, the original row and
+   the sign (one for a plus, zero for a minus); each is negative when the line has no tag *)
+fn _tag {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
+  (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop): @(int, int, int) = let
+  val line_end = _digits_end(bytes, stop, start)
+in
+  if line_end >= stop then @(~1, ~1, ~1)
+  else if line_end = start then @(~1, ~1, ~1)
+  else if byte2int0($A.read<byte>(bytes, line_end)) != 58 then @(~1, ~1, ~1)
+  else let
+    val row_end = _digits_end(bytes, stop, line_end + 1)
+  in
+    if row_end >= stop then @(~1, ~1, ~1)
+    else if row_end = line_end + 1 then @(~1, ~1, ~1)
+    else let
+      val sign_byte = byte2int0($A.read<byte>(bytes, row_end))
+      val sign = (if sign_byte = 43 then 1 else if sign_byte = 45 then 0 else ~1): int
+    in
+      @(_digits_value(bytes, line_end, start, 0), _digits_value(bytes, row_end, line_end + 1, 0), sign)
+    end
+  end
+end
+
+(* Where the text of the corpus line bytes[start, stop) starts, after its tag and a blank *)
+fn _text_start {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
+  (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop): [t:nat | start <= t; t <= stop] int t = let
+  val line_end = _digits_end(bytes, stop, start)
+in
+  if line_end >= stop then stop
+  else let
+    val row_end = _digits_end(bytes, stop, line_end + 1)
+  in
+    if row_end + 2 <= stop then row_end + 2 else stop
+  end
+end
+
+(* Whether the oracle's output (lines "text:N: row R: ...") names the line of the corpus
+   by its number and, when the row is not negative, with that row *)
+fun _oracle_has {l:agz}{n:pos | n <= 524288}{used:nat | used <= n}{start:nat | start <= used} .<used - start>.
+  (oracle: !$A.borrow(byte, l, n), used: int used, start: int start, line_number: int, row: int): bool = let
+  val raw = find_byte(oracle, used, start, 10)
+  val here =
+    (if raw - start < 5 then false
+     else if ~span_is(oracle, start, start + 5, "text:") then false
+     else let
+       val number_end = _digits_end(oracle, raw, start + 5)
+     in
+       if number_end + 6 > raw then false
+       else if ~span_is(oracle, number_end, number_end + 6, ": row ") then false
+       else if _digits_value(oracle, number_end, start + 5, 0) != line_number then false
+       else let
+         val row_end = _digits_end(oracle, raw, number_end + 6)
+       in
+         row < 0 || _digits_value(oracle, row_end, number_end + 6, 0) = row
+       end
+     end): bool
+in
+  if here then true
+  else if raw >= used then false
+  else _oracle_has(oracle, used, raw + 1, line_number, row)
+end
+
+(* How many phrases the lint finds in text[start, stop) with the phrases of phrases[from, upto) *)
+fn _found_with {tl,pl:agz}{tn,pn:pos | tn <= 524288; pn <= 524288}
+  {stop:nat | stop <= tn}{start:nat | start <= stop}{upto:nat | upto <= pn}{from:nat | from <= upto}
+  (text: !$A.borrow(byte, tl, tn), start: int start, stop: int stop,
+   phrases: !$A.borrow(byte, pl, pn), from: int from, upto: int upto): int = let
+  var body : $B.builder(0) = $B.create()
+  val () = put_range(text, start, stop, body)
+  val @(body_array, body_len) = $B.to_arr(body)
+  var one : $B.builder(0) = $B.create()
+  val () = put_range(phrases, from, upto, one)
+  val @(one_array, one_len) = $B.to_arr(one)
+  val @(body_frozen, body_view) = $A.freeze<byte>(body_array)
+  val @(one_frozen, one_view) = $A.freeze<byte>(one_array)
+  val out = $B.sized_rope_create()
+  val found = phrase_findings(body_view, body_len, one_view, one_len, out)
+  val () = discard_rope(out)
+  val () = $A.drop<byte>(body_frozen, body_view)
+  val () = $A.free<byte>($A.thaw<byte>(body_frozen))
+  val () = $A.drop<byte>(one_frozen, one_view)
+  val () = $A.free<byte>($A.thaw<byte>(one_frozen))
+in found end
+
+(* How many lines text[start, used) has that are not empty *)
+fun _lines_read {l:agz}{n:pos}{used:nat | used <= n}{start:nat | start <= used} .<used - start>.
+  (text: !$A.borrow(byte, l, n), used: int used, start: int start): int =
+  if start >= used then 0
+  else let
+    val raw = find_byte(text, used, start, 10)
+    val here = (if raw > start then 1 else 0): int
+  in
+    if raw >= used then here else here + _lines_read(text, used, raw + 1)
+  end
+
+(* How many lines of the copy of the original phrases are of the text kind *)
+fun _rows_read {l:agz}{n:pos}{used:nat | used <= n}{start:nat | start <= used} .<used - start>.
+  (tsv: !$A.borrow(byte, l, n), used: int used, start: int start): int =
+  if start >= used then 0
+  else let
+    val raw = find_byte(tsv, used, start, 10)
+    val here = (if raw - start >= 5 then (if span_is(tsv, start, start + 5, "text\t") then 1 else 0) else 0): int
+  in
+    if raw >= used then here else here + _rows_read(tsv, used, raw + 1)
+  end
+
+(* The plus lines of the corpus that carry the line of phrases.txt phrases_line: how many, or
+   negative when one is not found by that line alone, not named by the oracle with its row, or
+   of another row than the first; a miss is said *)
+fun _plus_lines {cl,pl,ol:agz}{cn,pn,on:pos | cn <= 524288; pn <= 524288; on <= 524288}
+  {cused:nat | cused <= cn}{start:nat | start <= cused}{oused:nat | oused <= on}
+  {upto:nat | upto <= pn}{from:nat | from <= upto} .<cused - start>.
+  (corpus: !$A.borrow(byte, cl, cn), cused: int cused, start: int start, line_number: int,
+   phrases: !$A.borrow(byte, pl, pn), from: int from, upto: int upto, phrases_line: int,
+   oracle: !$A.borrow(byte, ol, on), oused: int oused, row: int, count: int): int = let
+  val raw = find_byte(corpus, cused, start, 10)
+  val @(tag_line, tag_row, tag_sign) = _tag(corpus, start, raw)
+  val relevant = (tag_line = phrases_line && tag_sign = 1): bool
+  val found = (if relevant then _found_with(corpus, start, raw, phrases, from, upto) else 1): int
+  val named = (if relevant then _oracle_has(oracle, oused, 0, line_number, tag_row) else true): bool
+  val same_row = (~relevant || row < 0 || row = tag_row): bool
+  val count2 = (if relevant then count + 1 else count): int
+  val row2 = (if relevant && row < 0 then tag_row else row): int
+in
+  if found < 1 then let
+    val () = println! ("miss: corpus line ", line_number, " is not found by line ", phrases_line, " of phrases.txt alone")
+  in ~1 end
+  else if ~named then let
+    val () = println! ("miss: corpus line ", line_number, " is not named by the oracle with row ", tag_row)
+  in ~1 end
+  else if ~same_row then let
+    val () = println! ("miss: corpus line ", line_number, " carries another row than the first plus line of line ", phrases_line)
+  in ~1 end
+  else if raw >= cused then count2
+  else _plus_lines(corpus, cused, raw + 1, line_number + 1, phrases, from, upto, phrases_line,
+    oracle, oused, row2, count2)
+end
+
+(* (a) How many lines of phrases.txt (from start) have a plus line, found by that line alone,
+   named by the oracle with the line's row, all of one row *)
+fun _reach_phrases {cl,pl,ol:agz}{cn,pn,on:pos | cn <= 524288; pn <= 524288; on <= 524288}
+  {cused:nat | cused <= cn}{pused:nat | pused <= pn}{start:nat | start <= pused}{oused:nat | oused <= on}
+  .<pused - start>.
+  (corpus: !$A.borrow(byte, cl, cn), cused: int cused,
+   phrases: !$A.borrow(byte, pl, pn), pused: int pused, start: int start, phrases_line: int,
+   oracle: !$A.borrow(byte, ol, on), oused: int oused): int =
+  if start >= pused then 0
+  else let
+    val raw = find_byte(phrases, pused, start, 10)
+    val is_phrase = (if raw > start then byte2int0($A.read<byte>(phrases, start)) != 35 else false): bool
+    val here =
+      (if ~is_phrase then 0
+       else let
+         val count = _plus_lines(corpus, cused, 0, 1, phrases, start, raw, phrases_line, oracle, oused, ~1, 0)
+       in
+         if count >= 1 then 1
+         else let
+           val () = (if count = 0 then println! ("miss: line ", phrases_line, " of phrases.txt has no plus line in the corpus") else ())
+         in 0 end
+       end): int
+  in
+    if raw >= pused then here
+    else here + _reach_phrases(corpus, cused, phrases, pused, raw + 1, phrases_line + 1, oracle, oused)
+  end
+
+(* (b) How many lines of the corpus (from start) are found by the lint exactly when the oracle names
+   them, with the sign of the tag a plus exactly then *)
+fun _reach_corpus {cl,pl,ol:agz}{cn,pn,on:pos | cn <= 524288; pn <= 524288; on <= 524288}
+  {cused:nat | cused <= cn}{start:nat | start <= cused}{pused:nat | pused <= pn}{oused:nat | oused <= on}
+  .<cused - start>.
+  (corpus: !$A.borrow(byte, cl, cn), cused: int cused, start: int start, line_number: int,
+   phrases: !$A.borrow(byte, pl, pn), pused: int pused,
+   oracle: !$A.borrow(byte, ol, on), oused: int oused): int =
+  if start >= cused then 0
+  else let
+    val raw = find_byte(corpus, cused, start, 10)
+    val @(tag_line, tag_row, tag_sign) = _tag(corpus, start, raw)
+    val found = _found_with(corpus, start, raw, phrases, 0, pused)
+    val named = _oracle_has(oracle, oused, 0, line_number, ~1)
+    val agree = (if named then (found >= 1 && tag_sign = 1) else (found <= 0 && tag_sign = 0)): bool
+    val here =
+      (if raw = start then 0
+       else if agree then 1
+       else let
+         val named_flag = (if named then 1 else 0): int
+         val () = println! ("miss: corpus line ", line_number, " is found ", found, " times by the lint, is named by the oracle ", named_flag, ", sign ", tag_sign)
+       in 0 end): int
+  in
+    if raw >= cused then here
+    else here + _reach_corpus(corpus, cused, raw + 1, line_number + 1, phrases, pused, oracle, oused)
+  end
+
+(* Whether the corpus (from start) has a line of the row with the sign; with a text span, a plus
+   line of the row whose text is that span of the copy *)
+fun _corpus_has {cl,tl:agz}{cn,tn:pos | cn <= 524288; tn <= 524288}
+  {cused:nat | cused <= cn}{start:nat | start <= cused}{ex_stop:nat | ex_stop <= tn}{ex_start:nat | ex_start <= ex_stop}
+  .<cused - start>.
+  (corpus: !$A.borrow(byte, cl, cn), cused: int cused, start: int start, row: int, sign: int,
+   tsv: !$A.borrow(byte, tl, tn), ex_start: int ex_start, ex_stop: int ex_stop, with_text: bool): bool = let
+  val raw = find_byte(corpus, cused, start, 10)
+  val @(tag_line, tag_row, tag_sign) = _tag(corpus, start, raw)
+  val here =
+    (if tag_row != row || tag_sign != sign then false
+     else if ~with_text then true
+     else spans_equal(corpus, _text_start(corpus, start, raw), raw, tsv, ex_start, ex_stop)): bool
+in
+  if here then true
+  else if raw >= cused then false
+  else _corpus_has(corpus, cused, raw + 1, row, sign, tsv, ex_start, ex_stop, with_text)
+end
+
+(* (c) How many text rows of the copy (from start) have a plus line and a minus line in the
+   corpus, and their example as a plus line of the corpus tagged with the row *)
+fun _reach_rows {cl,tl:agz}{cn,tn:pos | cn <= 524288; tn <= 524288}
+  {cused:nat | cused <= cn}{tused:nat | tused <= tn}{start:nat | start <= tused} .<tused - start>.
+  (corpus: !$A.borrow(byte, cl, cn), cused: int cused,
+   tsv: !$A.borrow(byte, tl, tn), tused: int tused, start: int start): int =
+  if start >= tused then 0
+  else let
+    val raw = find_byte(tsv, tused, start, 10)
+    val here =
+      (if raw - start < 5 then 0
+       else if ~span_is(tsv, start, start + 5, "text\t") then 0
+       else let
+         val row_start = start + 5
+         val row_end = find_byte(tsv, raw, row_start, 9)
+       in
+         if row_end >= raw then 0
+         else let
+           val regex_end = find_byte(tsv, raw, row_end + 1, 9)
+         in
+           if regex_end >= raw then 0
+           else let
+             val example_end = find_byte(tsv, raw, regex_end + 1, 9)
+           in
+             if example_end >= raw then 0
+             else let
+               val row = _digits_value(tsv, row_end, row_start, 0)
+               val plus = _corpus_has(corpus, cused, 0, row, 1, tsv, 0, 0, false)
+               val minus = _corpus_has(corpus, cused, 0, row, 0, tsv, 0, 0, false)
+               val example = _corpus_has(corpus, cused, 0, row, 1, tsv, regex_end + 1, example_end, true)
+             in
+               if plus && minus && example then 1
+               else let
+                 val () = println! ("miss: row ", row, " of the copy lacks a plus line, a minus line or its example as a plus line")
+               in 0 end
+             end
+           end
+         end
+       end): int
+  in
+    if raw >= tused then here
+    else here + _reach_rows(corpus, cused, tsv, tused, raw + 1)
+  end
+
+(* How many lines of phrases.txt (from start) are phrases: not empty and not a comment *)
+fun _phrases_read {l:agz}{n:pos}{used:nat | used <= n}{start:nat | start <= used} .<used - start>.
+  (phrases: !$A.borrow(byte, l, n), used: int used, start: int start): int =
+  if start >= used then 0
+  else let
+    val raw = find_byte(phrases, used, start, 10)
+    val here = (if raw > start then (if byte2int0($A.read<byte>(phrases, start)) != 35 then 1 else 0) else 0): int
+  in
+    if raw >= used then here else here + _phrases_read(phrases, used, raw + 1)
+  end
+
 $UNITTEST.run begin
 
 (* the bodies that pass: no finding *)
@@ -287,7 +574,7 @@ fn test_refs_instead_of_fixes_is_refused (): bool =
   && _fixture_is("tests/bodies/fail-refs-other-repository.md", _head(), _test_phrases(), 1,
     "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\n")
 
-(* one-ticket: two tickets *)
+(* one-ticket: a second ticket *)
 fn test_two_tickets_are_refused (): bool =
   _fixture_is("tests/bodies/fail-two-tickets.md", _head(), _test_phrases(), 1,
     "PR body: Fixes names more than one ticket; one ticket, one PR, and a dependency is its own ticket and PR (one-ticket)\n")
@@ -372,7 +659,7 @@ fn test_pattern_language (): bool =
   && (_hits("l\ta.c\te\tr\n", "a.c") = 1)
   && (_hits("l\ta\\.c\te\tr\n", "abc") = 0)
 
-(* phrases: two patterns spell a letter as a class; the words are built here from pieces *)
+(* phrases: some patterns spell a letter as a class; the words are built here from pieces *)
 fn test_class_spelled_patterns (): bool =
   (_real_hits("it is par", "tly done") = 1)
   && (_real_hits("par", "tially done") = 1)
@@ -390,13 +677,13 @@ fn test_first_line_edges (): bool =
   && _body_is("Fixes #\n", 4, "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\nPR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
   && _body_is("Fix #1\n", 4, "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\nPR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
 
-(* one-ticket: the same ticket twice, in two cases, is one ticket; Refixes is not Fixes *)
+(* one-ticket: the same ticket named again, in either case, is one ticket; Refixes is not Fixes *)
 fn test_same_ticket_twice_is_one_ticket (): bool =
   _body_is("Fixes #1\nand fixes #1 again, and Refixes #2\n", 3, "PR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
   && _body_is("Fixes a/b#1\nFixes A/B#1\n", 3, "PR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
   && _body_is("Fixes a/b#1\nFixes a/b#2\n", 4, "PR body: Fixes names more than one ticket; one ticket, one PR, and a dependency is its own ticket and PR (one-ticket)\nPR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
 
-(* head: 41 digits are not a head; trailing blanks are fine; the last Head line counts *)
+(* head: a longer run of digits is not a head; trailing blanks are fine; the last Head line counts *)
 fn test_head_line_edges (): bool =
   _body_is("Fixes #1\nHead: 0123456789abcdef0123456789abcdef012345670\n", 3, "PR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
   && _body_is("Fixes #1\nHead: 0123456789abcdef0123456789abcdef01234567   \n", 2, "PR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
@@ -435,5 +722,43 @@ fn test_exemption_is_a_relock_branch_or_a_bot (): bool =
   && ~_exempt_is("relock", "moshez")
   && ~_exempt_is("not-relock/x", "bot")
   && ~_exempt_is("", "")
+
+
+(* phrases: the lines of phrases.txt are the rows of the original: each line has plus lines in the
+   corpus that it finds alone and the oracle names with its row, the lint and the oracle agree on
+   every line of the corpus, and every text row of the copy has its plus line, its minus line and
+   its example; each of the three says what it reached against what it read *)
+fn test_phrases_equal_the_original (): bool = let
+  val @(phrases_ok, phrases_array, phrases_used) = _file("phrases.txt")
+  val @(corpus_ok, corpus_array, corpus_used) = _file("tests/original/corpus.txt")
+  val @(oracle_ok, oracle_array, oracle_used) = _file("tests/original/oracle.txt")
+  val @(tsv_ok, tsv_array, tsv_used) = _file("tests/original/phrases.tsv")
+  val @(phrases_frozen, phrases_view) = $A.freeze<byte>(phrases_array)
+  val @(corpus_frozen, corpus_view) = $A.freeze<byte>(corpus_array)
+  val @(oracle_frozen, oracle_view) = $A.freeze<byte>(oracle_array)
+  val @(tsv_frozen, tsv_view) = $A.freeze<byte>(tsv_array)
+  val phrases_read = _phrases_read(phrases_view, phrases_used, 0)
+  val phrases_reached = _reach_phrases(corpus_view, corpus_used, phrases_view, phrases_used, 0, 1, oracle_view, oracle_used)
+  val () = println! ("lines of phrases.txt reached: ", phrases_reached, " of ", phrases_read)
+  val corpus_read = _lines_read(corpus_view, corpus_used, 0)
+  val corpus_reached = _reach_corpus(corpus_view, corpus_used, 0, 1, phrases_view, phrases_used, oracle_view, oracle_used)
+  val () = println! ("lines of the corpus compared with the oracle: ", corpus_reached, " of ", corpus_read)
+  val rows_read = _rows_read(tsv_view, tsv_used, 0)
+  val rows_reached = _reach_rows(corpus_view, corpus_used, tsv_view, tsv_used, 0)
+  val () = println! ("text rows of the copy reached: ", rows_reached, " of ", rows_read)
+  val () = $A.drop<byte>(phrases_frozen, phrases_view)
+  val () = $A.free<byte>($A.thaw<byte>(phrases_frozen))
+  val () = $A.drop<byte>(corpus_frozen, corpus_view)
+  val () = $A.free<byte>($A.thaw<byte>(corpus_frozen))
+  val () = $A.drop<byte>(oracle_frozen, oracle_view)
+  val () = $A.free<byte>($A.thaw<byte>(oracle_frozen))
+  val () = $A.drop<byte>(tsv_frozen, tsv_view)
+  val () = $A.free<byte>($A.thaw<byte>(tsv_frozen))
+in
+  phrases_ok && corpus_ok && oracle_ok && tsv_ok
+  && phrases_read > 0 && phrases_reached = phrases_read
+  && corpus_read > 0 && corpus_reached = corpus_read
+  && rows_read > 0 && rows_reached = rows_read
+end
 
 end

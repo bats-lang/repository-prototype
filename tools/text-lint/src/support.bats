@@ -15,7 +15,7 @@
 #use result as R
 
 (* How reading a file ended: it all fit, it did not fit the
-   buffer, or a read failed. Every caller matches all three (case+). *)
+   buffer, or a read failed. Every caller matches every outcome (case+). *)
 #pub datatype read_end =
   | Read_whole
   | Read_too_long
@@ -67,7 +67,7 @@ fun _find_byte {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit} .<limi
 
 implement find_byte (bytes, limit, start, wanted) = _find_byte(bytes, limit, start, wanted)
 
-(* a char above 127 is negative in C: the byte it is *)
+(* a char above the ASCII range is negative in C: the byte it is *)
 fn _unsigned (c: int): int = if c < 0 then c + 256 else c
 
 fun _lit_from {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit}{literal_len:nat}
@@ -80,7 +80,7 @@ fun _lit_from {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit}{literal
     _lit_from(bytes, limit, i + 1, literal, literal_len, at + 1)
   else false
 
-(* Whether bytes[line_start, line_stop) are exactly the text literal *)
+(* Whether bytes[line_start, line_stop) are the text literal *)
 #pub fn span_is {l:agz}{n:pos}{line_stop:nat | line_stop <= n}
   {line_start:nat | line_start <= line_stop}{literal_len:nat}
   (bytes: !$A.borrow(byte, l, n), line_start: int line_start, line_stop: int line_stop,
@@ -92,8 +92,8 @@ implement span_is (bytes, line_start, line_stop, literal) =
   else false
 
 (* Reads an open file to its end into out. A chunk that would take the
-   builder past its capacity is not appended (nothing is cut): the outcome is
-   Read_too_long. Each chunk is at least one byte, so the room left is the
+   builder past its room is not appended (nothing is cut): the outcome is
+   Read_too_long. Each chunk is not empty, so the room left is the
    metric. *)
 fun _drain {used:nat | used <= 524288} .<524288 - used>.
   (fd: !$F.fd, out: !$B.builder(used) >> $B.builder_v): read_end = let
@@ -184,7 +184,7 @@ fun _spans_equal {first_loc,second_loc:agz}{first_size,second_size:pos}
   else false
 
 (* Whether first[first_start, first_stop) and second[second_start, second_stop) are the
-   same bytes; the two may be one array *)
+   same bytes; both may be one array *)
 #pub fn spans_equal {first_loc,second_loc:agz}{first_size,second_size:pos}
   {first_stop:nat | first_stop <= first_size}{first_start:nat | first_start <= first_stop}
   {second_stop:nat | second_stop <= second_size}{second_start:nat | second_start <= second_stop}
@@ -240,8 +240,8 @@ fun _copy_bytes {l,other_loc:agz}{n:pos}{m:nat | m <= n}{capacity:pos | m <= cap
     val () = $A.set<byte>(destination, i, $A.read<byte>(bytes, i))
   in _copy_bytes(bytes, m, destination, i + 1) end
 
-(* One chunk's first used bytes written to the open file, as an array of exactly that
-   length (file_write takes all of an array); the chunk is freed. Whether they were all
+(* One chunk's first used bytes written to the open file, as an array of the length of
+   the chunk (file_write takes all of an array); the chunk is freed. Whether they were all
    written. *)
 fn _write_chunk {chunk_capacity:pos | chunk_capacity <= 524288}{chunk_loc:agz}
   {used:nat | used <= chunk_capacity}
