@@ -363,7 +363,7 @@ end
 implement lint_body (body, len, head, head_len, phrases, phrases_len, out) = let
   val first_ok = _first_line_fixes(body, len)
   val () = if first_ok then () else
-    $B.sized_rope_bput(out, "PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (first-line)\n")
+    $B.sized_rope_bput(out, "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\n")
   val tickets_differ = _differs(body, len, 0, 0, 0)
   val () = if tickets_differ then
     $B.sized_rope_bput(out, "PR body: Fixes names more than one ticket; one ticket, one PR, and a dependency is its own ticket and PR (one-ticket)\n") else ()

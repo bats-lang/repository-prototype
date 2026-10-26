@@ -16,13 +16,13 @@ narrowing	unless owner narrow	refs unless owner narrows it	Nobody offers a way t
 narrowing	unless the owner narrow	refs unless the owner narrows it	Nobody offers a way to ship less than the ticket says: the Done-when as written is the standard.
 narrowing	or narrow\b	do it or narrow	Narrowing is the owner's, never offered.
 narrowing	or narrowing\b	do it or narrowing	Narrowing is the owner's, never offered.
-refs	fixes\s+#?\d+\s+to\s+refs	change fixes #12 to refs	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
-refs	fixes\s+#?[nx]\s+to\s+refs	change fixes #n to refs	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
-refs	fixes\s+#?<[^>\s]*>\s+to\s+refs	change fixes #<ticket> to refs	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
-refs	\bas refs\b	open it as refs	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
-refs	\buse refs\b	use refs here	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
-refs	\bopen it as refs\b	then open it as refs	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
-refs	\bopened it as refs\b	we opened it as refs	A pull request that does not meet its Done-when is not opened as Refs; do the Done-when as written.
+refs	fixes\s+#?\d+\s+to\s+refs	change fixes #12 to refs	Do the Done-when as written; the first line stays Fixes.
+refs	fixes\s+#?[nx]\s+to\s+refs	change fixes #n to refs	Do the Done-when as written; the first line stays Fixes.
+refs	fixes\s+#?<[^>\s]*>\s+to\s+refs	change fixes #<ticket> to refs	Do the Done-when as written; the first line stays Fixes.
+refs	\bas refs\b	open it as refs	Do the Done-when as written; the first line stays Fixes.
+refs	\buse refs\b	use refs here	Do the Done-when as written; the first line stays Fixes.
+refs	\bopen it as refs\b	then open it as refs	Do the Done-when as written; the first line stays Fixes.
+refs	\bopened it as refs\b	we opened it as refs	Do the Done-when as written; the first line stays Fixes.
 half-done	\bpar[t]ly\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
 half-done	\bpar[t]ially\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
 half-done	hand-?picked	a hand-picked sample	A local sample is random, with its seed and size named; the whole population is CI's.
@@ -63,5 +63,5 @@ evidence-wait	blocked on evidence	blocked on evidence	Evidence is produced, not 
 evidence-wait	waiting for evidence	waiting for evidence	Evidence is produced, not waited for: produce it.
 waiting-go	waiting for a "?go"?\b	waiting for a go	No step waits for a go: do it as written.
 waiting-go	waiting for the "?go"?\b	waiting for the "go"	No step waits for a go: do it as written.
-measure	stop measuring	stop measuring	Measure as the Done-when says; do not stop or narrow it.
-measure	narrow the measurement	narrow the measurement	Measure as the Done-when says; do not stop or narrow it.
+measure	stop measuring	stop measuring	Measure as the Done-when says, in full.
+measure	narrow the measurement	narrow the measurement	Measure as the Done-when says, in full.

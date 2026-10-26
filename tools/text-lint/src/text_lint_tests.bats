@@ -283,9 +283,9 @@ fn test_passing_bodies_have_no_finding (): bool =
 (* first-line: Refs for Fixes, in either spelling of the ticket *)
 fn test_refs_instead_of_fixes_is_refused (): bool =
   _fixture_is("tests/bodies/fail-refs.md", _head(), _test_phrases(), 1,
-    "PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (first-line)\n")
+    "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\n")
   && _fixture_is("tests/bodies/fail-refs-other-repository.md", _head(), _test_phrases(), 1,
-    "PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (first-line)\n")
+    "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\n")
 
 (* one-ticket: two tickets *)
 fn test_two_tickets_are_refused (): bool =
@@ -381,14 +381,14 @@ fn test_class_spelled_patterns (): bool =
 (* an empty body fails every check but one-ticket *)
 fn test_empty_body_fails_each_row (): bool =
   _fixture_is("tests/bodies/fail-empty.md", _head(), _test_phrases(), 4,
-    "PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (first-line)\nPR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
+    "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\nPR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
 
 (* the edges of first-line: blank lines before, any case, the word edge, the digits *)
 fn test_first_line_edges (): bool =
   _body_is("\n\nFixes #1\n", 3, "PR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
   && _body_is("fixes #12\n", 3, "PR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
-  && _body_is("Fixes #\n", 4, "PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (first-line)\nPR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
-  && _body_is("Fix #1\n", 4, "PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (first-line)\nPR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
+  && _body_is("Fixes #\n", 4, "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\nPR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
+  && _body_is("Fix #1\n", 4, "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\nPR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\nPR body: it does not end with the generated-by footer of the template (footer)\n")
 
 (* one-ticket: the same ticket twice, in two cases, is one ticket; Refixes is not Fixes *)
 fn test_same_ticket_twice_is_one_ticket (): bool =
@@ -412,8 +412,8 @@ fn test_events (): bool =
   _event_is("tests/events/pass.json", 0, "",
     "{\"state\":\"success\",\"context\":\"text-lint\",\"description\":\"the PR body is in form\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
   && _event_is("tests/events/fail-refs.json", 0,
-    "PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (first-line)\n",
-    "{\"state\":\"failure\",\"context\":\"text-lint\",\"description\":\"PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (first-line)\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
+    "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\n",
+    "{\"state\":\"failure\",\"context\":\"text-lint\",\"description\":\"PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
   && _event_is("tests/events/exempt-relock.json", 0, "",
     "{\"state\":\"success\",\"context\":\"text-lint\",\"description\":\"exempt: a bot or a relock branch\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
   && _event_is("tests/events/exempt-bot.json", 0, "",
