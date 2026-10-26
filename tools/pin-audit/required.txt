@@ -1,0 +1,8 @@
+# The workflow files every audited repository has (bats-lang/repository-prototype#487,
+# keyword: pin-audit required).
+#
+# One path on each line, as git lists it (.github/workflows/<name>). A repository that does
+# not have a listed file fails the audit and, with --file-tickets, gets the ticket of a file
+# that is not canonical: the template of the same name in tools/pin-audit/templates, filled.
+# A line that starts with # is not an entry.
+.github/workflows/text-lint.yml

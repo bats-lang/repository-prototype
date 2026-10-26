@@ -91,8 +91,18 @@ fn _fresh {dir_len:nat | dir_len < 200} (dir: string dir_len): void = let
   var skip_list : $B.sized_rope = $B.sized_rope_create()
   val () = $B.sized_rope_bput(skip_list, "# no entries\n")
   val _ = write_rope(join_path3(dir, "/", "tools/pin-audit/skipped.txt"), skip_list)
+  var required : $B.sized_rope = $B.sized_rope_create()
+  val () = $B.sized_rope_bput(required, "# no entries\n")
+  val _ = write_rope(join_path3(dir, "/", "tools/pin-audit/required.txt"), required)
   var names : $B.sized_rope = $B.sized_rope_create()
   val _ = write_rope(join_path3(dir, "/", "gh-names.txt"), names)
+in () end
+
+(* The list of the required workflow files of the case, as written *)
+fn _required_raw {dir_len,content_len:nat | dir_len < 200; content_len < 100000} (dir: string dir_len, content: string content_len): void = let
+  var text : $B.sized_rope = $B.sized_rope_create()
+  val () = $B.sized_rope_bput(text, content)
+  val _ = write_rope(join_path3(dir, "/", "tools/pin-audit/required.txt"), text)
 in () end
 
 (* The skip list of the case, as written *)
@@ -912,6 +922,48 @@ fn test_symbolic_link_section_says_delete (): bool = let
 in judged && body end
 
 (* ============================================================
+   The required files (bats-lang/repository-prototype#487)
+   ============================================================ *)
+
+(* A repository that lacks a file tools/pin-audit/required.txt lists fails (as one file not canonical), and its ticket shows the
+   template of that name filled; a comment line of the list is not an entry *)
+fn test_missing_required_file_fails_and_is_ticketed (): bool = let
+  val dir = "build/pin-audit-tests/required-missing"
+  val () = _fresh(dir)
+  val () = _plant_fine(dir, "norequired")
+  val () = _required_raw(dir, "# the files every repository has\n.github/workflows/text-lint.yml\n")
+  val judged = _judge_run(dir, _only_with_tickets("norequired"), "GH_TOKEN=test-token", 1,
+    "::error title=pin audit::norequired: .github/workflows/text-lint.yml: missing: tools/pin-audit/required.txt lists it as a file every repository has",
+    "== 1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 1 passed by a template, 1 not canonical",
+    "   ticket created: https://example.invalid/create\n", "ticket updated")
+  var expected : $B.sized_rope = $B.sized_rope_create()
+  val () = _expect_start(expected)
+  val () = _expect_section(expected, ".github/workflows/text-lint.yml", "templates/text-lint.yml", "8a556d1e80eed22883318e2c6d9a1c7c299ca140", "repository-prototype main 8a556d1", "17")
+  val () = _expect_end(expected, "norequired")
+  val body = _body_is(dir, "norequired", expected)
+in judged && body end
+
+(* A repository that has the required file as the template passes *)
+fn test_required_file_as_the_template_passes (): bool = let
+  val dir = "build/pin-audit-tests/required-present"
+  val () = _fresh(dir)
+  val () = _plant(dir, "withlint")
+  val () = _fill(dir, "withlint", "text-lint.yml", "templates/text-lint.yml", "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", "17", ~1)
+  val () = _commit(dir, "withlint")
+  val () = _required_raw(dir, ".github/workflows/text-lint.yml\n")
+in _judge_run(dir, _only("withlint"), "GH_TOKEN=", 0, "== withlint\n", "1 repositories, 1 workflow files", ".github/workflows/text-lint.yml: pass, equal to the template text-lint.yml", "missing") end
+
+(* A required file that is there but is not the template fails as any file not canonical, and is not also missing *)
+fn test_required_file_not_canonical_fails (): bool = let
+  val dir = "build/pin-audit-tests/required-diverging"
+  val () = _fresh(dir)
+  val () = _plant(dir, "ownlint")
+  val () = _workflow(dir, "ownlint", "text-lint.yml", "name: my own lint\non: push\n")
+  val () = _commit(dir, "ownlint")
+  val () = _required_raw(dir, ".github/workflows/text-lint.yml\n")
+in _judge_run(dir, _only("ownlint"), "GH_TOKEN=", 1, "::error title=pin audit::ownlint: .github/workflows/text-lint.yml: not canonical", "1 repositories, 1 workflow files", "1 not canonical", "missing") end
+
+(* ============================================================
    The skip list (bats-lang/repository-prototype#430)
    ============================================================ *)
 
@@ -993,7 +1045,7 @@ fn test_issue_template_equal_passes (): bool = let
   val () = _fresh(dir)
   val () = _plant_with_issue_template(dir, "tidy", ~1)
   val () = _names(dir, "tidy\n")
-in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 6 read, 0 failing", "::error") end
+in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 7 read, 0 failing", "::error") end
 
 (* ... and the same file with one byte changed fails, named *)
 fn test_issue_template_one_byte_changed_fails (): bool = let
