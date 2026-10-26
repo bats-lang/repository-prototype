@@ -13,6 +13,8 @@ staload "event.sats"
 staload "lint.sats"
 staload "support.sats"
 
+fn _test_phrases (): string 29 = "tests/bodies/test-phrases.txt"
+
 fn _head (): string 40 = "0123456789abcdef0123456789abcdef01234567"
 
 fn text_length {text_len:nat} (text: string text_len): int text_len = g1u2i(string1_length(text))
@@ -75,12 +77,11 @@ in $B.to_arr(builder) end
 
 (* Whether the lint of the body in the file (head the constant, phrases the file
    tests/bodies/phrases.txt when phrases) gives that many findings and exactly that text *)
-fn _fixture_is {path_len,head_len0,expected_len:nat | path_len < 200; head_len0 < 4096}
-  (path: string path_len, head: string head_len0, phrases: bool, count: int, expected: string expected_len)
+fn _fixture_is {path_len,head_len0,phrases_path_len,expected_len:nat | path_len < 200; head_len0 < 4096; phrases_path_len < 200}
+  (path: string path_len, head: string head_len0, phrases_path: string phrases_path_len, count: int, expected: string expected_len)
   : bool = let
   val @(body_ok, body_array, body_len) = _file(path)
-  val @(phrases_ok, phrases_array, phrases_len0) = _file("phrases.txt")
-  val phrases_len = (if phrases then phrases_len0 else 0): [k:nat | k <= $B.BUILDER_CAP] int k
+  val @(phrases_ok, phrases_array, phrases_len) = _file(phrases_path)
   val @(head_array, head_len) = _text(head)
   val @(body_frozen, body_view) = $A.freeze<byte>(body_array)
   val @(phrases_frozen, phrases_view) = $A.freeze<byte>(phrases_array)
@@ -158,57 +159,60 @@ $UNITTEST.run begin
 
 (* the bodies that pass: no finding *)
 fn test_passing_bodies_have_no_finding (): bool =
-  _fixture_is("tests/bodies/pass-fixes.md", _head(), true, 0, "")
-  && _fixture_is("tests/bodies/pass-fixes-other-repository.md", _head(), true, 0, "")
-  && _fixture_is("tests/bodies/pass-robot-footer.md", _head(), true, 0, "")
-  && _fixture_is("tests/bodies/pass-crlf.md", _head(), true, 0, "")
+  _fixture_is("tests/bodies/pass-fixes.md", _head(), _test_phrases(), 0, "")
+  && _fixture_is("tests/bodies/pass-fixes-other-repository.md", _head(), _test_phrases(), 0, "")
+  && _fixture_is("tests/bodies/pass-robot-footer.md", _head(), _test_phrases(), 0, "")
+  && _fixture_is("tests/bodies/pass-crlf.md", _head(), _test_phrases(), 0, "")
 
 (* row 1: Refs for Fixes, in either spelling of the ticket *)
 fn test_refs_instead_of_fixes_is_refused (): bool =
-  _fixture_is("tests/bodies/fail-refs.md", _head(), true, 1,
+  _fixture_is("tests/bodies/fail-refs.md", _head(), _test_phrases(), 1,
     "PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (row 1)\n")
-  && _fixture_is("tests/bodies/fail-refs-other-repository.md", _head(), true, 1,
+  && _fixture_is("tests/bodies/fail-refs-other-repository.md", _head(), _test_phrases(), 1,
     "PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (row 1)\n")
 
 (* row 2: two tickets *)
 fn test_two_tickets_are_refused (): bool =
-  _fixture_is("tests/bodies/fail-two-tickets.md", _head(), true, 1,
+  _fixture_is("tests/bodies/fail-two-tickets.md", _head(), _test_phrases(), 1,
     "PR body: Fixes names more than one ticket; one ticket, one PR, and a dependency is its own ticket and PR (row 2)\n")
 
 (* row 3: no Head line, and a Head line that is not the head *)
 fn test_head_line_is_there_and_is_the_head (): bool =
-  _fixture_is("tests/bodies/fail-no-head.md", _head(), true, 1,
+  _fixture_is("tests/bodies/fail-no-head.md", _head(), _test_phrases(), 1,
     "PR body: no line Head: <40-character SHA>; the body names the head it describes (row 3)\n")
-  && _fixture_is("tests/bodies/fail-head-differs.md", _head(), true, 1,
+  && _fixture_is("tests/bodies/fail-head-differs.md", _head(), _test_phrases(), 1,
     "PR body: it describes head fedcba9876543210fedcba9876543210fedcba98 but the head is 0123456789abcdef0123456789abcdef01234567; rewrite the body for the head (row 3)\n")
-  && _fixture_is("tests/bodies/pass-fixes.md", "fedcba9876543210fedcba9876543210fedcba98", true, 1,
+  && _fixture_is("tests/bodies/pass-fixes.md", "fedcba9876543210fedcba9876543210fedcba98", _test_phrases(), 1,
     "PR body: it describes head 0123456789abcdef0123456789abcdef01234567 but the head is fedcba9876543210fedcba9876543210fedcba98; rewrite the body for the head (row 3)\n")
 
 (* row 4: the Evidence heading and a block of a command with its output *)
 fn test_evidence_has_a_heading_and_a_command_block (): bool =
-  _fixture_is("tests/bodies/fail-no-evidence.md", _head(), true, 1,
+  _fixture_is("tests/bodies/fail-no-evidence.md", _head(), _test_phrases(), 1,
     "PR body: no Evidence heading; every claim has its command and raw output (row 4)\n")
-  && _fixture_is("tests/bodies/fail-no-command-block.md", _head(), true, 1,
+  && _fixture_is("tests/bodies/fail-no-command-block.md", _head(), _test_phrases(), 1,
     "PR body: no fenced block that starts with $ <command> and holds its raw output (row 4)\n")
 
 (* row 5: the footer *)
 fn test_footer_is_the_one_of_the_template (): bool =
-  _fixture_is("tests/bodies/fail-wrong-footer.md", _head(), true, 1,
+  _fixture_is("tests/bodies/fail-wrong-footer.md", _head(), _test_phrases(), 1,
     "PR body: it does not end with the generated-by footer of the template (row 5)\n")
-  && _fixture_is("tests/bodies/fail-session-url.md", _head(), true, 2,
+  && _fixture_is("tests/bodies/fail-session-url.md", _head(), _test_phrases(), 2,
     "PR body: it does not end with the generated-by footer of the template (row 5)\nPR body: it holds a session URL; the footer is the generated-by line alone (row 5)\n")
-  && _fixture_is("tests/bodies/fail-two-footers.md", _head(), true, 1,
+  && _fixture_is("tests/bodies/fail-two-footers.md", _head(), _test_phrases(), 1,
     "PR body: it holds more than one generated-by footer; exactly one (row 5)\n")
 
 (* row 6: a phrase of the phrases file, without it the same body passes *)
 fn test_phrases_of_the_file_are_refused (): bool =
-  _fixture_is("tests/bodies/fail-phrase.md", _head(), true, 1,
-    "PR body: it holds the phrase 'frankly', which the lint refuses (the phrases file)\n")
-  && _fixture_is("tests/bodies/fail-phrase.md", _head(), false, 0, "")
+  _fixture_is("tests/bodies/fail-phrase.md", _head(), _test_phrases(), 1,
+    "PR body: it holds the phrase 'banned example phrase', which the lint refuses (the phrases file)\n")
+  && _fixture_is("tests/bodies/fail-phrase.md", _head(), "tests/bodies/none.txt", 0, "")
+  && _fixture_is("tests/bodies/fail-phrase-real-list.md", _head(), "phrases.txt", 1,
+    "PR body: it holds the phrase 'honest', which the lint refuses (the phrases file)\n")
+  && _fixture_is("tests/bodies/pass-fixes.md", _head(), "phrases.txt", 0, "")
 
 (* an empty body has every row but 2 *)
 fn test_empty_body_fails_each_row (): bool =
-  _fixture_is("tests/bodies/fail-empty.md", _head(), true, 4,
+  _fixture_is("tests/bodies/fail-empty.md", _head(), _test_phrases(), 4,
     "PR body: the first line is Fixes #N for the ticket; a PR that does not meet its Done-when as written is not opened as Refs (row 1)\nPR body: no line Head: <40-character SHA>; the body names the head it describes (row 3)\nPR body: no Evidence heading; every claim has its command and raw output (row 4)\nPR body: it does not end with the generated-by footer of the template (row 5)\n")
 
 (* the edges of row 1: blank lines before, any case, the word edge, the digits *)
