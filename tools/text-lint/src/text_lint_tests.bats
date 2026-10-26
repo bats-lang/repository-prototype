@@ -457,8 +457,8 @@ fun _reach_phrases {cl,pl,ol:agz}{cn,pn,on:pos | cn <= 524288; pn <= 524288; on 
     else here + _reach_phrases(corpus, cused, phrases, pused, raw + 1, phrases_line + 1, oracle, oused)
   end
 
-(* (b) How many lines of the corpus (from start) are found by the lint exactly when the oracle names
-   them, with the sign of the tag a plus exactly then *)
+(* (b) How many lines of the corpus (from start) are found by the lint just when the oracle names
+   them, with the sign of the tag a plus just then *)
 fun _reach_corpus {cl,pl,ol:agz}{cn,pn,on:pos | cn <= 524288; pn <= 524288; on <= 524288}
   {cused:nat | cused <= cn}{start:nat | start <= cused}{pused:nat | pused <= pn}{oused:nat | oused <= on}
   .<cused - start>.
@@ -727,7 +727,7 @@ fn test_exemption_is_a_relock_branch_or_a_bot (): bool =
 (* phrases: the lines of phrases.txt are the rows of the original: each line has plus lines in the
    corpus that it finds alone and the oracle names with its row, the lint and the oracle agree on
    every line of the corpus, and every text row of the copy has its plus line, its minus line and
-   its example; each of the three says what it reached against what it read *)
+   its example; each of them says what it reached against what it read *)
 fn test_phrases_equal_the_original (): bool = let
   val @(phrases_ok, phrases_array, phrases_used) = _file("phrases.txt")
   val @(corpus_ok, corpus_array, corpus_used) = _file("tests/original/corpus.txt")
