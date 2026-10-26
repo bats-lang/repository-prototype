@@ -1,0 +1,18 @@
+# Fixture of the skew case (#494): two pins of one repository, a pwa-ref copy for
+# both, and a pin of another repository. Never run.
+name: skew
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    uses: bats-lang/repository-prototype/.github/workflows/package-check.yml@0000000000000000000000000000000000000000 # repository-prototype main 0000000
+    with:
+      pwa-ref: 0000000000000000000000000000000000000000
+  publish:
+    uses: bats-lang/repository-prototype/.github/workflows/publish.yml@0000000000000000000000000000000000000000 # repository-prototype main 0000000
+    with:
+      pwa-ref: 0000000000000000000000000000000000000000
+  setup:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: bats-lang/bats/.github/actions/setup@0000000000000000000000000000000000000000 # bats main 0000000
