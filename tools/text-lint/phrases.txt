@@ -1,0 +1,25 @@
+# The phrases a pull request body may not hold (bats-lang/repository-prototype#487,
+# keyword: text-lint phrases).
+#
+# One phrase on each line, matched without regard to case and only at word edges (a phrase
+# inside a longer word is not a hit). A line that starts with # is not a phrase. They are the
+# literal ones of the text rows of bats-lang/quire's tests/static/guidelines/phrases.tsv
+# (the ones that are one fixed text; the patterns of that file stay in quire's own lint).
+provisional verdict
+instead of fixes
+or narrow
+hand-picked
+handpicked
+nothing touches it
+contention
+honest
+honestly
+frankly
+not run locally
+or say what is true
+wait and see
+holding the slot
+blocked on evidence
+waiting for evidence
+stop measuring
+narrow the measurement

@@ -465,6 +465,77 @@ in
   if j >= listing_len then counts_after else _records(repository_text, repository_start, repository_end, listing_text, listing_len, j + 1, allowlist_text, allowlist_len, offenders, counts_after)
 end
 
+(* ============================================================
+   The required workflow files (bats-lang/repository-prototype#487)
+   ============================================================ *)
+
+(* Whether the listing listing_text[0, listing_len) from i has a record whose path is
+   required_text[start, stop) *)
+fun _has_record {listing_loc,required_loc:agz}{listing_len:nat | listing_len <= 524288}{i:nat | i <= listing_len}{start,stop:nat | start <= stop; stop <= 524288} .<listing_len - i>.
+  (listing_text: !$A.borrow(byte, listing_loc, 524288), listing_len: int listing_len, i: int i,
+   required_text: !$A.borrow(byte, required_loc, 524288), start: int start, stop: int stop): bool = let
+  val j = find_byte(listing_text, listing_len, i, 0)
+  val tab_at = find_byte(listing_text, j, i, 9)
+  val same =
+    (if j <= i then false
+     else if tab_at >= j then false
+     else if j - (tab_at + 1) = stop - start then range_eq(listing_text, tab_at + 1, j, required_text, start)
+     else false): bool
+in
+  if same then true
+  else if j >= listing_len then false
+  else _has_record(listing_text, listing_len, j + 1, required_text, start, stop)
+end
+
+(* Every line of the required list required_text[0, required_len) from i: a path that is not a
+   comment (a line that starts with "#") must be a record of the listing, else it is a file
+   missing, said, offered to the ticket without a hash, and counted as not canonical *)
+fun _require_lines {repository_loc,listing_loc,required_loc:agz}{repository_start,repository_end,listing_len,required_len:nat | repository_start <= repository_end; repository_end <= 524288; listing_len <= 524288; required_len <= 524288}{i:nat | i <= required_len} .<required_len - i>.
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
+   listing_text: !$A.borrow(byte, listing_loc, 524288), listing_len: int listing_len,
+   required_text: !$A.borrow(byte, required_loc, 524288), required_len: int required_len, i: int i,
+   offenders: !$B.sized_rope, counts: tally): tally = let
+  val j = line_end(required_text, required_len, i)
+  val counts_after =
+    (if j <= i then counts
+     else if byte2int0($A.read<byte>(required_text, i)) = 35 then counts
+     else if _has_record(listing_text, listing_len, 0, required_text, i, j) then counts
+     else let
+       val () = _file_error(repository_text, repository_start, repository_end, required_text, i, j)
+       val no_hash = $A.alloc<byte>(64)
+       val @(no_hash_frozen, no_hash_view) = $A.freeze<byte>(no_hash)
+       val () = _offender(offenders, required_text, i, j, no_hash_view, false)
+       val () = $A.drop<byte>(no_hash_frozen, no_hash_view)
+       val () = $A.free<byte>($A.thaw<byte>(no_hash_frozen))
+       val () = println! ("missing: tools/pin-audit/required.txt lists it as a file every repository has; add the template of that name")
+     in _bump(counts, Column_not_canonical()) end): tally
+in
+  if j >= required_len then counts_after
+  else _require_lines(repository_text, repository_start, repository_end, listing_text, listing_len, required_text, required_len, j + 1, offenders, counts_after)
+end
+
+(* The files tools/pin-audit/required.txt lists, each a record of the listing or a failure *)
+fn _require {repository_loc,listing_loc:agz}{repository_start,repository_end,listing_len:nat | repository_start <= repository_end; repository_end <= 524288; listing_len <= 524288}
+  (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
+   listing_text: !$A.borrow(byte, listing_loc, 524288), listing_len: int listing_len,
+   offenders: !$B.sized_rope, counts: tally): tally = let
+  var required : $B.builder(0) = $B.create()
+  val @(ended, why) = read_constant("tools/pin-audit/required.txt", required)
+  val @(required_array, required_len) = $B.to_arr(required)
+  val @(required_frozen, required_view) = $A.freeze<byte>(required_array)
+  val counts_after =
+    (case+ ended of
+     | Read_whole() => _require_lines(repository_text, repository_start, repository_end, listing_text, listing_len, required_view, required_len, 0, offenders, counts)
+     | Read_too_long() => let
+         val () = _repository_error(repository_text, repository_start, repository_end)
+       in (println! ("tools/pin-audit/required.txt is longer than the 524288 bytes the audit reads"); _bump(counts, Column_repository())) end
+     | Read_failed() => let
+         val () = _repository_error(repository_text, repository_start, repository_end)
+       in (println! ("tools/pin-audit/required.txt could not be read: ", why); _bump(counts, Column_repository())) end): tally
+  val () = $A.drop<byte>(required_frozen, required_view)
+  val () = $A.free<byte>($A.thaw<byte>(required_frozen))
+in counts_after end
+
 (* The clone of repository_text[repository_start, repository_end) and its files *)
 fn _audit_clone {repository_loc,allowlist_loc:agz}{repository_start,repository_end,allowlist_len:nat | repository_start <= repository_end; repository_end - repository_start <= 255; repository_end <= 524288; allowlist_len <= 524288}
   (repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
@@ -477,7 +548,8 @@ fn _audit_clone {repository_loc,allowlist_loc:agz}{repository_start,repository_e
   val counts_after =
     (case+ ended of
      | Read_whole() =>
-         if status = 0 then _records(repository_text, repository_start, repository_end, listing_view, listing_len, 0, allowlist_text, allowlist_len, offenders, counts)
+         if status = 0 then _require(repository_text, repository_start, repository_end, listing_view, listing_len, offenders,
+           _records(repository_text, repository_start, repository_end, listing_view, listing_len, 0, allowlist_text, allowlist_len, offenders, counts))
          else let
            val () = _repository_error(repository_text, repository_start, repository_end)
          in (println! ("git ls-tree could not list .github/workflows (status ", status, ")"); _bump(counts, Column_repository())) end
