@@ -22,6 +22,14 @@
                               checksum of the target (CHECKSUM) at NOW (gradle.bats): the
                               move records are printed and, for a move, the version and
                               the checksum are written to the file UPDATES, a line each
+     repin paths-check PATHS  the repin path rule (#420, #466; pathrule.bats) on the lines of
+                              the file PATHS: at least one path, none refused; a refusal is
+                              printed as a workflow `::error::` command
+     repin members-check LISTING PATHS MAX_BYTES
+                              the listing LISTING (`tar -tv --numeric-owner
+                              --quoting-style=escape`) of a tar against PATHS: each member a
+                              regular file or directory passing the rule, a listed path or
+                              under one, the sizes at most MAX_BYTES, every path a member
 
    Exit status: 0 done, 1 a file that cannot be read or is not records, 2 the
    command line is not one of these. It reads the files it is given, makes no
@@ -38,6 +46,7 @@ staload "age.sats"
 staload "driver.sats"
 staload "gradle_driver.sats"
 staload "npm_driver.sats"
+staload "pathrule_driver.sats"
 staload "records.sats"
 staload "support.sats"
 
@@ -182,11 +191,37 @@ in
   else let val () = prerrln! ("repin: NOW is 1 to 12 digits") in 1 end
 end
 
+(* The paths file at args[paths_start, paths_stop) checked by the repin path rule; the refusal
+   is printed on standard output (a workflow command) *)
+fn _paths_check {l:agz}{n:pos | n <= 4096}{paths_stop:nat | paths_stop <= n}
+  {paths_start:nat | paths_start <= paths_stop}
+  (args: !$A.borrow(byte, l, n), paths_start: int paths_start, paths_stop: int paths_stop): int = let
+  val message = $B.sized_rope_create()
+  val status = run_paths_check(args, paths_start, paths_stop, message)
+  val () = print_rope(message)
+in status end
+
+(* The tar listing at args[listing_start, listing_stop) checked against the paths file and the
+   cap on the sizes *)
+fn _members_check {l:agz}{n:pos | n <= 4096}
+  {cap_stop:nat | cap_stop <= n}{cap_start:nat | cap_start <= cap_stop}
+  {paths_stop:nat | paths_stop <= n}{paths_start:nat | paths_start <= paths_stop}
+  {listing_stop:nat | listing_stop <= n}{listing_start:nat | listing_start <= listing_stop}
+  (args: !$A.borrow(byte, l, n), listing_start: int listing_start,
+   listing_stop: int listing_stop, paths_start: int paths_start, paths_stop: int paths_stop,
+   cap_start: int cap_start, cap_stop: int cap_stop): int = let
+  val message = $B.sized_rope_create()
+  val status = run_members_check(args, listing_start, listing_stop, paths_start, paths_stop,
+    cap_start, cap_stop, message)
+  val () = print_rope(message)
+in status end
+
 fn _usage (): int = let
   val () = prerrln! ("usage: repin table RECORDS | repin age NOW PUBLISHED")
   val () = prerrln! ("       repin actions DIR NOW RELEASES")
   val () = prerrln! ("       repin npm OUTDATED COMPATIBLE TIMES NOW UPDATES")
   val () = prerrln! ("       repin gradle PROPERTIES VERSIONS CHECKSUM NOW UPDATES")
+  val () = prerrln! ("       repin paths-check PATHS | repin members-check LISTING PATHS MAX_BYTES")
 in 2 end
 
 (* The argument at index (the program is 0) of the NUL-separated arguments
@@ -230,6 +265,14 @@ in
     (if sixth_start < args_len && seventh_start >= args_len
      then _gradle(args, second_start, second_stop, third_start, third_stop, fourth_start,
        fourth_stop, fifth_start, fifth_stop, sixth_start, sixth_stop)
+     else _usage())
+  else if span_is(args, command_start, command_stop, "paths-check") then
+    (if second_start < args_len && third_start >= args_len
+     then _paths_check(args, second_start, second_stop) else _usage())
+  else if span_is(args, command_start, command_stop, "members-check") then
+    (if fourth_start < args_len && fifth_start >= args_len
+     then _members_check(args, second_start, second_stop, third_start, third_stop,
+       fourth_start, fourth_stop)
      else _usage())
   else _usage()
 end

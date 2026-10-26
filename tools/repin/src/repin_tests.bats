@@ -25,6 +25,9 @@ staload "npm.sats"
 staload "npm_driver.sats"
 staload "npm.sats"
 staload "npm_driver.sats"
+staload "pathrule.sats"
+staload "fuel.sats"
+staload "pathrule_driver.sats"
 staload "records.sats"
 staload "support.sats"
 staload "version.sats"
@@ -447,6 +450,233 @@ fn _bad_times_line {times_len:nat | times_len < 4096} (times: string times_len):
   val () = $A.drop<byte>(frozen, view)
   val () = $A.free<byte>($A.thaw<byte>(frozen))
 in bad end
+
+(* ============================================================
+   The repin path rule (#466): helpers
+   ============================================================ *)
+
+(* The piece written count times to the open file *)
+fun _repeat {pl:agz}{pn:pos}{count:nat} .<count>.
+  (fd: !$F.fd, piece: !$A.borrow(byte, pl, pn), length: int pn, count: int count): void =
+  if count <= 0 then ()
+  else let
+    val () = (case+ $F.file_write(fd, piece, length) of
+              | ~$R.ok(_) => ()
+              | ~$R.err(_) => ())
+  in _repeat(fd, piece, length, count - 1) end
+
+(* The file made with the content written count times (a listing or a paths file of any
+   size is made this way) *)
+fn _make_repeated {path_len,content_len,count:nat | path_len < 300; content_len > 0; content_len < 4096}
+  (path: string path_len, content: string content_len, count: int count): void = let
+  val array = _exact_array(path, 1)
+  val @(frozen, view) = $A.freeze<byte>(array)
+  val size = g1u2i(string1_length(path)) + 1
+  val () = _mkdir("build/repin-tests")
+  val opened = $F.file_open(view, size, $F.WriteOnly(), $F.CreateOrTruncate(), 420)
+  val () =
+    (case+ opened of
+     | ~$R.err(_) => ()
+     | ~$R.ok(fd) => let
+         val length = g1u2i(string1_length(content))
+         val piece = _exact_array(content, 0)
+         val @(piece_frozen, piece_view) = $A.freeze<byte>(piece)
+         val () = _repeat(fd, piece_view, length, count)
+         val () = $A.drop<byte>(piece_frozen, piece_view)
+         val () = $A.free<byte>($A.thaw<byte>(piece_frozen))
+         val () = $R.discard<int><$F.io_error>($F.file_close(fd))
+       in () end)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+in () end
+
+(* The content appended to the file at the path, which is there *)
+fn _append_text {path_len,content_len:nat | path_len < 300; content_len > 0; content_len < 4096}
+  (path: string path_len, content: string content_len): void = let
+  val array = _exact_array(path, 1)
+  val @(frozen, view) = $A.freeze<byte>(array)
+  val size = g1u2i(string1_length(path)) + 1
+  val opened = $F.file_open(view, size, $F.WriteOnly(), $F.AppendExisting(), 0)
+  val () =
+    (case+ opened of
+     | ~$R.err(_) => ()
+     | ~$R.ok(fd) => let
+         val length = g1u2i(string1_length(content))
+         val piece = _exact_array(content, 0)
+         val @(piece_frozen, piece_view) = $A.freeze<byte>(piece)
+         val () = _repeat(fd, piece_view, length, 1)
+         val () = $A.drop<byte>(piece_frozen, piece_view)
+         val () = $A.free<byte>($A.thaw<byte>(piece_frozen))
+         val () = $R.discard<int><$F.io_error>($F.file_close(fd))
+       in () end)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+in () end
+
+(* `repin paths-check` on the file at the path with the fuel (base, a, b, c) at the place w
+   (0 for none): its status and message are the expected ones *)
+fn _paths_fuel_are {path_len,expected_len:nat | path_len < 300}{w:int | 0 <= w; w <= 10}
+  {base:pos}{a,b,c:nat}
+  (path: string path_len, w: int w, base: int base, a: int a, b: int b, c: int c, status: int,
+   expected: string expected_len): bool = let
+  val @(name_array, name_used) = _text_array(path)
+  val @(frozen, view) = $A.freeze<byte>(name_array)
+  val message = $B.sized_rope_create()
+  val got = check_paths_with_fuel(view, 0, name_used, message, w, base, a, b, c)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+  val same = _rope_is(message, expected)
+in got = status && same end
+
+(* `repin paths-check` on the file at the path: its status and message are the expected ones *)
+fn _paths_file_are {path_len,expected_len:nat | path_len < 300}
+  (path: string path_len, status: int, expected: string expected_len): bool =
+  _paths_fuel_are(path, 0, 1, 0, 0, 0, status, expected)
+
+(* The paths text checked: its status and message are the expected ones *)
+fn _paths_are {paths_len,expected_len:nat | paths_len < 4096}
+  (paths: string paths_len, status: int, expected: string expected_len): bool = let
+  val () = _mkdir("build/repin-tests")
+  val () = _make_file("build/repin-tests/rule-paths.txt", paths, 420)
+in _paths_file_are("build/repin-tests/rule-paths.txt", status, expected) end
+
+(* Whether one path passes the rule, as a paths text of its own *)
+fn _path_passes {path_len:nat | path_len < 4096} (path: string path_len): bool =
+  _paths_are(path, 0, "")
+
+(* `repin members-check` on the listing file, the paths file and the cap (digits), with the
+   fuel (base, a, b, c) at the place w (0 for none): the status and message are the expected
+   ones *)
+fn _members_fuel_are {listing_len,paths_len,cap_len,expected_len:nat | listing_len < 100;
+  paths_len < 100; cap_len < 100}{w:int | 0 <= w; w <= 10}{base:pos}{a,b,c:nat}
+  (listing: string listing_len, paths: string paths_len, cap: string cap_len,
+   w: int w, base: int base, a: int a, b: int b, c: int c, status: int,
+   expected: string expected_len): bool = let
+  var arguments : $B.builder(0) = $B.create()
+  val () = $B.bput(arguments, listing)
+  val listing_stop = $B.length(arguments)
+  val () = $B.bput(arguments, paths)
+  val paths_stop = $B.length(arguments)
+  val () = $B.bput(arguments, cap)
+  val cap_stop = $B.length(arguments)
+  val @(arguments_array, arguments_used) = $B.to_arr(arguments)
+  val @(frozen, view) = $A.freeze<byte>(arguments_array)
+  val message = $B.sized_rope_create()
+  val got = check_members_with_fuel(view, 0, listing_stop, listing_stop, paths_stop, paths_stop,
+    cap_stop, message, w, base, a, b, c)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+  val same = _rope_is(message, expected)
+in got = status && same end
+
+fn _members_files_are {listing_len,paths_len,cap_len,expected_len:nat | listing_len < 100;
+  paths_len < 100; cap_len < 100}
+  (listing: string listing_len, paths: string paths_len, cap: string cap_len, status: int,
+   expected: string expected_len): bool =
+  _members_fuel_are(listing, paths, cap, 0, 1, 0, 0, 0, status, expected)
+
+(* The tar listing text checked against the paths text and the cap (digits): the status and
+   message are the expected ones *)
+fn _members_are {listing_len,paths_len,cap_len,expected_len:nat | listing_len < 4096;
+  paths_len < 4096; cap_len < 100}
+  (listing: string listing_len, paths: string paths_len, cap: string cap_len, status: int,
+   expected: string expected_len): bool = let
+  val () = _mkdir("build/repin-tests")
+  val () = _make_file("build/repin-tests/rule-listing.txt", listing, 420)
+  val () = _make_file("build/repin-tests/rule-members-paths.txt", paths, 420)
+in
+  _members_files_are("build/repin-tests/rule-listing.txt",
+    "build/repin-tests/rule-members-paths.txt", cap, status, expected)
+end
+
+(* The content appended count times to the file at the path, which is there *)
+fn _append_repeated {path_len,content_len,count:nat | path_len < 300; content_len > 0; content_len < 4096}
+  (path: string path_len, content: string content_len, count: int count): void = let
+  val array = _exact_array(path, 1)
+  val @(frozen, view) = $A.freeze<byte>(array)
+  val size = g1u2i(string1_length(path)) + 1
+  val opened = $F.file_open(view, size, $F.WriteOnly(), $F.AppendExisting(), 0)
+  val () =
+    (case+ opened of
+     | ~$R.err(_) => ()
+     | ~$R.ok(fd) => let
+         val length = g1u2i(string1_length(content))
+         val piece = _exact_array(content, 0)
+         val @(piece_frozen, piece_view) = $A.freeze<byte>(piece)
+         val () = _repeat(fd, piece_view, length, count)
+         val () = $A.drop<byte>(piece_frozen, piece_view)
+         val () = $A.free<byte>($A.thaw<byte>(piece_frozen))
+         val () = $R.discard<int><$F.io_error>($F.file_close(fd))
+       in () end)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+in () end
+
+(* A listing of one regular file `fx` whose size is lead followed by the digit text count
+   times, in the file at the path *)
+fn _make_sized_listing {path_len,lead_len,digit_len,count:nat | path_len < 300; lead_len < 100;
+  digit_len > 0; digit_len < 100}
+  (path: string path_len, lead: string lead_len, digit: string digit_len, count: int count): void = let
+  val () = _make_file(path, "-rw-r--r-- 0/0 ", 420)
+  val () = if text_length(lead) > 0 then _append_repeated(path, lead, 1) else ()
+  val () = _append_repeated(path, digit, count)
+  val () = _append_repeated(path, " 2026-10-25 23:32 fx\n", 1)
+in () end
+
+fun _put_repeat {used,count:nat | used + count <= 524288} .<count>.
+  (out: !$B.builder(used) >> $B.builder(used + count), digit: int, count: int count): void =
+  if count <= 0 then ()
+  else let
+    val () = $B.put_char(out, $AR.low_byte(digit))
+  in _put_repeat(out, digit, count - 1) end
+
+(* `repin members-check` on the two files with a cap of lead followed by the digit count
+   times: its status and message are the expected ones *)
+fn _members_long_cap_are {listing_len,paths_len,count,expected_len:nat | listing_len < 100;
+  paths_len < 100; count <= 9000}
+  (listing: string listing_len, paths: string paths_len, lead: int, digit: int, count: int count,
+   status: int, expected: string expected_len): bool = let
+  var arguments : $B.builder(0) = $B.create()
+  val () = $B.bput(arguments, listing)
+  val listing_stop = $B.length(arguments)
+  val () = $B.bput(arguments, paths)
+  val paths_stop = $B.length(arguments)
+  val () = $B.put_char(arguments, $AR.low_byte(lead))
+  val () = _put_repeat(arguments, digit, count)
+  val cap_stop = $B.length(arguments)
+  val @(arguments_array, arguments_used) = $B.to_arr(arguments)
+  val @(frozen, view) = $A.freeze<byte>(arguments_array)
+  val message = $B.sized_rope_create()
+  val got = run_members_check(view, 0, listing_stop, listing_stop, paths_stop, paths_stop,
+    cap_stop, message)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+  val same = _rope_is(message, expected)
+in got = status && same end
+
+(* the fuel message of every place that runs out *)
+fn _fuel_is_gone_in_paths {path_len:nat | path_len < 300}{w:int | 0 <= w; w <= 10}
+  (path: string path_len, w: int w): bool =
+  _paths_fuel_are(path, w, 2, 0, 0, 2, 1, "::error::the stream is longer than the fuel\n")
+
+fn _fuel_is_gone_in_members {listing_len,paths_len:nat | listing_len < 100; paths_len < 100}
+  {w:int | 0 <= w; w <= 10}
+  (listing: string listing_len, paths: string paths_len, w: int w): bool =
+  _members_fuel_are(listing, paths, "10", w, 2, 0, 0, 2, 1,
+    "::error::the stream is longer than the fuel\n")
+
+fn _plant_five_lines (): void = let
+  val () = _make_file("build/repin-tests/fuel-five.txt", "fx\nfx\nfx\nfx\nfx\n", 420)
+  val () = _make_file("build/repin-tests/fuel-dir.txt", "drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", 420)
+  val () = _make_file("build/repin-tests/fuel-fx.txt", "fx\n", 420)
+  val () = _make_file("build/repin-tests/fuel-dirs.txt",
+    "drwxr-xr-x 0/0 0 2026-10-25 23:32 ab/\ndrwxr-xr-x 0/0 0 2026-10-25 23:32 cd/\ndrwxr-xr-x 0/0 0 2026-10-25 23:32 ef/\ndrwxr-xr-x 0/0 0 2026-10-25 23:32 gh/\ndrwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", 420)
+  val () = _make_repeated("build/repin-tests/fuel-members.txt", "drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", 5)
+  val () = _make_file("build/repin-tests/fuel-holds.txt",
+    "-rw-r--r-- 0/0 1 2026-10-25 23:32 fx/a\n-rw-r--r-- 0/0 1 2026-10-25 23:32 fx/b\n-rw-r--r-- 0/0 1 2026-10-25 23:32 fx/c\n-rw-r--r-- 0/0 1 2026-10-25 23:32 fx/d\ndrwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", 420)
+  val () = _make_file("build/repin-tests/fuel-under-paths.txt", "ab\ncd\nef\ngh\nfx\n", 420)
+  val () = _make_file("build/repin-tests/fuel-abcde.txt", "abcde\n", 420)
+in () end
 
 $UNITTEST.run begin
 
@@ -1672,5 +1902,405 @@ fn test_gradle_the_version_of_the_distribution_url_is_found (): bool =
   && _properties_version_is("# distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n", "")
   && _properties_version_is("", "")
   && _properties_version_is("distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\nb=2\n", "8.5")
+
+
+(* ============================================================
+   The repin path rule (#466)
+   ============================================================ *)
+
+fn test_path_rule_accepts_plain_paths (): bool =
+  true
+  && _path_passes("fixture")
+  && _path_passes("tests/relock-pins/repin")
+  && _path_passes("a/b.c@d+e=f,g-h_i")
+  && _path_passes("fixture/pin.txt\nfixture/other.txt\n")
+  && _path_passes("fixture\n\n\nother\n")
+  && _path_passes(".gitignore")
+  && _path_passes("a.git/b")
+  && _path_passes("..a/b..")
+  && _path_passes(".github2")
+  && _path_passes(".gitmodulesx")
+
+fn test_path_rule_refuses_no_path (): bool =
+  true
+  && _paths_are("", 1, "::error::repin-paths is empty: nothing would be committed\n")
+  && _paths_are("\n\n", 1, "::error::repin-paths is empty: nothing would be committed\n")
+
+fn test_path_rule_refuses_the_start_and_the_end (): bool =
+  true
+  && _paths_are("/etc", 1, "::error::repin-paths names a path that is refused: /etc\n")
+  && _paths_are("-fixture", 1, "::error::repin-paths names a path that is refused: -fixture\n")
+  && _paths_are("fixture/", 1, "::error::repin-paths names a path that is refused: fixture/\n")
+  && _paths_are("/", 1, "::error::repin-paths names a path that is refused: /\n")
+
+fn test_path_rule_refuses_an_empty_dot_or_dotdot_component (): bool =
+  true
+  && _paths_are("a//b", 1, "::error::repin-paths names a path that is refused: a//b\n")
+  && _paths_are("./a", 1, "::error::repin-paths names a path that is refused: ./a\n")
+  && _paths_are("a/./b", 1, "::error::repin-paths names a path that is refused: a/./b\n")
+  && _paths_are("a/.", 1, "::error::repin-paths names a path that is refused: a/.\n")
+  && _paths_are("..", 1, "::error::repin-paths names a path that is refused: ..\n")
+  && _paths_are("../x", 1, "::error::repin-paths names a path that is refused: ../x\n")
+  && _paths_are("a/../b", 1, "::error::repin-paths names a path that is refused: a/../b\n")
+  && _paths_are("a/..", 1, "::error::repin-paths names a path that is refused: a/..\n")
+
+fn test_path_rule_refuses_a_name_git_reads_at_any_depth_in_any_case (): bool =
+  true
+  && _paths_are(".git", 1, "::error::repin-paths names a path that is refused: .git\n")
+  && _paths_are(".github", 1, "::error::repin-paths names a path that is refused: .github\n")
+  && _paths_are(".gitmodules", 1, "::error::repin-paths names a path that is refused: .gitmodules\n")
+  && _paths_are(".gitattributes", 1, "::error::repin-paths names a path that is refused: .gitattributes\n")
+  && _paths_are("fixture/.GIT", 1, "::error::repin-paths names a path that is refused: fixture/.GIT\n")
+  && _paths_are("a/.GitHub/b", 1, "::error::repin-paths names a path that is refused: a/.GitHub/b\n")
+  && _paths_are("a/b/.GITMODULES", 1, "::error::repin-paths names a path that is refused: a/b/.GITMODULES\n")
+  && _paths_are("x/.gitAttributes/y", 1, "::error::repin-paths names a path that is refused: x/.gitAttributes/y\n")
+
+fn test_path_rule_refuses_a_character_outside_the_set (): bool =
+  true
+  && _paths_are("a b", 1, "::error::repin-paths names a path that is refused: a b\n")
+  && _paths_are("a\tb", 1, "::error::repin-paths names a path that is refused: a\tb\n")
+  && _paths_are("a\\b", 1, "::error::repin-paths names a path that is refused: a\\b\n")
+  && _paths_are("a:b", 1, "::error::repin-paths names a path that is refused: a:b\n")
+  && _paths_are("a*", 1, "::error::repin-paths names a path that is refused: a*\n")
+  && _paths_are("a\r", 1, "::error::repin-paths names a path that is refused: a\r\n")
+  && _paths_are(" ", 1, "::error::repin-paths names a path that is refused:  \n")
+
+fn test_path_rule_names_the_first_refused_path_after_good_ones (): bool =
+  _paths_are("fixture\nother\n../x\n/etc\n", 1,
+    "::error::repin-paths names a path that is refused: ../x\n")
+
+(* ============================================================
+   The members of a tar (#466)
+   ============================================================ *)
+
+fn test_members_of_a_whole_tar_pass (): bool =
+  true
+  && _members_are(
+       "drwxr-xr-x 0/0               0 2026-10-25 23:32 fx/\n-rw-r--r-- 0/0               2 2026-10-25 23:32 fx/sub/o.txt\n-rw-r--r-- 0/0               2 2026-10-25 23:32 fx/pin.txt\n",
+       "fx\n", "100", 0, "")
+  && _members_are("-rwxr-xr-x 0/0 4 2026-10-25 23:32 fx.txt\n", "fx.txt\n", "4", 0, "")
+  && _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 fx\n", "fx\n", "0", 0, "")
+
+fn test_members_with_a_link_are_refused (): bool =
+  _members_are(
+    "drwxr-xr-x 0/0               0 2026-10-25 23:32 fx/\nlrwxrwxrwx 0/0               0 2026-10-25 23:32 fx/lnk -> /etc/passwd\n",
+    "fx\n", "100", 1,
+    "::error::a member that is not a regular file or a directory: lrwxrwxrwx 0/0               0 2026-10-25 23:32 fx/lnk -> /etc/passwd\n")
+
+fn test_members_that_are_devices_are_refused (): bool =
+  _members_are("crw-r--r-- 0/0 1,3 2026-10-25 23:32 fx/dev\n", "fx\n", "100", 1,
+    "::error::a member that is not a regular file or a directory: crw-r--r-- 0/0 1,3 2026-10-25 23:32 fx/dev\n")
+  && _members_are("brw-r--r-- 0/0 8,0 2026-10-25 23:32 fx/blk\n", "fx\n", "100", 1,
+    "::error::a member that is not a regular file or a directory: brw-r--r-- 0/0 8,0 2026-10-25 23:32 fx/blk\n")
+
+fn test_members_that_are_pipes_are_refused (): bool =
+  _members_are("prw-r--r-- 0/0 0 2026-10-25 23:32 fx/pipe\n", "fx\n", "100", 1,
+    "::error::a member that is not a regular file or a directory: prw-r--r-- 0/0 0 2026-10-25 23:32 fx/pipe\n")
+
+fn test_members_that_are_hard_links_are_refused (): bool =
+  _members_are("hrw-r--r-- 0/0 0 2026-10-25 23:32 fx/h link to fx/a\n", "fx\n", "100", 1,
+    "::error::a member that is not a regular file or a directory: hrw-r--r-- 0/0 0 2026-10-25 23:32 fx/h link to fx/a\n")
+
+fn test_members_outside_the_listed_paths_are_refused (): bool =
+  true
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 outside.txt\n", "fx\n", "100", 1,
+       "::error::a member outside the listed paths or with a refused name: outside.txt\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx-two/x\n", "fx\n", "100", 1,
+       "::error::a member outside the listed paths or with a refused name: fx-two/x\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 f\n", "fx\n", "100", 1,
+       "::error::a member outside the listed paths or with a refused name: f\n")
+
+fn test_members_with_a_name_the_rule_refuses_are_refused (): bool =
+  true
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/../x\n", "fx\n", "100", 1,
+       "::error::a member outside the listed paths or with a refused name: fx/../x\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/.github/x\n", "fx\n", "100", 1,
+       "::error::a member outside the listed paths or with a refused name: fx/.github/x\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 /fx/x\n", "fx\n", "100", 1,
+       "::error::a member outside the listed paths or with a refused name: /fx/x\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/a b\n", "fx\n", "100", 1,
+       "::error::a member outside the listed paths or with a refused name: fx/a b\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/a\\nb\n", "fx\n", "100", 1,
+       "::error::a member outside the listed paths or with a refused name: fx/a\\nb\n")
+
+fn test_members_over_the_cap_are_refused (): bool =
+  true
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx\n", "fx\n", "1", 1,
+       "::error::the repinned files are over repin-max-bytes\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/a\n-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/b\ndrwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", "fx\n", "3", 1,
+       "::error::the repinned files are over repin-max-bytes\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/a\n-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/b\ndrwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", "fx\n", "4", 0, "")
+
+fn test_members_that_do_not_hold_a_listed_path_are_refused (): bool =
+  true
+  && _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", "fx\ngone\n", "100", 1,
+       "::error::the repinned files do not hold gone\n")
+  && _members_are("-rw-r--r-- 0/0 2 2026-10-25 23:32 fx/a\n", "fx\n", "100", 1,
+       "::error::the repinned files do not hold fx\n")
+  && _members_are("", "fx\n", "100", 1, "::error::the repinned files do not hold fx\n")
+
+fn test_members_check_the_paths_with_the_rule_first (): bool =
+  true
+  && _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", "", "100", 1,
+       "::error::repin-paths is empty: nothing would be committed\n")
+  && _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 .github/\n", ".github\n", "100", 1,
+       "::error::repin-paths names a path that is refused: .github\n")
+
+fn test_a_line_that_is_no_member_is_refused (): bool =
+  true
+  && _members_are("-rw-r--r-- 0/0 x 2026-10-25 23:32 fx\n", "fx\n", "100", 1,
+       "::error::a line of the tar listing that is no member: -rw-r--r-- 0/0 x 2026-10-25 23:32 fx\n")
+  && _members_are("-rw-r--r--\n", "fx\n", "100", 1,
+       "::error::a line of the tar listing that is no member: -rw-r--r--\n")
+  && _members_are("\n", "fx\n", "100", 1,
+       "::error::a line of the tar listing that is no member: \n")
+
+
+(* ---- the streams (#466): any size, the member limit, tarfile's slashes ---- *)
+
+fn test_a_directory_loses_every_trailing_slash (): bool =
+  true
+  && _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 fx//\n", "fx\n", "100", 0, "")
+  && _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 fx///\n-rw-r--r-- 0/0 1 2026-10-25 23:32 fx/a\n", "fx\n", "100", 0, "")
+  && _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 /\n", "fx\n", "100", 1,
+       "::error::a member outside the listed paths or with a refused name: \n")
+
+fn test_a_file_keeps_its_trailing_slash_and_is_refused (): bool =
+  _members_are("-rw-r--r-- 0/0 1 2026-10-25 23:32 fx/a/\n", "fx\n", "100", 1,
+    "::error::a member outside the listed paths or with a refused name: fx/a/\n")
+
+fn test_a_size_may_have_any_number_of_digits (): bool =
+  true
+  && _members_are("-rw-r--r-- 0/0 000000000000000000000000000002 2026-10-25 23:32 fx\n", "fx\n", "2", 0, "")
+  && _members_are("-rw-r--r-- 0/0 000000000000000000000000000002 2026-10-25 23:32 fx\n", "fx\n", "1",
+       1, "::error::the repinned files are over repin-max-bytes\n")
+  && _members_are("-rw-r--r-- 0/0 99999999999999999999999999 2026-10-25 23:32 fx\n", "fx\n", "100", 1,
+       "::error::the repinned files are over repin-max-bytes\n")
+  && _members_are("-rw-r--r-- 0/0 5 2026-10-25 23:32 fx\n", "fx\n", "0000000000000000000000000000000100", 0, "")
+  && _members_are("-rw-r--r-- 0/0 5 2026-10-25 23:32 fx\n", "fx\n", "99999999999999999999999999999", 0, "")
+
+fn test_a_size_with_a_letter_is_no_member (): bool =
+  _members_are("-rw-r--r-- 0/0 1x 2026-10-25 23:32 fx\n", "fx\n", "100", 1,
+    "::error::a line of the tar listing that is no member: -rw-r--r-- 0/0 1x 2026-10-25 23:32 fx\n")
+
+(* a listing of 100000 members (about 4 MB) passes, one
+   more is refused *)
+fn test_a_listing_of_the_most_members_passes_and_one_more_is_refused (): bool = let
+  val () = _make_repeated("build/repin-tests/rule-big-listing.txt",
+    "drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", 100000)
+  val () = _make_repeated("build/repin-tests/rule-big-listing-over.txt",
+    "drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", 100001)
+  val () = _make_file("build/repin-tests/rule-fx-paths.txt", "fx\n", 420)
+in
+  _members_files_are("build/repin-tests/rule-big-listing.txt", "build/repin-tests/rule-fx-paths.txt",
+    "10", 0, "")
+  && _members_files_are("build/repin-tests/rule-big-listing-over.txt",
+       "build/repin-tests/rule-fx-paths.txt", "10", 1,
+       "::error::too many members in the repinned files\n")
+end
+
+(* a paths file of 200000 lines (600000 bytes) is read whole *)
+fn test_a_paths_file_of_600000_bytes_is_read (): bool = let
+  val () = _make_repeated("build/repin-tests/rule-big-paths.txt", "fx\n", 200000)
+  val () = _make_file("build/repin-tests/rule-one-dir.txt", "drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n", 420)
+in
+  _paths_file_are("build/repin-tests/rule-big-paths.txt", 0, "")
+  && _members_files_are("build/repin-tests/rule-one-dir.txt", "build/repin-tests/rule-big-paths.txt",
+       "10", 0, "")
+end
+
+(* a refused path after 200000 good ones is found *)
+fn test_a_refused_path_after_a_big_file_is_found (): bool = let
+  val () = _make_repeated("build/repin-tests/rule-big-then-bad.txt", "fx\n", 200000)
+  val () = _append_text("build/repin-tests/rule-big-then-bad.txt", "../x\n")
+in
+  _paths_file_are("build/repin-tests/rule-big-then-bad.txt", 1,
+    "::error::repin-paths names a path that is refused: ../x\n")
+end
+
+fn test_a_name_or_a_path_over_8192_bytes_is_refused (): bool = let
+  val () = _make_repeated("build/repin-tests/rule-long-line.txt", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 100)
+in
+  _paths_file_are("build/repin-tests/rule-long-line.txt", 1,
+    "::error::a path of repin-paths is longer than 8192 bytes: the test -e of job repin fails for it (ENAMETOOLONG)\n")
+  && _members_files_are("build/repin-tests/rule-long-line.txt", "build/repin-tests/rule-fx-paths.txt",
+       "10", 1,
+       "::error::a name of the tar listing is longer than 8192 bytes: its write fails (ENAMETOOLONG), so the run is red in any case\n")
+end
+
+fn test_a_name_of_exactly_8192_bytes_is_read (): bool = let
+  val () = _make_repeated("build/repin-tests/rule-8192-line.txt", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 32)
+in
+  _paths_file_are("build/repin-tests/rule-8192-line.txt", 0, "")
+end
+
+
+(* ---- the fuel (#466): every loop ends on the end of the file; a fuel that is gone refuses ---- *)
+
+fn test_the_units_of_a_fuel_are_a_times_base_plus_one_squared_plus_b_times_base_plus_one_plus_c (): bool =
+  units_of(2, 0, 0, 0) = 0 && units_of(2, 0, 1, 1) = 4 && units_of(2, 1, 0, 0) = 9
+  && units_of(2, 1, 1, 1) = 13 && units_of(5, 0, 0, 3) = 3
+
+fn test_scan_paths_refuses_when_its_lines_are_gone (): bool = let
+  val () = _plant_five_lines()
+in
+  _paths_fuel_are("build/repin-tests/fuel-five.txt", 0, 1, 0, 0, 0, 0, "")
+  && _fuel_is_gone_in_paths("build/repin-tests/fuel-five.txt", 1)
+end
+
+fn test_members_loop_refuses_when_its_lines_are_gone (): bool = let
+  val () = _plant_five_lines()
+in
+  _members_fuel_are("build/repin-tests/fuel-members.txt", "build/repin-tests/fuel-fx.txt", "10", 0, 1, 0, 0, 0, 0, "")
+  && _fuel_is_gone_in_members("build/repin-tests/fuel-members.txt", "build/repin-tests/fuel-fx.txt", 2)
+end
+
+fn test_held_loop_refuses_when_its_lines_are_gone (): bool = let
+  val () = _plant_five_lines()
+in
+  _members_fuel_are("build/repin-tests/fuel-dir.txt", "build/repin-tests/fuel-five.txt", "10", 0, 1, 0, 0, 0, 0, "")
+  && _fuel_is_gone_in_members("build/repin-tests/fuel-dir.txt", "build/repin-tests/fuel-five.txt", 3)
+end
+
+fn test_holds_loop_refuses_when_its_lines_are_gone (): bool = let
+  val () = _plant_five_lines()
+in
+  _members_fuel_are("build/repin-tests/fuel-holds.txt", "build/repin-tests/fuel-fx.txt", "10", 0, 1, 0, 0, 0, 0, "")
+  && _fuel_is_gone_in_members("build/repin-tests/fuel-holds.txt", "build/repin-tests/fuel-fx.txt", 4)
+end
+
+fn test_under_loop_refuses_when_its_lines_are_gone (): bool = let
+  val () = _plant_five_lines()
+in
+  _members_fuel_are("build/repin-tests/fuel-dirs.txt", "build/repin-tests/fuel-under-paths.txt", "10", 0, 1, 0, 0, 0, 0, "")
+  && _fuel_is_gone_in_members("build/repin-tests/fuel-dirs.txt", "build/repin-tests/fuel-under-paths.txt", 5)
+end
+
+fn test_scan_paths_refuses_when_its_reads_are_gone (): bool = let
+  val () = _plant_five_lines()
+in
+  _paths_fuel_are("build/repin-tests/fuel-abcde.txt", 0, 1, 0, 0, 0, 0, "")
+  && _fuel_is_gone_in_paths("build/repin-tests/fuel-abcde.txt", 6)
+end
+
+fn test_members_loop_refuses_when_its_reads_are_gone (): bool = let
+  val () = _plant_five_lines()
+in _fuel_is_gone_in_members("build/repin-tests/fuel-dir.txt", "build/repin-tests/fuel-fx.txt", 7) end
+
+fn test_held_loop_refuses_when_its_reads_are_gone (): bool = let
+  val () = _plant_five_lines()
+in _fuel_is_gone_in_members("build/repin-tests/fuel-dir.txt", "build/repin-tests/fuel-fx.txt", 8) end
+
+fn test_holds_loop_refuses_when_its_reads_are_gone (): bool = let
+  val () = _plant_five_lines()
+in _fuel_is_gone_in_members("build/repin-tests/fuel-dir.txt", "build/repin-tests/fuel-fx.txt", 9) end
+
+fn test_under_loop_refuses_when_its_reads_are_gone (): bool = let
+  val () = _plant_five_lines()
+in _fuel_is_gone_in_members("build/repin-tests/fuel-dir.txt", "build/repin-tests/fuel-fx.txt", 10) end
+
+(* base 2, the fuel (0, 1, 1) is 4 units: 3 lines are read and the end of the file, a 4th
+   line is one unit too many *)
+fn test_the_fuel_carries_from_c_to_b (): bool = let
+  val () = _make_file("build/repin-tests/fuel-three.txt", "fx\nfx\nfx\n", 420)
+  val () = _make_file("build/repin-tests/fuel-four.txt", "fx\nfx\nfx\nfx\n", 420)
+in
+  _paths_fuel_are("build/repin-tests/fuel-three.txt", 1, 2, 0, 1, 1, 0, "")
+  && _paths_fuel_are("build/repin-tests/fuel-four.txt", 1, 2, 0, 1, 1, 1,
+       "::error::the stream is longer than the fuel\n")
+end
+
+(* base 2, (1, 0, 0) is 9 units: 8 lines pass, 9 do not *)
+fn test_the_fuel_carries_from_b_to_a (): bool = let
+  val () = _make_repeated("build/repin-tests/fuel-eight.txt", "fx\n", 8)
+  val () = _make_repeated("build/repin-tests/fuel-nine.txt", "fx\n", 9)
+in
+  _paths_fuel_are("build/repin-tests/fuel-eight.txt", 1, 2, 1, 0, 0, 0, "")
+  && _paths_fuel_are("build/repin-tests/fuel-nine.txt", 1, 2, 1, 0, 0, 1,
+       "::error::the stream is longer than the fuel\n")
+end
+
+fn test_a_last_line_without_a_newline_is_read_on_the_paths (): bool = let
+  val () = _make_file("build/repin-tests/last-paths.txt", "fx", 420)
+in _paths_file_are("build/repin-tests/last-paths.txt", 0, "") end
+
+fn test_a_last_line_without_a_newline_is_read_on_the_listing (): bool = let
+  val () = _make_file("build/repin-tests/last-listing.txt", "drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/", 420)
+  val () = _make_file("build/repin-tests/last-fx.txt", "fx\n", 420)
+in
+  _members_files_are("build/repin-tests/last-listing.txt", "build/repin-tests/last-fx.txt", "10", 0, "")
+end
+
+fn test_blank_lines_of_the_paths_are_skipped_by_every_loop (): bool = let
+  val () = _make_file("build/repin-tests/blank-paths.txt", "\nfx\n\n\n", 420)
+  val () = _make_file("build/repin-tests/blank-listing.txt",
+    "drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n-rw-r--r-- 0/0 1 2026-10-25 23:32 fx/a\n", 420)
+  val () = _make_file("build/repin-tests/blank-outside.txt", "-rw-r--r-- 0/0 1 2026-10-25 23:32 zz\n", 420)
+in
+  _paths_file_are("build/repin-tests/blank-paths.txt", 0, "")
+  && _members_files_are("build/repin-tests/blank-listing.txt", "build/repin-tests/blank-paths.txt", "10", 0, "")
+  && _members_files_are("build/repin-tests/blank-outside.txt", "build/repin-tests/blank-paths.txt", "10", 1,
+       "::error::a member outside the listed paths or with a refused name: zz\n")
+end
+
+fn test_a_member_equal_to_a_listed_path_is_accepted (): bool = let
+  val () = _make_file("build/repin-tests/equal-listing.txt", "-rw-r--r-- 0/0 1 2026-10-25 23:32 fx\n", 420)
+  val () = _make_file("build/repin-tests/equal-paths.txt", "fx\n", 420)
+in _members_files_are("build/repin-tests/equal-listing.txt", "build/repin-tests/equal-paths.txt", "10", 0, "") end
+
+(* ---- the sizes (#466): exact digit strings, the room, any length ---- *)
+
+fn test_a_size_and_a_cap_of_18_digits_compare_exactly (): bool =
+  _members_are("-rw-r--r-- 0/0 180000000000000000 2026-10-25 23:32 fx\n", "fx\n", "160000000000000000", 1,
+    "::error::the repinned files are over repin-max-bytes\n")
+  && _members_are("-rw-r--r-- 0/0 150000000000000000 2026-10-25 23:32 fx\n", "fx\n", "160000000000000000", 0, "")
+  && _members_are("-rw-r--r-- 0/0 160000000000000001 2026-10-25 23:32 fx\n", "fx\n", "160000000000000000", 1,
+       "::error::the repinned files are over repin-max-bytes\n")
+
+fn test_a_size_equal_to_the_cap_is_accepted (): bool =
+  _members_are("-rw-r--r-- 0/0 5 2026-10-25 23:32 fx\n", "fx\n", "5", 0, "")
+  && _members_are("-rw-r--r-- 0/0 6 2026-10-25 23:32 fx\n", "fx\n", "5", 1,
+       "::error::the repinned files are over repin-max-bytes\n")
+
+fn test_leading_zeros_do_not_count (): bool =
+  _members_are("-rw-r--r-- 0/0 0005 2026-10-25 23:32 fx\n", "fx\n", "5", 0, "")
+  && _members_are("-rw-r--r-- 0/0 5 2026-10-25 23:32 fx\n", "fx\n", "0005", 0, "")
+  && _members_are("-rw-r--r-- 0/0 0006 2026-10-25 23:32 fx\n", "fx\n", "0005", 1,
+       "::error::the repinned files are over repin-max-bytes\n")
+  && _members_are("-rw-r--r-- 0/0 0 2026-10-25 23:32 fx\n", "fx\n", "0", 0, "")
+
+fn test_a_size_with_more_digits_than_the_room_is_over_the_cap (): bool =
+  _members_are("-rw-r--r-- 0/0 1000 2026-10-25 23:32 fx\n", "fx\n", "100", 1,
+    "::error::the repinned files are over repin-max-bytes\n")
+  && _members_are("-rw-r--r-- 0/0 1000000000000000000 2026-10-25 23:32 fx\n", "fx\n", "999999999999999999", 1,
+       "::error::the repinned files are over repin-max-bytes\n")
+
+(* the room 1000: 1 leaves 999 (a borrow across three digits), 999 leaves 0, one more is over *)
+fn test_sizes_add_up_exactly_across_a_borrow (): bool =
+  _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n-rw-r--r-- 0/0 1 2026-10-25 23:32 fx/a\n-rw-r--r-- 0/0 999 2026-10-25 23:32 fx/b\n", "fx\n", "1000", 0, "")
+  && _members_are("drwxr-xr-x 0/0 0 2026-10-25 23:32 fx/\n-rw-r--r-- 0/0 1 2026-10-25 23:32 fx/a\n-rw-r--r-- 0/0 999 2026-10-25 23:32 fx/b\n-rw-r--r-- 0/0 1 2026-10-25 23:32 fx/c\n", "fx\n", "1000", 1,
+       "::error::the repinned files are over repin-max-bytes\n")
+
+fn test_a_directory_adds_no_size (): bool =
+  _members_are("drwxr-xr-x 0/0 5 2026-10-25 23:32 fx/\n-rw-r--r-- 0/0 1 2026-10-25 23:32 fx/a\n", "fx\n", "1", 0, "")
+
+fn test_a_cap_of_4097_digits_is_exact (): bool = let
+  val () = _make_file("build/repin-tests/cap-paths.txt", "fx\n", 420)
+  val () = _make_sized_listing("build/repin-tests/cap-listing-below.txt", "", "9", 4096)
+  val () = _make_sized_listing("build/repin-tests/cap-listing-above.txt", "2", "0", 4096)
+  val () = _make_sized_listing("build/repin-tests/cap-listing-equal.txt", "1", "0", 4096)
+in
+  _members_long_cap_are("build/repin-tests/cap-listing-below.txt", "build/repin-tests/cap-paths.txt", 49, 48, 4096, 0, "")
+  && _members_long_cap_are("build/repin-tests/cap-listing-equal.txt", "build/repin-tests/cap-paths.txt", 49, 48, 4096, 0, "")
+  && _members_long_cap_are("build/repin-tests/cap-listing-above.txt", "build/repin-tests/cap-paths.txt", 49, 48, 4096, 1,
+       "::error::the repinned files are over repin-max-bytes\n")
+end
+
+fn test_a_cap_beyond_the_room_is_unlimited (): bool = let
+  val () = _make_file("build/repin-tests/cap-paths.txt", "fx\n", 420)
+  val () = _make_sized_listing("build/repin-tests/cap-listing-big.txt", "", "9", 8000)
+in
+  _members_long_cap_are("build/repin-tests/cap-listing-big.txt", "build/repin-tests/cap-paths.txt", 49, 48, 8200, 0, "")
+end
 
 end
