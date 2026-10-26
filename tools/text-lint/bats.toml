@@ -1,0 +1,13 @@
+[package]
+name = "text-lint"
+kind = "bin"
+unsafe = false
+
+[dependencies]
+"array" = ""
+"arith" = ""
+"builder" = ""
+"file" = ""
+"result" = ""
+"env" = ""
+"json" = ""

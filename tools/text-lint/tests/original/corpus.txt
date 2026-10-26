@@ -1,0 +1,242 @@
+11:1+ my provisional verdict is approved
+11:1+ MY PROVISIONAL VERDICT IS APPROVED
+11:1+ so my provisional verdict is approved again
+11:1- myprovisionalverdictisapproved
+12:2+ change refs instead of fixes
+12:2+ CHANGE REFS INSTEAD OF FIXES
+12:2+ so change refs instead of fixes again
+12:2- change refs instead of
+13:2+ refs unless narrows it
+13:2+ REFS UNLESS NARROWS IT
+13:2+ so refs unless narrows it again
+13:2- refsunlessnarrowsit
+14:2+ refs unless the narrows it
+14:2+ REFS UNLESS THE NARROWS IT
+14:2+ so refs unless the narrows it again
+14:2- refsunlessthenarrowsit
+15:2+ refs unless owner narrows it
+15:2+ REFS UNLESS OWNER NARROWS IT
+15:2+ so refs unless owner narrows it again
+15:2- refsunlessownernarrowsit
+16:2+ refs unless the owner narrows it
+16:2+ REFS UNLESS THE OWNER NARROWS IT
+16:2+ so refs unless the owner narrows it again
+16:2- refsunlesstheownernarrowsit
+17:2+ do it or narrow
+17:2+ DO IT OR NARROW
+17:2+ so do it or narrow again
+17:2- do it or
+18:2+ do it or narrowing
+18:2+ DO IT OR NARROWING
+18:2+ so do it or narrowing again
+18:2- do it or
+19:2+ change fixes #12 to refs
+19:2+ CHANGE FIXES #12 TO REFS
+19:2+ so change fixes #12 to refs again
+19:2- change fixes #12 to
+20:2+ change fixes #n to refs
+20:2+ CHANGE FIXES #N TO REFS
+20:2+ so change fixes #n to refs again
+20:2- change fixes #n to
+21:2+ change fixes #<ticket> to refs
+21:2+ CHANGE FIXES #<TICKET> TO REFS
+21:2+ so change fixes #<ticket> to refs again
+21:2- change fixes #<ticket> to
+22:2+ open it as refs
+22:2+ OPEN IT AS REFS
+22:2+ so open it as refs again
+22:2- open it as
+23:2+ use refs here
+23:2+ USE REFS HERE
+23:2+ so use refs here again
+23:2- refs here
+24:2+ then open it as refs
+24:2+ THEN OPEN IT AS REFS
+24:2+ so then open it as refs again
+24:2- then open it as
+25:2+ we opened it as refs
+25:2+ WE OPENED IT AS REFS
+25:2+ so we opened it as refs again
+25:2- we opened it as
+26:3+ the work is partly done
+26:3+ THE WORK IS PARTLY DONE
+26:3+ so the work is partly done again
+26:3- theworkispartlydone
+27:3+ the work is partially done
+27:3+ THE WORK IS PARTIALLY DONE
+27:3+ so the work is partially done again
+27:3- theworkispartiallydone
+28:3+ a hand-picked sample
+28:3+ A HAND-PICKED SAMPLE
+28:3+ so a hand-picked sample again
+28:3- a hand picked sample
+29:6+ it passed this time
+29:6+ IT PASSED THIS TIME
+29:6+ so it passed this time again
+29:6- it passed this
+30:6+ it passed alone
+30:6+ IT PASSED ALONE
+30:6+ so it passed alone again
+30:6- it passed
+31:6+ it passed on rerun
+31:6+ IT PASSED ON RERUN
+31:6+ so it passed on rerun again
+31:6- it passed on
+32:6+ it passed on a re-run
+32:6+ IT PASSED ON A RE-RUN
+32:6+ so it passed on a re-run again
+32:6- it passed on a
+33:6+ it will pass alone
+33:6+ IT WILL PASS ALONE
+33:6+ so it will pass alone again
+33:6- it will pass
+34:6+ it passes alone
+34:6+ IT PASSES ALONE
+34:6+ so it passes alone again
+34:6- it passes
+35:6+ it will pass this time
+35:6+ IT WILL PASS THIS TIME
+35:6+ so it will pass this time again
+35:6- it will pass this
+36:6+ it passes this time
+36:6+ IT PASSES THIS TIME
+36:6+ so it passes this time again
+36:6- it passes this
+37:6+ it can pass on rerun
+37:6+ IT CAN PASS ON RERUN
+37:6+ so it can pass on rerun again
+37:6- it can pass on
+38:6+ it can pass on a re-run
+38:6+ IT CAN PASS ON A RE-RUN
+38:6+ so it can pass on a re-run again
+38:6- it can pass on a
+39:6+ it passes on rerun
+39:6+ IT PASSES ON RERUN
+39:6+ so it passes on rerun again
+39:6- it passes on
+40:6+ it passes on a re-run
+40:6+ IT PASSES ON A RE-RUN
+40:6+ so it passes on a re-run again
+40:6- it passes on a
+41:6+ contention, nothing touches it
+41:6+ CONTENTION, NOTHING TOUCHES IT
+41:6+ so contention, nothing touches it again
+41:6- contentious, nothin touches it
+42:23+ failed under contention
+42:23+ FAILED UNDER CONTENTION
+42:23+ so failed under contention again
+42:23- failed under
+43:10+ honest points
+43:10+ HONEST POINTS
+43:10+ so honest points again
+43:10- points
+44:10+ to be frank it works
+44:10+ TO BE FRANK IT WORKS
+44:10+ so to be frank it works again
+44:10- tobefrankitworks
+45:10+ frankly it works
+45:10+ FRANKLY IT WORKS
+45:10+ so frankly it works again
+45:10- it works
+46:10+ not run locally: the e2e
+46:10+ NOT RUN LOCALLY: THE E2E
+46:10+ so not run locally: the e2e again
+46:10- run locally: the e2e
+47:10+ we haven't verified it
+47:10+ WE HAVEN'T VERIFIED IT
+47:10+ so we haven't verified it again
+47:10- wehaven'tverifiedit
+48:16+ do x or say what is true
+48:16+ DO X OR SAY WHAT IS TRUE
+48:16+ so do x or say what is true again
+48:16- do x or say what is
+49:16+ or remove the claim
+49:16+ OR REMOVE THE CLAIM
+49:16+ so or remove the claim again
+49:16- or remove the
+50:16+ or remove the sentence
+50:16+ OR REMOVE THE SENTENCE
+50:16+ so or remove the sentence again
+50:16- or remove the
+51:16+ or remove the line
+51:16+ OR REMOVE THE LINE
+51:16+ so or remove the line again
+51:16- or remove the
+52:13+ after a day of sessions
+52:13+ AFTER A DAY OF SESSIONS
+52:13+ so after a day of sessions again
+52:13- a day of sessions
+53:13+ after a week of sessions
+53:13+ AFTER A WEEK OF SESSIONS
+53:13+ so after a week of sessions again
+53:13- a week of sessions
+54:13+ after a month of sessions
+54:13+ AFTER A MONTH OF SESSIONS
+54:13+ so after a month of sessions again
+54:13- a month of sessions
+55:13+ after a session
+55:13+ AFTER A SESSION
+55:13+ so after a session again
+55:13- after a
+56:13+ after 3 sessions
+56:13+ AFTER 3 SESSIONS
+56:13+ so after 3 sessions again
+56:13- after 3
+57:13+ at the next capture
+57:13+ AT THE NEXT CAPTURE
+57:13+ so at the next capture again
+57:13- at the next
+58:13+ at the next run
+58:13+ AT THE NEXT RUN
+58:13+ so at the next run again
+58:13- at the next
+59:13+ at the next occurrence
+59:13+ AT THE NEXT OCCURRENCE
+59:13+ so at the next occurrence again
+59:13- at the next
+60:13+ wait and see
+60:13+ WAIT AND SEE
+60:13+ so wait and see again
+60:13- wait and
+61:14+ holding the slot
+61:14+ HOLDING THE SLOT
+61:14+ so holding the slot again
+61:14- holding the
+62:18+ blocked on evidence
+62:18+ BLOCKED ON EVIDENCE
+62:18+ so blocked on evidence again
+62:18- blocked on
+63:18+ waiting for evidence
+63:18+ WAITING FOR EVIDENCE
+63:18+ so waiting for evidence again
+63:18- waiting for
+64:20+ waiting for a go
+64:20+ WAITING FOR A GO
+64:20+ so waiting for a go again
+64:20- waiting for a
+65:20+ waiting for the "go"
+65:20+ WAITING FOR THE "GO"
+65:20+ so waiting for the "go" again
+65:20- waiting for the
+66:21+ stop measuring
+66:21+ STOP MEASURING
+66:21+ so stop measuring again
+66:21- stop
+67:21+ narrow the measurement
+67:21+ NARROW THE MEASUREMENT
+67:21+ so narrow the measurement again
+67:21- narrow the
+12:2+ change Refs instead of Fixes
+16:2+ Refs unless the owner narrows it
+26:3+ the ticket is partly done
+27:3+ partially done
+28:3+ a hand-picked six fixtures
+46:10+ Not run locally: the e2e
+48:16+ do X or say what is true
+61:14+ holding the slot for the next fix
+47:10+ I haven't verified
+19:2+ change Fixes #368 to Refs #368
+20:2+ change Fixes #N to Refs #N
+22:2+ open it as Refs
+22:2+ it goes in as Refs
+23:2+ use Refs
