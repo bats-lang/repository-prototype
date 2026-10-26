@@ -1,0 +1,26 @@
+{
+  "action": "edited",
+  "number": 7,
+  "repository": {
+    "full_name": "bats-lang/example"
+  },
+  "pull_request": {
+    "number": 7,
+    "body": null,
+    "title": "t",
+    "head": {
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "ref": "work-1",
+      "repo": {
+        "name": "x"
+      }
+    },
+    "user": {
+      "login": "moshez",
+      "type": "User"
+    }
+  },
+  "sender": {
+    "login": "x"
+  }
+}

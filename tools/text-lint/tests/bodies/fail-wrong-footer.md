@@ -1,0 +1,13 @@
+Fixes #487
+
+Head: 0123456789abcdef0123456789abcdef01234567
+
+## Evidence
+
+```
+$ text_lint body body.md 0123456789abcdef0123456789abcdef01234567
+ok
+```
+
+---
+Generated with Claude

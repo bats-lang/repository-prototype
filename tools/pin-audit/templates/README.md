@@ -1,6 +1,6 @@
 # Caller templates
 
-`check.yml`, `relock.yml` and `publish.yml` are the exact text of the workflow
+`check.yml`, `relock.yml`, `publish.yml` and `text-lint.yml` (bats-lang/repository-prototype#487: the pull request body lint; its `@@COMMIT@@` holes are the same commit in a real caller, and `tools/pin-audit/required.txt` makes the file required in every repository) are the exact text of the workflow
 files a library repository commits at `.github/workflows/`; `review-gate.yml` and
 `review-gate-relay.yml` are bridge's two files at bridge commit
 `d8d68f6e9302db86c4b6afb042238df2859bdd92` byte for byte, with no holes. Each is compared as

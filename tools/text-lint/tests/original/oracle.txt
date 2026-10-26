@@ -1,0 +1,203 @@
+text:1: row 1: "provisional verdict": A review is the posted comment; a verdict anywhere else is no review.
+text:2: row 1: "PROVISIONAL VERDICT": A review is the posted comment; a verdict anywhere else is no review.
+text:3: row 1: "provisional verdict": A review is the posted comment; a verdict anywhere else is no review.
+text:5: row 2: "instead of fixes": Nobody offers a way to ship less than the ticket says: the verdict is changes needed, and the finding is to do the Done-when as written.
+text:6: row 2: "INSTEAD OF FIXES": Nobody offers a way to ship less than the ticket says: the verdict is changes needed, and the finding is to do the Done-when as written.
+text:7: row 2: "instead of fixes": Nobody offers a way to ship less than the ticket says: the verdict is changes needed, and the finding is to do the Done-when as written.
+text:9: row 2: "unless narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:10: row 2: "UNLESS NARROW": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:11: row 2: "unless narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:13: row 2: "unless the narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:14: row 2: "UNLESS THE NARROW": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:15: row 2: "unless the narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:17: row 2: "unless owner narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:18: row 2: "UNLESS OWNER NARROW": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:19: row 2: "unless owner narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:21: row 2: "unless the owner narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:22: row 2: "UNLESS THE OWNER NARROW": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:23: row 2: "unless the owner narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:25: row 2: "or narrow": Narrowing is the owner's, never offered.
+text:26: row 2: "OR NARROW": Narrowing is the owner's, never offered.
+text:27: row 2: "or narrow": Narrowing is the owner's, never offered.
+text:29: row 2: "or narrowing": Narrowing is the owner's, never offered.
+text:30: row 2: "OR NARROWING": Narrowing is the owner's, never offered.
+text:31: row 2: "or narrowing": Narrowing is the owner's, never offered.
+text:33: row 2: "fixes #12 to refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:34: row 2: "FIXES #12 TO REFS": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:35: row 2: "fixes #12 to refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:37: row 2: "fixes #n to refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:38: row 2: "FIXES #N TO REFS": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:39: row 2: "fixes #n to refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:41: row 2: "fixes #<ticket> to refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:42: row 2: "FIXES #<TICKET> TO REFS": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:43: row 2: "fixes #<ticket> to refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:45: row 2: "open it as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:45: row 2: "as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:46: row 2: "OPEN IT AS REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:46: row 2: "AS REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:47: row 2: "open it as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:47: row 2: "as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:49: row 2: "use refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:49: row 2: "use refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:50: row 2: "USE REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:50: row 2: "USE REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:51: row 2: "use refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:51: row 2: "use refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:53: row 2: "open it as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:53: row 2: "as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:54: row 2: "OPEN IT AS REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:54: row 2: "AS REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:55: row 2: "open it as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:55: row 2: "as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:57: row 2: "opened it as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:57: row 2: "as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:58: row 2: "OPENED IT AS REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:58: row 2: "AS REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:59: row 2: "opened it as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:59: row 2: "as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:61: row 3: "partly": Partly is not a state: the Done-when is met as written or the work goes on.
+text:62: row 3: "PARTLY": Partly is not a state: the Done-when is met as written or the work goes on.
+text:63: row 3: "partly": Partly is not a state: the Done-when is met as written or the work goes on.
+text:65: row 3: "partially": Partially is not a state: the Done-when is met as written or the work goes on.
+text:66: row 3: "PARTIALLY": Partially is not a state: the Done-when is met as written or the work goes on.
+text:67: row 3: "partially": Partially is not a state: the Done-when is met as written or the work goes on.
+text:69: row 3: "hand-picked": A local sample is random, with its seed and size named; the Done-when's own command runs in CI on the whole population.
+text:70: row 3: "HAND-PICKED": A local sample is random, with its seed and size named; the Done-when's own command runs in CI on the whole population.
+text:71: row 3: "hand-picked": A local sample is random, with its seed and size named; the Done-when's own command runs in CI on the whole population.
+text:73: row 6: "passed this time": A red test is root-caused; "it passed again" is not a cause.
+text:74: row 6: "PASSED THIS TIME": A red test is root-caused; "it passed again" is not a cause.
+text:75: row 6: "passed this time": A red test is root-caused; "it passed again" is not a cause.
+text:77: row 6: "passed alone": A red test is root-caused; "it passed again" is not a cause.
+text:78: row 6: "PASSED ALONE": A red test is root-caused; "it passed again" is not a cause.
+text:79: row 6: "passed alone": A red test is root-caused; "it passed again" is not a cause.
+text:81: row 6: "passed on rerun": A red test is root-caused; "it passed again" is not a cause.
+text:82: row 6: "PASSED ON RERUN": A red test is root-caused; "it passed again" is not a cause.
+text:83: row 6: "passed on rerun": A red test is root-caused; "it passed again" is not a cause.
+text:85: row 6: "passed on a re-run": A red test is root-caused; "it passed again" is not a cause.
+text:86: row 6: "PASSED ON A RE-RUN": A red test is root-caused; "it passed again" is not a cause.
+text:87: row 6: "passed on a re-run": A red test is root-caused; "it passed again" is not a cause.
+text:89: row 6: "pass alone": A red test is root-caused; "it passes again" is not a cause.
+text:90: row 6: "PASS ALONE": A red test is root-caused; "it passes again" is not a cause.
+text:91: row 6: "pass alone": A red test is root-caused; "it passes again" is not a cause.
+text:93: row 6: "passes alone": A red test is root-caused; "it passes again" is not a cause.
+text:94: row 6: "PASSES ALONE": A red test is root-caused; "it passes again" is not a cause.
+text:95: row 6: "passes alone": A red test is root-caused; "it passes again" is not a cause.
+text:97: row 6: "pass this time": A red test is root-caused; "it passes again" is not a cause.
+text:98: row 6: "PASS THIS TIME": A red test is root-caused; "it passes again" is not a cause.
+text:99: row 6: "pass this time": A red test is root-caused; "it passes again" is not a cause.
+text:101: row 6: "passes this time": A red test is root-caused; "it passes again" is not a cause.
+text:102: row 6: "PASSES THIS TIME": A red test is root-caused; "it passes again" is not a cause.
+text:103: row 6: "passes this time": A red test is root-caused; "it passes again" is not a cause.
+text:105: row 6: "pass on rerun": A red test is root-caused; "it passes again" is not a cause.
+text:106: row 6: "PASS ON RERUN": A red test is root-caused; "it passes again" is not a cause.
+text:107: row 6: "pass on rerun": A red test is root-caused; "it passes again" is not a cause.
+text:109: row 6: "pass on a re-run": A red test is root-caused; "it passes again" is not a cause.
+text:110: row 6: "PASS ON A RE-RUN": A red test is root-caused; "it passes again" is not a cause.
+text:111: row 6: "pass on a re-run": A red test is root-caused; "it passes again" is not a cause.
+text:113: row 6: "passes on rerun": A red test is root-caused; "it passes again" is not a cause.
+text:114: row 6: "PASSES ON RERUN": A red test is root-caused; "it passes again" is not a cause.
+text:115: row 6: "passes on rerun": A red test is root-caused; "it passes again" is not a cause.
+text:117: row 6: "passes on a re-run": A red test is root-caused; "it passes again" is not a cause.
+text:118: row 6: "PASSES ON A RE-RUN": A red test is root-caused; "it passes again" is not a cause.
+text:119: row 6: "passes on a re-run": A red test is root-caused; "it passes again" is not a cause.
+text:121: row 6: "nothing touches it": A red test is root-caused; "nothing touches it" is not a cause.
+text:121: row 23: "contention": A red test is root-caused or the test is made robust; "contention" is not a cause.
+text:122: row 6: "NOTHING TOUCHES IT": A red test is root-caused; "nothing touches it" is not a cause.
+text:122: row 23: "CONTENTION": A red test is root-caused or the test is made robust; "contention" is not a cause.
+text:123: row 6: "nothing touches it": A red test is root-caused; "nothing touches it" is not a cause.
+text:123: row 23: "contention": A red test is root-caused or the test is made robust; "contention" is not a cause.
+text:125: row 23: "contention": A red test is root-caused or the test is made robust; "contention" is not a cause.
+text:126: row 23: "CONTENTION": A red test is root-caused or the test is made robust; "contention" is not a cause.
+text:127: row 23: "contention": A red test is root-caused or the test is made robust; "contention" is not a cause.
+text:129: row 10: "honest": State the fact; the word adds nothing and offers an exit.
+text:130: row 10: "HONEST": State the fact; the word adds nothing and offers an exit.
+text:131: row 10: "honest": State the fact; the word adds nothing and offers an exit.
+text:133: row 10: "frank": State the fact; the word adds nothing and offers an exit.
+text:134: row 10: "FRANK": State the fact; the word adds nothing and offers an exit.
+text:135: row 10: "frank": State the fact; the word adds nothing and offers an exit.
+text:137: row 10: "frankly": State the fact; the word adds nothing and offers an exit.
+text:138: row 10: "FRANKLY": State the fact; the word adds nothing and offers an exit.
+text:139: row 10: "frankly": State the fact; the word adds nothing and offers an exit.
+text:141: row 10: "not run locally": Run what the change needs; what CI runs is CI's and is not a caveat.
+text:142: row 10: "NOT RUN LOCALLY": Run what the change needs; what CI runs is CI's and is not a caveat.
+text:143: row 10: "not run locally": Run what the change needs; what CI runs is CI's and is not a caveat.
+text:145: row 10: "haven't verified": Run the check and say what it printed.
+text:146: row 10: "HAVEN'T VERIFIED": Run the check and say what it printed.
+text:147: row 10: "haven't verified": Run the check and say what it printed.
+text:149: row 16: "or say what is true": A brief never offers an alternative to the Done-when.
+text:150: row 16: "OR SAY WHAT IS TRUE": A brief never offers an alternative to the Done-when.
+text:151: row 16: "or say what is true": A brief never offers an alternative to the Done-when.
+text:153: row 16: "or remove the claim": A claim is never weakened: the code is made to match it.
+text:154: row 16: "OR REMOVE THE CLAIM": A claim is never weakened: the code is made to match it.
+text:155: row 16: "or remove the claim": A claim is never weakened: the code is made to match it.
+text:157: row 16: "or remove the sentence": A claim is never weakened: the code is made to match it.
+text:158: row 16: "OR REMOVE THE SENTENCE": A claim is never weakened: the code is made to match it.
+text:159: row 16: "or remove the sentence": A claim is never weakened: the code is made to match it.
+text:161: row 16: "or remove the line": A claim is never weakened: the code is made to match it.
+text:162: row 16: "OR REMOVE THE LINE": A claim is never weakened: the code is made to match it.
+text:163: row 16: "or remove the line": A claim is never weakened: the code is made to match it.
+text:165: row 13: "after a day": A step that waits for time is done now.
+text:166: row 13: "AFTER A DAY": A step that waits for time is done now.
+text:167: row 13: "after a day": A step that waits for time is done now.
+text:169: row 13: "after a week": A step that waits for time is done now.
+text:170: row 13: "AFTER A WEEK": A step that waits for time is done now.
+text:171: row 13: "after a week": A step that waits for time is done now.
+text:173: row 13: "after a month": A step that waits for time is done now.
+text:174: row 13: "AFTER A MONTH": A step that waits for time is done now.
+text:175: row 13: "after a month": A step that waits for time is done now.
+text:177: row 13: "after a session": A step that waits for time is done now.
+text:178: row 13: "AFTER A SESSION": A step that waits for time is done now.
+text:179: row 13: "after a session": A step that waits for time is done now.
+text:181: row 13: "after 3 sessions": A step that waits for time is done now.
+text:182: row 13: "AFTER 3 SESSIONS": A step that waits for time is done now.
+text:183: row 13: "after 3 sessions": A step that waits for time is done now.
+text:185: row 13: "the next capture": A step that waits for a recurrence is done now: produce what the wait would produce.
+text:186: row 13: "THE NEXT CAPTURE": A step that waits for a recurrence is done now: produce what the wait would produce.
+text:187: row 13: "the next capture": A step that waits for a recurrence is done now: produce what the wait would produce.
+text:189: row 13: "the next run": A step that waits for a recurrence is done now: produce what the wait would produce.
+text:190: row 13: "THE NEXT RUN": A step that waits for a recurrence is done now: produce what the wait would produce.
+text:191: row 13: "the next run": A step that waits for a recurrence is done now: produce what the wait would produce.
+text:193: row 13: "the next occurrence": A step that waits for a recurrence is done now: produce what the wait would produce.
+text:194: row 13: "THE NEXT OCCURRENCE": A step that waits for a recurrence is done now: produce what the wait would produce.
+text:195: row 13: "the next occurrence": A step that waits for a recurrence is done now: produce what the wait would produce.
+text:197: row 13: "wait and see": A ticket whose only content is waiting is closed; the work is done now.
+text:198: row 13: "WAIT AND SEE": A ticket whose only content is waiting is closed; the work is done now.
+text:199: row 13: "wait and see": A ticket whose only content is waiting is closed; the work is done now.
+text:201: row 14: "holding the slot": A free slot is filled the same turn, in the owner's order.
+text:202: row 14: "HOLDING THE SLOT": A free slot is filled the same turn, in the owner's order.
+text:203: row 14: "holding the slot": A free slot is filled the same turn, in the owner's order.
+text:205: row 18: "blocked on evidence": Producing the evidence is the work.
+text:206: row 18: "BLOCKED ON EVIDENCE": Producing the evidence is the work.
+text:207: row 18: "blocked on evidence": Producing the evidence is the work.
+text:209: row 18: "waiting for evidence": Producing the evidence is the work.
+text:210: row 18: "WAITING FOR EVIDENCE": Producing the evidence is the work.
+text:211: row 18: "waiting for evidence": Producing the evidence is the work.
+text:213: row 20: "waiting for a go": An interrupt that killed agents means restart them fresh; nobody waits for a go.
+text:214: row 20: "WAITING FOR A GO": An interrupt that killed agents means restart them fresh; nobody waits for a go.
+text:215: row 20: "waiting for a go": An interrupt that killed agents means restart them fresh; nobody waits for a go.
+text:217: row 20: "waiting for the "go": An interrupt that killed agents means restart them fresh; nobody waits for a go.
+text:218: row 20: "WAITING FOR THE "GO": An interrupt that killed agents means restart them fresh; nobody waits for a go.
+text:219: row 20: "waiting for the "go": An interrupt that killed agents means restart them fresh; nobody waits for a go.
+text:221: row 21: "stop measuring": The Done-when is measured as written.
+text:222: row 21: "STOP MEASURING": The Done-when is measured as written.
+text:223: row 21: "stop measuring": The Done-when is measured as written.
+text:225: row 21: "narrow the measurement": The Done-when is measured as written.
+text:226: row 21: "NARROW THE MEASUREMENT": The Done-when is measured as written.
+text:227: row 21: "narrow the measurement": The Done-when is measured as written.
+text:229: row 2: "instead of Fixes": Nobody offers a way to ship less than the ticket says: the verdict is changes needed, and the finding is to do the Done-when as written.
+text:230: row 2: "unless the owner narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:231: row 3: "partly": Partly is not a state: the Done-when is met as written or the work goes on.
+text:232: row 3: "partially": Partially is not a state: the Done-when is met as written or the work goes on.
+text:233: row 3: "hand-picked": A local sample is random, with its seed and size named; the Done-when's own command runs in CI on the whole population.
+text:234: row 10: "Not run locally": Run what the change needs; what CI runs is CI's and is not a caveat.
+text:235: row 16: "or say what is true": A brief never offers an alternative to the Done-when.
+text:236: row 14: "holding the slot": A free slot is filled the same turn, in the owner's order.
+text:237: row 10: "haven't verified": Run the check and say what it printed.
+text:238: row 2: "Fixes #368 to Refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:239: row 2: "Fixes #N to Refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:240: row 2: "open it as Refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:240: row 2: "as Refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:241: row 2: "as Refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:241: row 2: "as Refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:242: row 2: "use Refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:242: row 2: "use Refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
