@@ -345,7 +345,8 @@ implement lint_body (body, len, head, head_len, phrases, phrases_len, out) = let
     else if head_len <= 0 then false
     else if head_len = 40 then ~spans_equal(body, head_at, head_at + 40, head, 0, head_len)
     else true): bool
-  val () = if head_at < 0 then
+  val head_missing = (head_at < 0): bool
+  val () = if head_missing then
     $B.sized_rope_bput(out, "PR body: no line Head: <40-character SHA>; the body names the head it describes (row 3)\n") else ()
   val () = if head_at < 0 then () else if head_wrong then let
       val () = $B.sized_rope_bput(out, "PR body: it describes head ")
@@ -373,7 +374,7 @@ in
   let
     val a = (if first_ok then 0 else 1): int
     val b = (if tickets_differ then 1 else 0): int
-    val c = (if head_at < 0 then 1 else 0): int
+    val c = (if head_missing then 1 else 0): int
     val d = (if head_wrong then 1 else 0): int
     val e = (if evidence = 3 then 0 else 1): int
     val f = (if last_is_footer then 0 else 1): int
