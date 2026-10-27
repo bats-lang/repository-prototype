@@ -74,6 +74,11 @@
 # it. A dispatch with `refusal` `bare` runs this case alone (the workflow under
 # test is then the one of the dispatched ref, so a ref with the old staging
 # shows it red).
+# One resolution for each repository (#494, area: relock heads): `skew` runs the
+# program between the pin-moves markers of relock-pins.yml on
+# tests/relock-pins/skew with a git whose main moves at every ls-remote, two
+# pins of one repository and a pwa-ref copy listed for both; the pins and copies
+# must hold the first answer and ls-remote must run once for each repository.
 # A dispatch with `refusal` runs only that case: the calls of the other jobs
 # share concurrency groups with the pull request's run and would cancel each
 # other's pending jobs.
@@ -288,6 +293,34 @@ jobs:
               || { echo "::error::the $name refusal does not name the file and the line number"; cat "$work/$name.out"; exit 1; }
             echo "the $name spelling is refused: $(grep -F '::error' "$work/$name.out")"
           done
+
+  skew:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # the setup action names a pull request's head, the merge's second parent (bats#283)
+          fetch-depth: 2
+      # the stand-in git and the checking program are bats programs of tools/pin-audit, built as tools-test.yml builds the audit
+      - name: Set up bats
+        uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
+        with:
+          require-lock: 'false'
+      - name: Build the stand-in git
+        working-directory: tools/pin-audit
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
+      # area: relock heads; the checking program is tools/pin-audit/src/bin/skew_check.bats
+      - name: Pins of one repository agree when its main moves between two resolutions
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/skew"
+          cd "$RUNNER_TEMP/skew"
+          "$GITHUB_WORKSPACE/tools/pin-audit/dist/debug/skew_check" \
+            "$GITHUB_WORKSPACE/.github/workflows/relock-pins.yml" \
+            "$GITHUB_WORKSPACE/tests/relock-pins/skew" \
+            "$GITHUB_WORKSPACE/tools/pin-audit/dist/debug/git_stand_in"
 
   actions:
     if: inputs.refusal == ''

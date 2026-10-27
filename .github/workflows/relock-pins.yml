@@ -1018,11 +1018,21 @@ jobs:
           case "$WORKFLOWS_DIRECTORY" in
             ''|-*|*[!A-Za-z0-9._/-]*) echo "::error::workflows-directory is refused: $WORKFLOWS_DIRECTORY"; exit 1 ;;
           esac
+          # pin-moves begin
           : > ~/relock/pins
+          # One ls-remote for each repository, before any line is written, so the pins
+          # (and pin-copies lines) of one repository agree (area: relock heads, #494)
+          : > ~/relock/heads
           for pin in $PINS; do
             owner_repo=$(printf '%s' "$pin" | cut -d/ -f1-2)
-            newest=$(git ls-remote "https://github.com/$owner_repo.git" refs/heads/main | cut -f1)
-            test -n "$newest" || { echo "::error::no main in $owner_repo"; exit 1; }
+            if awk -v r="$owner_repo" '$1 == r { found = 1 } END { exit !found }' ~/relock/heads; then continue; fi
+            head=$(git ls-remote "https://github.com/$owner_repo.git" refs/heads/main | cut -f1)
+            test -n "$head" || { echo "::error::no main in $owner_repo"; exit 1; }
+            printf '%s %s\n' "$owner_repo" "$head" >> ~/relock/heads
+          done
+          for pin in $PINS; do
+            owner_repo=$(printf '%s' "$pin" | cut -d/ -f1-2)
+            newest=$(awk -v r="$owner_repo" '$1 == r { print $2; exit }' ~/relock/heads)
             # area: relock own repository (repository-prototype#448): in the repository that hosts the
             # pin's workflow, a mention that is not a plain `uses:` line (a header comment saying how
             # to call it) is documentation and is left as it is, and a pin that no plain line calls
@@ -1100,6 +1110,7 @@ jobs:
               printf '%s %s %s %s\n' "$pin" "$owner_repo" "$old" "$newest" >> ~/relock/pins
             fi
           done
+          # pin-moves end
 
           # The action pins (area: repin actions): tools/repin moves them in
           # the workflow files and prints a record for each pin examined
