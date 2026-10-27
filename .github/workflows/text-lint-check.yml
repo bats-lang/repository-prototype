@@ -63,6 +63,7 @@ jobs:
         uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
         with:
           require-lock: 'false'
+          commit: ${{ inputs.tools-ref }}
 
       - name: Build the lint
         working-directory: tools/text-lint

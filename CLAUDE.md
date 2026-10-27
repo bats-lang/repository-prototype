@@ -156,13 +156,14 @@ against every package's newest version, which is the point of it.
 
 ## A library's check.yml is a caller of package-check.yml
 
-A library's `.github/workflows/check.yml` only calls `.github/workflows/package-check.yml` here, by commit (`uses: bats-lang/repository-prototype/.github/workflows/package-check.yml@<40 hex> # <version>`), on push to main, pull request to main and `workflow_dispatch`. It has no inputs: the library chooses what runs by which test directories it has, never by editing a workflow.
+A library's `.github/workflows/check.yml` only calls `.github/workflows/package-check.yml` here, by commit (`uses: bats-lang/repository-prototype/.github/workflows/package-check.yml@<40 hex> # <version>`), on push to main, pull request to main (`types: [opened, synchronize, reopened, ready_for_review]`: GitHub's default three plus the transition to ready) and `workflow_dispatch`. It has no inputs: the library chooses what runs by which test directories it has, never by editing a workflow.
 
 * Always: the bats setup action, `bats check`, `bats test` (unit tests live in `src/`; a package with none prints "no tests found" and passes).
 * `tests/static/` exists: `tests/static/run.sh "$REPOSITORY"`. `tests/dynamic/` exists: valgrind is installed and `tests/dynamic/run.sh "$REPOSITORY"` runs; when `tests/dynamic/package.json` exists too, Node (`.nvmrc`) and `npm ci` run first. `tests/c/` exists: `tests/c/run.sh` on ubuntu-24.04 and macos-26. A directory that exists must hold its `run.sh`; the step fails otherwise.
 * The existence tests are `hashFiles('<dir>/**') != ''` expressions, so no shell decides anything.
 * The lock is always required (the setup action's default `require-lock: 'true'`). `bats check` does not fail on a missing `bats.lock` (without one it fetches the newest of each package), and it refuses a `#use` the lock does not name only when a lock exists. So a package with no dependencies commits the empty `bats.lock` that `bats lock --repository <dir>` writes ("wrote bats.lock (no dependencies)"); adding a dependency without relocking then fails `bats check`.
 * The job shows in a caller as `check / check` (caller job / called job).
+* A draft pull request runs no job (#525, keyword: draft-ci): each job of `package-check.yml` carries `github.event_name != 'pull_request' || !github.event.pull_request.draft`, so a push to a draft starts nothing that costs runner time and the caller's `check / check` is reported as skipped, not missing (GitHub counts a skipped job as success for a required check; a draft cannot merge in any case). `ready_for_review` in the caller's `types` starts the check on the head when the pull request is marked ready; push, `workflow_dispatch` and the merge queue run unchanged. The caller template is `tools/pin-audit/templates/check.yml`; each library's caller adopts it in a ticket of its own (quire#939).
 
 ## Branches
 
