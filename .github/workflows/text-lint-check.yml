@@ -1,0 +1,83 @@
+# The form of a pull request body, one lint for every repository of the organisation
+# (bats-lang/repository-prototype#487, keyword: text-lint). A repository's
+# .github/workflows/text-lint.yml is only a caller of this workflow, by commit (#269):
+#
+#   name: text-lint
+#   on:
+#     pull_request_target:
+#       types: [opened, edited, synchronize, reopened]
+#   permissions:
+#     contents: read
+#     statuses: write
+#   jobs:
+#     text-lint:
+#       uses: bats-lang/repository-prototype/.github/workflows/text-lint-check.yml@<commit> # <version>
+#       with:
+#         tools-ref: <the same commit>
+#
+# What it does: builds tools/text-lint of this repository at tools-ref (a reusable workflow
+# cannot read its own ref, so the caller repeats the commit; relock-pins.yml's pin-copies
+# keeps them equal), runs `text_lint event` on the event's file, and posts the commit
+# status `text-lint` on the pull request's head: success when the body is in form (the
+# rows are in tools/text-lint/src/lint.bats), failure with the first finding as its
+# description, success saying exempt for a relock/ branch and for a bot's pull request.
+# The findings are all printed in the log of the run. It is not a required check: it reports.
+#
+# Safe on pull_request_target: the job checks out this repository, never the pull request's,
+# and passes the pull request's text to the tool in the event's file only, never through a
+# shell, so no code of the pull request runs (the review gate of bridge reasons the same way).
+# A newer edit of the same pull request cancels the older run, so the last body decides.
+name: text-lint-check
+
+on:
+  workflow_call:
+    inputs:
+      tools-ref:
+        description: The full commit SHA of bats-lang/repository-prototype this workflow is called at.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: text-lint-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: bats-lang/repository-prototype
+          ref: ${{ inputs.tools-ref }}
+          persist-credentials: false
+          fetch-depth: 2
+
+      # bats's setup action, pinned by commit as tools-test.yml does: the compiler and the
+      # package repository at the commits of .github/bats-version and .github/repository-version
+      # of the checkout above. The tool's lock names packages newer than that commit, so its
+      # packages are fetched from this checkout (--repository below).
+      - name: Set up bats
+        uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
+        with:
+          require-lock: 'false'
+          commit: ${{ inputs.tools-ref }}
+
+      - name: Build the lint
+        working-directory: tools/text-lint
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
+
+      - name: Lint the pull request body
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: tools/text-lint/dist/debug/text_lint event "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/status.json" "$RUN_URL" tools/text-lint/phrases.txt
+
+      - name: Set the commit status text-lint
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" --input "$RUNNER_TEMP/status.json"

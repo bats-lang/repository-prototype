@@ -1,0 +1,2 @@
+# phrases of the tests (the lint's own list is ../../phrases.txt)
+example	banned example phrase	this holds the banned example phrase	Do not write it.
