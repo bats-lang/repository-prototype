@@ -1,0 +1,11 @@
+name: check-gated
+
+on:
+  pull_request_target:
+    types: [opened]
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo one

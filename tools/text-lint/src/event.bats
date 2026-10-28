@@ -18,6 +18,7 @@
 #use json as J
 #use result as R
 
+staload "gated.sats"
 staload "lint.sats"
 staload "support.sats"
 
@@ -169,13 +170,17 @@ fn _empty_rope (): $B.sized_rope = $B.sized_rope_create()
    the status object to status, from the event event[0, len), the phrases and the run's URL.
    The result says whether it went well (a failing lint is a status of state failure) or the event
    is refused (said on standard error; nothing useful appended). *)
-#pub fn lint_event {el,pl,ul:agz}{pn,un:pos}{len:nat | len <= 524288}
+#pub fn lint_event {el,pl,ul,cl,bl,tl:agz}{pn,un,cn,bn,tn:pos}{len:nat | len <= 524288}
   {plen:nat | plen <= pn}{ulen:nat | ulen <= un}
+  {changes_len:nat | changes_len <= cn}{base_len:nat | base_len <= bn}{triggers_len:nat | triggers_len <= tn}
   (event: !$A.borrow(byte, el, 524288), len: int len, phrases: !$A.borrow(byte, pl, pn),
    plen: int plen, url: !$A.borrow(byte, ul, un), ulen: int ulen,
+   changes: !$A.borrow(byte, cl, cn), changes_len: int changes_len,
+   base: !$A.borrow(byte, bl, bn), base_len: int base_len,
+   triggers: !$A.borrow(byte, tl, tn), triggers_len: int triggers_len,
    findings: !$B.sized_rope, status: !$B.sized_rope): int
 
-implement lint_event (event, len, phrases, plen, url, ulen, findings, status) = let
+implement lint_event (event, len, phrases, plen, url, ulen, changes, changes_len, base, base_len, triggers, triggers_len, findings, status) = let
   val @(ok, root) = _parsed(event, len)
 in
   if ~ok then let val () = $J.json_free(root) in 1 end
@@ -209,8 +214,10 @@ in
             in 0 end
             else let
               val count = lint_body(body_view, body_len, sha_view, sha_len, phrases, plen, findings)
+                + lint_gated(body_view, body_len, changes, changes_len, base, base_len, triggers, triggers_len, findings)
               val again = $B.sized_rope_create()
               val _ = lint_body(body_view, body_len, sha_view, sha_len, phrases, plen, again)
+              val _ = lint_gated(body_view, body_len, changes, changes_len, base, base_len, triggers, triggers_len, again)
               val () =
                 (if count = 0 then _put_status("success", "the PR body is in form", again, url, ulen, status)
                  else _put_status("failure", "", again, url, ulen, status))

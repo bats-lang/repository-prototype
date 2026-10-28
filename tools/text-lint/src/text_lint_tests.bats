@@ -10,6 +10,7 @@
 #use builder as B
 
 staload "event.sats"
+staload "gated.sats"
 staload "lint.sats"
 staload "support.sats"
 
@@ -118,9 +119,9 @@ fn _body_is {body_len,expected_len:nat | body_len < 4096}
 in found = count && same end
 
 (* The status and the findings lint_event gives the event file *)
-fn _event_is {path_len,findings_len,status_len:nat | path_len < 200}
-  (path: string path_len, code: int, findings_text: string findings_len,
-   status_text: string status_len): bool = let
+fn _event_full {path_len,changes_len0,findings_len,status_len:nat | path_len < 200; changes_len0 < 200}
+  (path: string path_len, changes_path: string changes_len0, code: int,
+   findings_text: string findings_len, status_text: string status_len): bool = let
   val @(event_ok, event_array, event_len) = _file(path)
   val @(phrases_array, phrases_len) = _text("")
   val @(url_array, url_len) = _text("https://github.com/o/r/actions/runs/1")
@@ -129,8 +130,20 @@ fn _event_is {path_len,findings_len,status_len:nat | path_len < 200}
   val @(url_frozen, url_view) = $A.freeze<byte>(url_array)
   val findings = $B.sized_rope_create()
   val status = $B.sized_rope_create()
+  val @(changes_ok, changes_array, changes_len) = _file(changes_path)
+  val @(triggers_ok, triggers_array, triggers_len) = _file("gated-triggers.txt")
+  val @(base_array, base_len) = _text("tests/gated/base")
+  val @(changes_frozen, changes_view) = $A.freeze<byte>(changes_array)
+  val @(base_frozen, base_view) = $A.freeze<byte>(base_array)
+  val @(triggers_frozen, triggers_view) = $A.freeze<byte>(triggers_array)
   val got = lint_event(event_view, event_len, phrases_view, phrases_len, url_view, url_len,
-    findings, status)
+    changes_view, changes_len, base_view, base_len, triggers_view, triggers_len, findings, status)
+  val () = $A.drop<byte>(changes_frozen, changes_view)
+  val () = $A.free<byte>($A.thaw<byte>(changes_frozen))
+  val () = $A.drop<byte>(base_frozen, base_view)
+  val () = $A.free<byte>($A.thaw<byte>(base_frozen))
+  val () = $A.drop<byte>(triggers_frozen, triggers_view)
+  val () = $A.free<byte>($A.thaw<byte>(triggers_frozen))
   val () = $A.drop<byte>(event_frozen, event_view)
   val () = $A.free<byte>($A.thaw<byte>(event_frozen))
   val () = $A.drop<byte>(phrases_frozen, phrases_view)
@@ -139,7 +152,40 @@ fn _event_is {path_len,findings_len,status_len:nat | path_len < 200}
   val () = $A.free<byte>($A.thaw<byte>(url_frozen))
   val same_findings = _rope_is(findings, findings_text)
   val same_status = _rope_is(status, status_text)
-in event_ok && got = code && same_findings && same_status end
+in event_ok && changes_ok && triggers_ok && got = code && same_findings && same_status end
+
+(* The status and the findings lint_event gives the event file, no workflow changed *)
+fn _event_is {path_len,findings_len,status_len:nat | path_len < 200}
+  (path: string path_len, code: int, findings_text: string findings_len,
+   status_text: string status_len): bool =
+  _event_full(path, "tests/gated/changes-empty.diff", code, findings_text, status_text)
+
+(* The findings of the row scratch-run for the event file and the changes file (the base
+   checkout is tests/gated/base, the triggers are gated-triggers.txt): the count, and the text *)
+fn _gated_is {event_len,changes_len,findings_len:nat | event_len < 200; changes_len < 200}
+  (event_path: string event_len, changes_path: string changes_len, count: int,
+   findings_text: string findings_len): bool = let
+  val @(event_ok, event_array, event_used) = _file(event_path)
+  val @(changes_ok, changes_array, changes_used) = _file(changes_path)
+  val @(triggers_ok, triggers_array, triggers_used) = _file("gated-triggers.txt")
+  val @(base_array, base_used) = _text("tests/gated/base")
+  val @(event_frozen, event_view) = $A.freeze<byte>(event_array)
+  val @(changes_frozen, changes_view) = $A.freeze<byte>(changes_array)
+  val @(triggers_frozen, triggers_view) = $A.freeze<byte>(triggers_array)
+  val @(base_frozen, base_view) = $A.freeze<byte>(base_array)
+  val out = $B.sized_rope_create()
+  val found = lint_gated(event_view, event_used, changes_view, changes_used, base_view, base_used,
+    triggers_view, triggers_used, out)
+  val () = $A.drop<byte>(event_frozen, event_view)
+  val () = $A.free<byte>($A.thaw<byte>(event_frozen))
+  val () = $A.drop<byte>(changes_frozen, changes_view)
+  val () = $A.free<byte>($A.thaw<byte>(changes_frozen))
+  val () = $A.drop<byte>(triggers_frozen, triggers_view)
+  val () = $A.free<byte>($A.thaw<byte>(triggers_frozen))
+  val () = $A.drop<byte>(base_frozen, base_view)
+  val () = $A.free<byte>($A.thaw<byte>(base_frozen))
+  val same = _rope_is(out, findings_text)
+in event_ok && changes_ok && triggers_ok && found = count && same end
 
 fn _exempt_is {ref_len,login_len:nat | ref_len < 4096; login_len < 4096}
   (ref: string ref_len, login: string login_len): bool = let
@@ -760,5 +806,52 @@ in
   && corpus_read > 0 && corpus_reached = corpus_read
   && rows_read > 0 && rows_reached = rows_read
 end
+
+(* #509, scratch-run. _gated_is gives lint_gated the event file's text as the body (the URL
+   survives the quoting of JSON); the event cases below run the whole lint_event *)
+fn test_gated_workflow_without_a_scratch_run_is_refused (): bool =
+  _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-modified-gated.diff", 1,
+    "PR body: .github/workflows/check-gated.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-gated.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-renamed-gated.diff", 1,
+    "PR body: .github/workflows/check-new-name.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-comment-only.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+
+(* a job URL of relock-scratch in the body is the whole row; a run URL alone and a job of
+   another repository are not *)
+fn test_gated_workflow_with_a_scratch_run_passes (): bool =
+  _gated_is("tests/events/gated-url.json", "tests/gated/changes-modified-gated.diff", 0, "")
+  && _gated_is("tests/events/gated-url.json", "tests/gated/changes-added-gated.diff", 0, "")
+  && _gated_is("tests/events/gated-run-url-only.json", "tests/gated/changes-modified-gated.diff", 1,
+    "PR body: .github/workflows/check-gated.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-url-other-repository.json", "tests/gated/changes-modified-gated.diff", 1,
+    "PR body: .github/workflows/check-gated.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+
+(* end to end: the status is a failure with the finding when the event's body cites no run, a
+   success when it cites one, and nothing changes for a pull request that changes no workflow *)
+fn test_gated_event_status (): bool =
+  _event_full("tests/events/gated-no-url.json", "tests/gated/changes-modified-gated.diff", 0,
+    "PR body: .github/workflows/check-gated.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n",
+    "{\"state\":\"failure\",\"context\":\"text-lint\",\"description\":\"PR body: .github/workflows/check-gated.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
+  && _event_full("tests/events/gated-url.json", "tests/gated/changes-modified-gated.diff", 0, "",
+    "{\"state\":\"success\",\"context\":\"text-lint\",\"description\":\"the PR body is in form\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
+  && _event_full("tests/events/gated-no-url.json", "tests/gated/changes-modified-plain.diff", 0, "",
+    "{\"state\":\"success\",\"context\":\"text-lint\",\"description\":\"the PR body is in form\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
+
+(* a change that is not to a gated workflow needs no run: a plain workflow, a file that is not a
+   workflow, a deleted workflow, no change at all *)
+fn test_other_changes_need_no_scratch_run (): bool =
+  _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-modified-plain.diff", 0, "")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-plain.diff", 0, "")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-other-file.diff", 0, "")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-deleted-gated.diff", 0, "")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-empty.diff", 0, "")
+
+(* two changed files, one gated: one finding, for the gated one *)
+fn test_one_finding_for_each_gated_file (): bool =
+  _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-two-files.diff", 1,
+    "PR body: .github/workflows/check-gated.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
 
 end

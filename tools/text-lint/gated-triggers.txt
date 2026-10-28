@@ -1,0 +1,19 @@
+# The triggers that run the default branch's copy of a workflow (GitHub's "Events that trigger
+# workflows": the events whose GITHUB_SHA is the last commit on the default branch), one pattern
+# on each line (src/pattern.bats), found in a changed workflow's patch or its base copy
+# (src/gated.bats, bats-lang/repository-prototype#509). Keyword: text-lint gated.
+# Left out, since the word is also a permission or a common word in a workflow: issues, label,
+# status, watch, fork, public, delete.
+\bpull_request_target\b
+\bissue_comment\b
+\bworkflow_run\b
+\brepository_dispatch\b
+\bschedule\b
+\bdiscussion\b
+\bdiscussion_comment\b
+\bbranch_protection_rule\b
+\bcheck_run\b
+\bcheck_suite\b
+\bmilestone\b
+\bpage_build\b
+\bgollum\b

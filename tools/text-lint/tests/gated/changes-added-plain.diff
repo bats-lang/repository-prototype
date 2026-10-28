@@ -1,0 +1,6 @@
+diff --git a/.github/workflows/new.yml b/.github/workflows/new.yml
+@@ -0,0 +1,4 @@
++name: new
++on:
++  push:
++jobs: {}

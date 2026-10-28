@@ -1,0 +1,11 @@
+name: check-plain
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo one

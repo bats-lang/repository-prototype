@@ -1,0 +1,8 @@
+diff --git a/.github/workflows/check-plain.yml b/.github/workflows/check-plain.yml
+@@ -9,3 +9,3 @@ jobs:
+-      - run: echo one
++      - run: echo two
+diff --git a/.github/workflows/check-gated.yml b/.github/workflows/check-gated.yml
+@@ -9,3 +9,3 @@ jobs:
+-      - run: echo one
++      - run: echo two
