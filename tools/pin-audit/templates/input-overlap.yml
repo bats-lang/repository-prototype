@@ -1,0 +1,19 @@
+# An input of an action or of a reusable workflow is removed in two steps
+# (bats-lang/repository-prototype#544): a pull request that removes or renames one fails unless the
+# default branch marked it deprecated a relock cycle earlier. The work is the shared
+# input-overlap-check.yml, called by commit; tools-ref is the same commit (a reusable workflow
+# cannot read its own).
+name: input-overlap
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  input-overlap:
+    uses: bats-lang/repository-prototype/.github/workflows/input-overlap-check.yml@@@COMMIT@@ # @@COMMENT@@
+    with:
+      tools-ref: @@COMMIT@@
