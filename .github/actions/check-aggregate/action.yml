@@ -37,7 +37,7 @@ inputs:
   jobs:
     description: The job ids that must have passed, separated by spaces.
     required: true
-  results:
+  results-list:
     description: The caller's needs context as JSON, toJSON(needs).
     required: true
 
