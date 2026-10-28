@@ -23,6 +23,16 @@
 # description, success saying exempt for a relock/ branch and for a bot's pull request.
 # The findings are all printed in the log of the run. It is not a required check: it reports.
 #
+# The row scratch-run (bats-lang/repository-prototype#509, keyword: text-lint gated): a pull
+# request that changes a workflow the default branch runs (pull_request_target and the other
+# triggers of tools/text-lint/gated-triggers.txt) has no run of that change before it merges, so
+# its body must cite a job of the change in bats-lang/relock-scratch. The lint reads two more
+# files for it: the patches of the workflow files the pull request changes (`gh api`, below) and
+# a checkout of the base commit as data (never run), where the trigger of a changed file is read.
+# Non-bats code of ours, one `gh api` call with a `--jq` filter that picks the workflow files:
+# the avenue exhausted is to give the lint the API's whole JSON, which holds the patch of every
+# file of the pull request and exceeds the 512 KiB the lint reads on a large pull request.
+#
 # Safe on pull_request_target: the job checks out this repository, never the pull request's,
 # and passes the pull request's text to the tool in the event's file only, never through a
 # shell, so no code of the pull request runs (the review gate of bridge reasons the same way).
@@ -71,10 +81,28 @@ jobs:
           REPOSITORY: ${{ github.workspace }}
         run: bats build --repository "$REPOSITORY"
 
+      # The base commit of the repository the pull request is for, only to be read: the copy of a
+      # changed workflow that is there is the file the default branch runs (data, never run).
+      - name: Check out the base commit as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          sparse-checkout: .github/workflows
+          persist-credentials: false
+
+      - name: List the workflow files the pull request changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST/files" --jq '.[] | select(.filename | startswith(".github/workflows/")) | "diff --git a/" + (.previous_filename // .filename) + " b/" + .filename + "\n" + (.patch // "")' > "$RUNNER_TEMP/changes.diff"
+
       - name: Lint the pull request body
         env:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: tools/text-lint/dist/debug/text_lint event "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/status.json" "$RUN_URL" tools/text-lint/phrases.txt
+        run: tools/text-lint/dist/debug/text_lint event "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/status.json" "$RUN_URL" tools/text-lint/phrases.txt "$RUNNER_TEMP/changes.diff" base tools/text-lint/gated-triggers.txt
 
       - name: Set the commit status text-lint
         env:
