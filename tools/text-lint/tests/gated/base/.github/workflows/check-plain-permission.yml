@@ -1,0 +1,11 @@
+name: check-plain-permission
+
+on:
+  push:
+
+permissions:
+  issues: write
+
+jobs:
+  go:
+    runs-on: x

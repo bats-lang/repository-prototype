@@ -1,0 +1,5 @@
+diff --git a/.github/workflows/check-gated-called.yml b/.github/workflows/check-gated-called.yml
+@@ -8,3 +8,3 @@ jobs:
+   go:
+-    runs-on: x
++    runs-on: y

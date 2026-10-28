@@ -1,0 +1,9 @@
+# Called on: pull_request_target (the callers)
+name: check-gated-called
+
+on:
+  workflow_call:
+
+jobs:
+  go:
+    runs-on: x

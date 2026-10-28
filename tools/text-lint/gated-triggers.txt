@@ -1,0 +1,29 @@
+# The events whose GITHUB_SHA is the last commit on the default branch, so that the workflow of
+# an event runs the default branch's file: every one of the 21 of GitHub's "Events that trigger
+# workflows" table (https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows),
+# one name on each line, no pattern. A changed workflow file is gated (bats-lang/repository-prototype#509,
+# src/gated.bats, keyword: text-lint gated) when one of them is a trigger of it: a key or a list item of
+# the block of on:, a word of a flow list or of a single event after on:, or a word after
+# "Called on:" in a comment (a reusable workflow names the event of its callers so). The same
+# word as a permission (issues: write under permissions:) or inside a trigger's options is not one.
+branch_protection_rule
+check_run
+check_suite
+delete
+discussion
+discussion_comment
+fork
+gollum
+image_version
+issue_comment
+issues
+label
+milestone
+page_build
+public
+pull_request_target
+repository_dispatch
+schedule
+status
+watch
+workflow_run

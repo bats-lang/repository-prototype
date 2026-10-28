@@ -1,0 +1,7 @@
+diff --git a/.github/workflows/new.yml b/.github/workflows/new.yml
+@@ -0,0 +1,5 @@
++name: new
++# Called on: pull_request_target
++on:
++  workflow_call:
++jobs: {}

@@ -1,0 +1,7 @@
+name: check-gated-list
+
+on: [push, issue_comment]
+
+jobs:
+  go:
+    runs-on: x

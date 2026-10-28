@@ -1,0 +1,11 @@
+name: check-removed
+
+on:
+  schedule:
+    - cron: '7 4 * * *'
+
+jobs:
+  go:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo one

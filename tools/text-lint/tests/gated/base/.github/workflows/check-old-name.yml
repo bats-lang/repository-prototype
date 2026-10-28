@@ -1,0 +1,11 @@
+name: check-old-name
+
+on:
+  workflow_run:
+    workflows: [x]
+
+jobs:
+  go:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo one

@@ -6,7 +6,7 @@
                       commit SHA), one line each on standard output; "ok" when
                       there is none. PHRASES is a file of the phrases the body may not
                       hold, one on each line.
-     text_lint event EVENT STATUS URL [PHRASES]
+     text_lint event EVENT STATUS URL [PHRASES [CHANGES BASEDIR TRIGGERS]]
                       the findings of the pull request of the event file EVENT (the
                       JSON GitHub writes for the run) on standard output, and the commit
                       status to post in the file STATUS (a JSON object: state, context
@@ -131,27 +131,42 @@ fn _event {l:agz}{n:pos | n <= 4096}{args_len:nat | args_len <= n}
   val @(status_start, status_stop) = _argument(args, args_len, 3)
   val @(url_start, url_stop) = _argument(args, args_len, 4)
   val @(phrases_start, phrases_stop) = _argument(args, args_len, 5)
-  val @(extra_start, _) = _argument(args, args_len, 6)
+  val @(changes_start, changes_stop) = _argument(args, args_len, 6)
+  val @(base_start, base_stop) = _argument(args, args_len, 7)
+  val @(triggers_start, triggers_stop) = _argument(args, args_len, 8)
+  val @(extra_start, _) = _argument(args, args_len, 9)
 in
-  if url_start >= args_len || extra_start < args_len then let
-    val () = prerrln! ("usage: text_lint event EVENT STATUS URL [PHRASES]")
+  if url_start >= args_len || extra_start < args_len
+     || (changes_start < args_len && triggers_start >= args_len) then let
+    val () = prerrln! ("usage: text_lint event EVENT STATUS URL [PHRASES [CHANGES BASEDIR TRIGGERS]]")
   in 2 end
   else let
     val @(event_ok, event_array, event_len) = _read(args, event_start, event_stop, "event")
     val @(phrases_ok, phrases_array, phrases_len) =
       _read_optional(args, args_len, phrases_start, phrases_stop)
+    val @(changes_ok, changes_array, changes_len) =
+      _read_optional(args, args_len, changes_start, changes_stop)
+    val @(triggers_ok, triggers_array, triggers_len) =
+      _read_optional(args, args_len, triggers_start, triggers_stop)
+    var base : $B.builder(0) = $B.create()
+    val () = put_range(args, base_start, base_stop, base)
+    val @(base_array, base_len) = $B.to_arr(base)
     var url : $B.builder(0) = $B.create()
     val () = put_range(args, url_start, url_stop, url)
     val @(url_array, url_len) = $B.to_arr(url)
     val @(event_frozen, event_view) = $A.freeze<byte>(event_array)
     val @(phrases_frozen, phrases_view) = $A.freeze<byte>(phrases_array)
     val @(url_frozen, url_view) = $A.freeze<byte>(url_array)
+    val @(changes_frozen, changes_view) = $A.freeze<byte>(changes_array)
+    val @(base_frozen, base_view) = $A.freeze<byte>(base_array)
+    val @(triggers_frozen, triggers_view) = $A.freeze<byte>(triggers_array)
     val status =
-      (if event_ok && phrases_ok then let
+      (if event_ok && phrases_ok && changes_ok && triggers_ok then let
          val findings = $B.sized_rope_create()
          val status_text = $B.sized_rope_create()
          val code = lint_event(event_view, event_len, phrases_view, phrases_len,
-           url_view, url_len, findings, status_text)
+           url_view, url_len, changes_view, changes_len, base_view, base_len,
+           triggers_view, triggers_len, findings, status_text)
          val () = print_rope(findings)
        in
          if code = 0 then let
@@ -173,12 +188,18 @@ in
     val () = $A.free<byte>($A.thaw<byte>(phrases_frozen))
     val () = $A.drop<byte>(url_frozen, url_view)
     val () = $A.free<byte>($A.thaw<byte>(url_frozen))
+    val () = $A.drop<byte>(changes_frozen, changes_view)
+    val () = $A.free<byte>($A.thaw<byte>(changes_frozen))
+    val () = $A.drop<byte>(base_frozen, base_view)
+    val () = $A.free<byte>($A.thaw<byte>(base_frozen))
+    val () = $A.drop<byte>(triggers_frozen, triggers_view)
+    val () = $A.free<byte>($A.thaw<byte>(triggers_frozen))
   in status end
 end
 
 fn _usage (): int = let
   val () = prerrln! ("usage: text_lint body BODY HEAD [PHRASES]")
-  val () = prerrln! ("       text_lint event EVENT STATUS URL [PHRASES]")
+  val () = prerrln! ("       text_lint event EVENT STATUS URL [PHRASES [CHANGES BASEDIR TRIGGERS]]")
 in 2 end
 
 fn _command {l:agz}{n:pos | n <= 4096}{args_len:nat | args_len <= n}

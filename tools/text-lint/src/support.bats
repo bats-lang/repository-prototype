@@ -91,6 +91,13 @@ implement span_is (bytes, line_start, line_stop, literal) =
     _lit_from(bytes, line_stop, line_start, literal, g1u2i(string1_length(literal)), 0)
   else false
 
+(* Whether the text literal starts at bytes[i, limit) *)
+#pub fn starts_with {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit}{literal_len:nat}
+  (bytes: !$A.borrow(byte, l, n), limit: int limit, i: int i, literal: string literal_len): bool
+
+implement starts_with (bytes, limit, i, literal) =
+  _lit_from(bytes, limit, i, literal, g1u2i(string1_length(literal)), 0)
+
 (* Reads an open file to its end into out. A chunk that would take the
    builder past its room is not appended (nothing is cut): the outcome is
    Read_too_long. Each chunk is not empty, so the room left is the
