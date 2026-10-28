@@ -520,6 +520,16 @@ fn test_canonical_callers_pass (): bool = let
 in _judge(dir, 0, ".github/workflows/check.yml: pass, equal to the template check.yml", ".github/workflows/relock.yml: pass, equal to the template relock.yml",
           ".github/workflows/publish.yml: pass, equal to the template publish.yml", "::error") end
 
+(* A relock.yml equal to the regenerating caller's template (bats#538, repository-prototype#541) passes by that template's name *)
+fn test_regenerating_relock_passes (): bool = let
+  val dir = "build/pin-audit-tests/regenerate"
+  val () = _fresh(dir)
+  val () = _plant(dir, "compiler")
+  val () = _fill(dir, "compiler", "relock.yml", "templates/relock-regenerate.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "41", ~1)
+  val () = _commit(dir, "compiler")
+  val () = _names(dir, "compiler\n")
+in _judge(dir, 0, ".github/workflows/relock.yml: pass, equal to the template relock-regenerate.yml", "0 not canonical", "", "::error") end
+
 (* A canonical file with one byte changed fails *)
 fn test_one_byte_changed_fails (): bool = let
   val dir = "build/pin-audit-tests/one-byte"
@@ -1045,7 +1055,7 @@ fn test_issue_template_equal_passes (): bool = let
   val () = _fresh(dir)
   val () = _plant_with_issue_template(dir, "tidy", ~1)
   val () = _names(dir, "tidy\n")
-in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 7 read, 0 failing", "::error") end
+in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 8 read, 0 failing", "::error") end
 
 (* ... and the same file with one byte changed fails, named *)
 fn test_issue_template_one_byte_changed_fails (): bool = let

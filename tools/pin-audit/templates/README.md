@@ -17,6 +17,10 @@ parsed as YAML.
 `@@COMMIT@@` follows the `@` of the `uses:` line, so a filled line reads
 `...relock-pins.yml@<40 hex> # <comment>`.
 
+## relock-regenerate.yml (bats-lang/repository-prototype#541)
+
+`relock-regenerate.yml` is the second relock caller: the compiler's (bats-lang/bats), which calls only `relock-pins.yml` (so `workflow-pins` lists that one), passes `regenerate` and `regenerate-paths` (it rewrites `bootstrap/c` after a moved lock) and has a `concurrency` group. It has the same three holes as `relock.yml`. The audit tries every `*.yml` here, so a `relock.yml` passes when it equals either; an allowlist entry cannot hold such a file, since the daily relock changes its bytes. The ticket text of a failing `relock.yml` shows the file of the same name, so `relock.yml` here, not this one.
+
 ## ISSUE_TEMPLATE
 
 `ISSUE_TEMPLATE/ticket.md` is the canonical ticket template (bats-lang/repository-prototype#406),
