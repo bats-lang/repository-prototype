@@ -43,6 +43,10 @@ on:
 permissions:
   contents: read
 
+# The tools are checked out at the root of the workspace, as text-lint-check.yml does: bats's setup
+# action reads .github/bats-version and .github/repository-version there, so a checkout into a
+# subdirectory fails it ("bats-version is not given and .github/bats-version does not exist",
+# run 40710650303). The head, the base and the commit of one cycle ago are data in subdirectories.
 jobs:
   check:
     runs-on: ubuntu-24.04
@@ -51,7 +55,6 @@ jobs:
         with:
           repository: bats-lang/repository-prototype
           ref: ${{ inputs.tools-ref }}
-          path: prototype
           persist-credentials: false
           fetch-depth: 2
 
@@ -62,9 +65,9 @@ jobs:
           commit: ${{ inputs.tools-ref }}
 
       - name: Build the check
-        working-directory: prototype/tools/input-overlap
+        working-directory: tools/input-overlap
         env:
-          REPOSITORY: ${{ github.workspace }}/prototype
+          REPOSITORY: ${{ github.workspace }}
         run: bats build --repository "$REPOSITORY"
 
       - name: Check out the head as data
@@ -109,4 +112,4 @@ jobs:
         run: gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST/files" --jq '.[] | (.previous_filename // empty), .filename' > "$RUNNER_TEMP/changes.txt"
 
       - name: Refuse an input removed before its cycle
-        run: mkdir -p old && prototype/tools/input-overlap/dist/debug/input_overlap check base head old "$RUNNER_TEMP/changes.txt"
+        run: mkdir -p old && tools/input-overlap/dist/debug/input_overlap check base head old "$RUNNER_TEMP/changes.txt"
