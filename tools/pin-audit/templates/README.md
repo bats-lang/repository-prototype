@@ -21,6 +21,10 @@ parsed as YAML.
 
 `relock-regenerate.yml` is the second relock caller: the compiler's (bats-lang/bats), which calls only `relock-pins.yml` (so `workflow-pins` lists that one), passes `regenerate` and `regenerate-paths` (it rewrites `bootstrap/c` after a moved lock) and has a `concurrency` group. It has the same three holes as `relock.yml`. The audit tries every `*.yml` here, so a `relock.yml` passes when it equals either; an allowlist entry cannot hold such a file, since the daily relock changes its bytes. The ticket text of a failing `relock.yml` shows the file of the same name, so `relock.yml` here, not this one.
 
+## input-overlap.yml (bats-lang/repository-prototype#544)
+
+`input-overlap.yml` is the caller of `input-overlap-check.yml`, which fails a pull request that removes an input of an action or a reusable workflow before the default branch marked it deprecated a relock cycle earlier. It has the holes `@@COMMIT@@` (twice, the same commit) and `@@COMMENT@@`. It is not in `required.txt`: each repository adopts it in a ticket of its own.
+
 ## ISSUE_TEMPLATE
 
 `ISSUE_TEMPLATE/ticket.md` is the canonical ticket template (bats-lang/repository-prototype#406),

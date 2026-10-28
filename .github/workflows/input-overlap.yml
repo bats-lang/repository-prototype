@@ -1,0 +1,19 @@
+# An input of an action or of a reusable workflow is removed in two steps
+# (bats-lang/repository-prototype#544, keyword: input-overlap): the caller of the shared check,
+# which this repository hosts, so it is called by path as package-check.yml is, with the tools at
+# the merge commit of the pull request. Every other repository's input-overlap.yml is the
+# template tools/pin-audit/templates/input-overlap.yml, which calls it by commit.
+name: input-overlap
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  input-overlap:
+    uses: ./.github/workflows/input-overlap-check.yml
+    with:
+      tools-ref: ${{ github.sha }}

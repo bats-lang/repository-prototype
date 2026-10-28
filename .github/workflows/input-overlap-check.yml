@@ -1,0 +1,115 @@
+# An input of an action or of a reusable workflow is removed in two steps
+# (bats-lang/repository-prototype#544, keyword: input-overlap). A repository's
+# .github/workflows/input-overlap.yml is only a caller of this workflow, by commit (#269):
+#
+#   name: input-overlap
+#   on:
+#     pull_request:
+#       types: [opened, synchronize, reopened]
+#   permissions:
+#     contents: read
+#   jobs:
+#     input-overlap:
+#       uses: bats-lang/repository-prototype/.github/workflows/input-overlap-check.yml@<commit> # <version>
+#       with:
+#         tools-ref: <the same commit>
+#
+# Why: GitHub refuses a `with:` input a reusable workflow or an action does not declare, so a pull
+# request that removes or renames an input breaks every caller at its next pin move (pwa#136's
+# node-version, quire run 4). The overlap rule (CLAUDE.md, "Publishing Packages") is one version of
+# both forms; for a pin that moves daily, one version is one relock cycle (24 hours). The tool
+# (tools/input-overlap, input_overlap check) reads three checkouts of the caller's repository, the
+# pull request's base commit, its head, and the default branch's commit of one cycle before the
+# base's, and refuses a changed action.yml or workflow that drops an input unless that older commit
+# already marked it deprecated (a description that starts with Deprecated, or deprecationMessage, the
+# key GitHub's runner turns into a warning for the callers that set the input).
+#
+# Non-bats code of ours, two `run:` steps: the commit of one cycle ago and the list of changed paths.
+# The avenue exhausted: bats has no clock and no HTTP client, and these are GitHub's API
+# (`gh api`, a third-party tool used as it is) and `date`.
+#
+# Safe on pull_request: the pull request's files are checked out as data and read, never run, with
+# a read-only token and no secret; a fork's run has the same rights.
+name: input-overlap-check
+
+on:
+  workflow_call:
+    inputs:
+      tools-ref:
+        description: The full commit SHA of bats-lang/repository-prototype this workflow is called at.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# The tools are checked out at the root of the workspace, as text-lint-check.yml does: bats's setup
+# action reads .github/bats-version and .github/repository-version there, so a checkout into a
+# subdirectory fails it ("bats-version is not given and .github/bats-version does not exist",
+# run 40710650303). The head, the base and the commit of one cycle ago are data in subdirectories.
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: bats-lang/repository-prototype
+          ref: ${{ inputs.tools-ref }}
+          persist-credentials: false
+          fetch-depth: 2
+
+      - name: Set up bats
+        uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
+        with:
+          require-lock: 'false'
+          commit: ${{ inputs.tools-ref }}
+
+      - name: Build the check
+        working-directory: tools/input-overlap
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
+
+      - name: Check out the head as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          persist-credentials: false
+
+      - name: Check out the base as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+
+      # The newest commit of the base's history that is at least 24 hours older than the run: empty when
+      # the history is younger, and then nothing was marked a cycle ago.
+      - name: Find the commit of one relock cycle ago
+        id: old
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          until=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits?sha=$BASE_SHA&until=$until&per_page=1" --jq '.[0].sha // ""')
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the commit of one relock cycle ago as data
+        if: steps.old.outputs.sha != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.old.outputs.sha }}
+          path: old
+          persist-credentials: false
+
+      # A renamed file lists both names: the old one is a removal.
+      - name: List the paths the pull request changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST/files" --jq '.[] | (.previous_filename // empty), .filename' > "$RUNNER_TEMP/changes.txt"
+
+      - name: Refuse an input removed before its cycle
+        run: mkdir -p old && tools/input-overlap/dist/debug/input_overlap check base head old "$RUNNER_TEMP/changes.txt"
