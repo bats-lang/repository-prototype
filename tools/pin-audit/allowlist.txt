@@ -12,7 +12,7 @@
 # such comment, a malformed entry or a repeated file fails the audit. A file
 # that is listed and also equals a template fails too: drop its entry.
 #
-bats/.github/workflows/check.yml 86da1ad528c8e4254f93a3390109eb82b245fb8f0a5fd2f1cfc7432eeba602f5 # bats#499
+bats/.github/workflows/check.yml 8423f6af1fabaedc1b30b53bcb26b166c6709ef79fbb6928b93d9173f83f2256 e4a8a12035847172e03180796c48efef9c2dbdd405dde31c5a68cf953d2f53ec # bats#499
 bats/.github/workflows/relock.yml 0a9694b116fb154564aa7a91c673a5d5b96e941f18413112210e152cf540e4f9 9b014601af94b87f7994cd3be7dbd7dd8c53727321bf4db9f7ee62c746f5bb5a # bats#499
 quire/.github/workflows/check.yml 084f4fd936c22104588610209132821080b08bace0fae376508222d58b0187e3 # quire#815
 quire/.github/workflows/deploy.yml 20d86eb203b8d271e298e93caf9e89dde505a0a6d20edfa78c8733006329f397 # quire#815
