@@ -1,0 +1,10 @@
+diff --git a/.github/workflows/new.yml b/.github/workflows/new.yml
+@@ -0,0 +1,8 @@
++name: new
++
++on:
++  push:
++    branches: [main]
++  branch_protection_rule:
++
++jobs: {}

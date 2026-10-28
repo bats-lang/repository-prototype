@@ -23,9 +23,12 @@
 # description, success saying exempt for a relock/ branch and for a bot's pull request.
 # The findings are all printed in the log of the run. It is not a required check: it reports.
 #
+# Called on: pull_request_target (a reusable workflow names the event of its callers so, which
+# gates a change of it: tools/text-lint/gated-triggers.txt, keyword: text-lint gated).
+#
 # The row scratch-run (bats-lang/repository-prototype#509, keyword: text-lint gated): a pull
 # request that changes a workflow the default branch runs (pull_request_target and the other
-# triggers of tools/text-lint/gated-triggers.txt) has no run of that change before it merges, so
+# events of tools/text-lint/gated-triggers.txt) has no run of that change before it merges, so
 # its body must cite a job of the change in bats-lang/relock-scratch. The lint reads two more
 # files for it: the patches of the workflow files the pull request changes (`gh api`, below) and
 # a checkout of the base commit as data (never run), where the trigger of a changed file is read.

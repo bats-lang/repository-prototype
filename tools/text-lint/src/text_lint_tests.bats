@@ -816,8 +816,6 @@ fn test_gated_workflow_without_a_scratch_run_is_refused (): bool =
     "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
   && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-renamed-gated.diff", 1,
     "PR body: .github/workflows/check-new-name.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
-  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-comment-only.diff", 1,
-    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
 
 (* a job URL of relock-scratch in the body is the whole row; a run URL alone and a job of
    another repository are not *)
@@ -853,5 +851,84 @@ fn test_other_changes_need_no_scratch_run (): bool =
 fn test_one_finding_for_each_gated_file (): bool =
   _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-two-files.diff", 1,
     "PR body: .github/workflows/check-gated.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+
+(* #509, item 2 as written: every event of GitHub's table that runs the default branch's file is
+   a trigger that gates, in the key form under on: *)
+fn test_every_default_branch_event_gates (): bool =
+  _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-branch_protection_rule.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-check_run.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-check_suite.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-delete.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-discussion.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-discussion_comment.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-fork.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-gollum.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-image_version.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-issue_comment.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-issues.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-label.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-milestone.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-page_build.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-public.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-pull_request_target.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-repository_dispatch.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-schedule.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-status.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-watch.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-event-workflow_run.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+
+(* the other forms of on:, a reusable workflow that names its callers' event, and the base copy *)
+fn test_forms_of_on_gate (): bool =
+  _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-form-single.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-form-flow.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-form-flow-multiline.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-form-list.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-form-quoted-on.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-form-mapping-options.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-added-form-called-on.diff", 1,
+    "PR body: .github/workflows/new.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-hunk-in-on-block.diff", 1,
+    "PR body: .github/workflows/check-plain.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-base-gated-list.diff", 1,
+    "PR body: .github/workflows/check-gated-list.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-base-gated-called.diff", 1,
+    "PR body: .github/workflows/check-gated-called.yml runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+
+(* the same words as a permission, in a comment, as an option of a trigger or in a step are not a trigger *)
+fn test_permissions_and_words_do_not_gate (): bool =
+  _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-plain-permission.diff", 0, "")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-plain-nested-word.diff", 0, "")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-plain-comment-word.diff", 0, "")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-plain-workflow-call-plain.diff", 0, "")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-plain-step-text.diff", 0, "")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-hunk-in-jobs.diff", 0, "")
+  && _gated_is("tests/events/gated-no-url.json", "tests/gated/changes-base-plain-permission.diff", 0, "")
 
 end

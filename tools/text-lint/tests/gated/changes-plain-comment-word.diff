@@ -1,0 +1,6 @@
+diff --git a/.github/workflows/new.yml b/.github/workflows/new.yml
+@@ -0,0 +1,4 @@
++name: new
++# runs on a schedule of nobody, on issues and on pull_request_target nowhere
++on: push
++jobs: {}
