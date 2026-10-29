@@ -850,6 +850,19 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # the setup action names a pull request's head, the merge's second parent (bats#283)
+          fetch-depth: 2
+      # tools/repin, built from this checkout: the path rule is its paths-check and members-check
+      - name: Set up bats
+        uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
+        with:
+          require-lock: 'false'
+      - name: Build the pin mover
+        working-directory: tools/repin
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
       - name: The repin script refuses a write outside the paths, a link, a failure and a refused path
         run: |
           set -eu
@@ -874,7 +887,7 @@ jobs:
             git -C "$repo" add -A
             git -C "$repo" -c user.name=t -c user.email=t@example.com commit -q -m fixture
             status=0
-            (cd "$repo" && RUNNER_TEMP="$work/$name/tmp" REPIN_COMMAND="$command" REPIN_PATHS="$paths" MAX_BYTES=1000000 bash "$work/check.sh") \
+            (cd "$repo" && BATS_REPOSITORY="$GITHUB_WORKSPACE" RUNNER_TEMP="$work/$name/tmp" REPIN_COMMAND="$command" REPIN_PATHS="$paths" MAX_BYTES=1000000 bash "$work/check.sh") \
               > "$work/$name/out" 2>&1 || status=$?
             cat "$work/$name/out"
             if [ "$expect" = ok ]; then
@@ -918,15 +931,28 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # the setup action names a pull request's head, the merge's second parent (bats#283)
+          fetch-depth: 2
+      # tools/repin, built from this checkout: the path rule is its paths-check and members-check
+      - name: Set up bats
+        uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
+        with:
+          require-lock: 'false'
+      - name: Build the pin mover
+        working-directory: tools/repin
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
       - name: The relock job takes the repinned files as data and refuses what is not
         run: |
           set -eu
           work="$RUNNER_TEMP/repin-take"
           mkdir -p "$work"
-          # the Python as relock-pins.yml has it, between its markers
+          # the script as relock-pins.yml has it, between its markers
           awk '/# repin-take end/ { on = 0 } on { sub(/^ {10}/, ""); print } /# repin-take begin/ { on = 1 }' \
-            .github/workflows/relock-pins.yml > "$work/take.py"
-          [ -s "$work/take.py" ] || { echo "::error::no repin-take program in relock-pins.yml"; exit 1; }
+            .github/workflows/relock-pins.yml > "$work/take.sh"
+          [ -s "$work/take.sh" ] || { echo "::error::no repin-take script in relock-pins.yml"; exit 1; }
           # take_case NAME EXPECT MEMBERS: a tar made by $work/make.py from MEMBERS
           # (kind:name, kind file, dir, link, device) is taken in a checkout of the fixture
           cat > "$work/make.py" <<'MAKE'
@@ -958,7 +984,7 @@ jobs:
             cp tests/relock-pins/repin/*.txt "$work/$name/checkout/tests/relock-pins/repin/"
             python3 -I "$work/make.py" "$work/$name/tmp/repin/files.tar" "$@"
             status=0
-            (cd "$work/$name/checkout" && RUNNER_TEMP="$work/$name/tmp" REPIN_PATHS="$paths" REPIN_MAX_BYTES="$cap" python3 -I - "$work/$name/tmp/repin/files.tar" < "$work/take.py") \
+            (cd "$work/$name/checkout" && BATS_REPOSITORY="$GITHUB_WORKSPACE" RUNNER_TEMP="$work/$name/tmp" REPIN_PATHS="$paths" REPIN_MAX_BYTES="$cap" bash "$work/take.sh") \
               > "$work/$name/out" 2>&1 || status=$?
             cat "$work/$name/out"
             if [ "$expect" = ok ]; then
