@@ -69,8 +69,17 @@
 # cancelled), so one relock per repository and prefix runs at a time and a
 # scheduled run and a dispatch with the same prefix cannot interleave their
 # pushes. `branch-prefix` (default `relock/`) names the branch and the pull
-# requests this run supersedes: a test run uses another prefix, so it runs
+# requests that hold the next relock back: a test run uses another prefix, so it runs
 # beside, and cannot touch, the day's real relock.
+#
+# The previous relock (#545, area: relock hold): the `hold` job lists the open
+# pull requests (of this repository, or of `pull-requests-repository`) whose head
+# branch starts with `branch-prefix`, other than today's branch. When one is open
+# the run ends green without relocking or pushing anything: the step summary
+# names the pull request and the output `held` is its number. A relock pushed
+# on top of a red one only repeats its failures (PR 811 sat red and PR 819
+# failed on the same errors), so the open one is merged or closed first. It
+# is shell in a workflow because bats has no HTTP client (avenue exhausted).
 #
 # Do not give `regenerate` to a repository whose workflows use actions/cache or
 # other state that a later run trusts: the command can write the cache for the
@@ -396,10 +405,18 @@ on:
         default: bats-lang/repository-prototype
       branch-prefix:
         description: >-
-          The relock branch is <prefix><date>; older pull requests from
-          branches with this prefix are superseded. A test run uses another
+          The relock branch is <prefix><date>; an open pull request from
+          another branch with this prefix holds the relock back (output
+          held). A test run uses another
         type: string
         default: relock/
+      pull-requests-repository:
+        description: >-
+          The repository whose open pull requests hold the relock back
+          (owner/name); empty is the repository the workflow runs in. A test
+          names its scratch repository
+        type: string
+        default: ''
       regenerate-timeout-minutes:
         description: Minutes the caller's command (its step) may take
         type: string
@@ -420,6 +437,9 @@ on:
         type: string
         default: 'true'
     outputs:
+      held:
+        description: The number of the open pull request of the previous relock that held this run back (nothing was relocked, changed is empty); empty when none did
+        value: ${{ jobs.hold.outputs.held }}
       changed:
         description: yes when a pin or the lock moved, else no
         value: ${{ jobs.relock.outputs.changed }}
@@ -459,10 +479,53 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Job 0: the previous relock's pull request, if it is still open (see the header)
+  hold:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      held: ${{ steps.hold.outputs.held }}
+    steps:
+      - name: Look for the previous relock's open pull request
+        id: hold
+        env:
+          BRANCH_PREFIX: ${{ inputs.branch-prefix }}
+          REPOSITORY: ${{ inputs.pull-requests-repository || github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          case "$BRANCH_PREFIX" in
+            ''|-*|*[!A-Za-z0-9._/-]*) echo "::error::branch-prefix is refused: $BRANCH_PREFIX"; exit 1 ;;
+          esac
+          case "$REPOSITORY" in
+            */*/*|*[!A-Za-z0-9._/-]*|-*|/*|*/) echo "::error::pull-requests-repository is refused: $REPOSITORY"; exit 1 ;;
+          esac
+          today="$BRANCH_PREFIX$(date -u +%Y-%m-%d)"
+          # a pull request from a fork never holds the relock back
+          gh pr list --repo "$REPOSITORY" --state open --limit 1000 \
+            --json number,headRefName,isCrossRepository > open.json
+          jq -r --arg prefix "$BRANCH_PREFIX" --arg today "$today" \
+            '.[] | select(.isCrossRepository | not) | select(.headRefName | startswith($prefix)) | select(.headRefName != $today) | "\(.number) \(.headRefName)"' \
+            open.json | sort -n | head -n 1 > previous.txt
+          if [ ! -s previous.txt ]; then
+            echo "held=" >> "$GITHUB_OUTPUT"
+            echo "No open pull request of a previous relock in $REPOSITORY (branches $BRANCH_PREFIX*): the relock goes on."
+            exit 0
+          fi
+          read -r number branch < previous.txt
+          echo "held=$number" >> "$GITHUB_OUTPUT"
+          {
+            echo "### The relock did not run"
+            echo
+            echo "The previous relock's pull request is still open: $REPOSITORY#$number (branch \`$branch\`). Nothing was relocked or pushed. Merge it, or close it, and the next run relocks."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice::the relock did not run: $REPOSITORY#$number ($branch) is the previous relock and is still open"
+
   # Job 0 (only with repin-command): the caller's command, with nothing to
   # steal, before anything is relocked (see the header)
   repin:
-    if: inputs.repin-command != ''
+    needs: hold
+    if: inputs.repin-command != '' && needs.hold.outputs.held == ''
     runs-on: ubuntu-24.04
     timeout-minutes: ${{ fromJSON(inputs.repin-timeout-minutes) }}
     permissions: {}
@@ -599,9 +662,10 @@ jobs:
           if-no-files-found: error
 
   relock:
-    needs: repin
+    needs: [hold, repin]
     if: >-
-      always() && (needs.repin.result == 'success' || needs.repin.result == 'skipped')
+      always() && needs.hold.result == 'success' && needs.hold.outputs.held == ''
+      && (needs.repin.result == 'success' || needs.repin.result == 'skipped')
     runs-on: ubuntu-24.04
     # 30 minutes for the relock itself; with a regenerate command the step has
     # its own timeout (regenerate-timeout-minutes) and the job the most a job may have
@@ -1379,12 +1443,6 @@ jobs:
           issue=$(gh issue list --repo "$repo" --state open --search "\"$issue_title\" in:title" --json number --jq '.[0].number // empty')
 
           if [ "$opened" = yes ]; then
-            # An older relock is superseded by this one
-            gh pr list --repo "$repo" --state open --json number,headRefName \
-              --jq ".[] | select(.headRefName | startswith(\"$BRANCH_PREFIX\")) | select(.headRefName != \"$branch\") | .number" |
-            while read -r older; do
-              gh pr close "$older" --repo "$repo" --delete-branch --comment "Superseded by #$number."
-            done
             # The setting is on now: the issue that asked for it is done
             if [ -n "$issue" ]; then
               gh issue close "$issue" --repo "$repo" --comment "The relock opened #$number: GitHub Actions may create pull requests now."

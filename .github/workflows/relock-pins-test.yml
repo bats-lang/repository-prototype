@@ -74,6 +74,11 @@
 # it. A dispatch with `refusal` `bare` runs this case alone (the workflow under
 # test is then the one of the dispatched ref, so a ref with the old staging
 # shows it red).
+# The previous relock (#545, area: relock hold): `hold` runs the workflow with
+# the open pull request relock-scratch#29 (branch relock-hold/2026-10-01) in
+# its prefix, `hold-none` with a prefix no open pull request has, and
+# `hold-check` requires the first to be held (output held 29, nothing
+# relocked) and the second to relock as before.
 # One resolution for each repository (#494, area: relock heads): `skew` runs the
 # program between the pin-moves markers of relock-pins.yml on
 # tests/relock-pins/skew with a git whose main moves at every ls-remote, two
@@ -673,6 +678,65 @@ jobs:
           grep -q '^+.*uses: bats-lang/repository-prototype/.github/workflows/publish.yml@[0-9a-f]\{40\} # repository-prototype main ' "$RUNNER_TEMP/bare.patch" \
             || { echo "::error::the pin line did not move"; exit 1; }
           echo "the pin moved in a repository with no package.json, pnpm lockfile or Gradle wrapper"
+
+  # The previous relock (#545, area: relock hold): the scratch repository
+  # bats-lang/relock-scratch has an open pull request (#29) from the branch
+  # relock-hold/2026-10-01. With that prefix the run is held back: nothing is
+  # relocked (changed and patch are empty) and `held` is the pull request's
+  # number. With a prefix no open pull request has, the same run relocks as before.
+  hold:
+    if: inputs.refusal == ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      compiler-pin-file: tests/relock-pins/no-compiler-pin
+      repository-pin-file: tests/relock-pins/no-repository-pin
+      npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      workflow-pins: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml
+      publish: 'false'
+      pull-requests-repository: bats-lang/relock-scratch
+      branch-prefix: relock-hold/
+
+  hold-none:
+    if: inputs.refusal == ''
+    uses: ./.github/workflows/relock-pins.yml
+    with:
+      compiler-pin-file: tests/relock-pins/no-compiler-pin
+      repository-pin-file: tests/relock-pins/no-repository-pin
+      npm-ignore: tests/relock-pins/npm
+      gradle-ignore: tests/relock-pins/gradle
+      base: ${{ github.event.pull_request.head.sha || github.sha }}
+      workflows-directory: tests/relock-pins/workflows
+      workflow-pins: |
+        bats-lang/repository-prototype/.github/workflows/publish.yml
+      publish: 'false'
+      pull-requests-repository: bats-lang/relock-scratch
+      branch-prefix: relock-hold-none/
+
+  hold-check:
+    needs: [hold, hold-none]
+    runs-on: ubuntu-24.04
+    env:
+      HELD: ${{ needs.hold.outputs.held }}
+      HELD_CHANGED: ${{ needs.hold.outputs.changed }}
+      HELD_PATCH: ${{ needs.hold.outputs.patch }}
+      NONE_HELD: ${{ needs.hold-none.outputs.held }}
+      NONE_CHANGED: ${{ needs.hold-none.outputs.changed }}
+      NONE_PATCH: ${{ needs.hold-none.outputs.patch }}
+    steps:
+      - name: The open pull request holds the relock back, and none lets it go on
+        run: |
+          set -eu
+          [ "$HELD" = 29 ] || { echo "::error::held is '$HELD', expected 29 (relock-scratch#29, from relock-hold/2026-10-01)"; exit 1; }
+          [ -z "$HELD_CHANGED" ] && [ -z "$HELD_PATCH" ] \
+            || { echo "::error::a held run relocked (changed='$HELD_CHANGED', patch of ${#HELD_PATCH} characters)"; exit 1; }
+          [ -z "$NONE_HELD" ] || { echo "::error::held is '$NONE_HELD' with no open pull request of that prefix"; exit 1; }
+          [ "$NONE_CHANGED" = yes ] && [ -n "$NONE_PATCH" ] \
+            || { echo "::error::the run with no previous relock did not relock (changed='$NONE_CHANGED')"; exit 1; }
+          echo "held by relock-scratch#29, nothing relocked; with none open the relock went on (changed=yes)"
 
   regenerate-check:
     needs: regenerate
