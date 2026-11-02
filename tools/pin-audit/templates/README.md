@@ -19,7 +19,11 @@ parsed as YAML.
 
 ## relock-regenerate.yml (bats-lang/repository-prototype#541)
 
-`relock-regenerate.yml` is the second relock caller: the compiler's (bats-lang/bats), which calls only `relock-pins.yml` (so `workflow-pins` lists that one), passes `regenerate` and `regenerate-paths` (it rewrites `bootstrap/c` after a moved lock) and has a `concurrency` group. It has the same three holes as `relock.yml`. The audit tries every `*.yml` here, so a `relock.yml` passes when it equals either; an allowlist entry cannot hold such a file, since the daily relock changes its bytes. The ticket text of a failing `relock.yml` shows the file of the same name, so `relock.yml` here, not this one.
+`relock-regenerate.yml` is the second relock caller (after `relock.yml`): the compiler's (bats-lang/bats), which calls only `relock-pins.yml` (so `workflow-pins` lists that one), passes `regenerate` and `regenerate-paths` (it rewrites `bootstrap/c` after a moved lock) and has a `concurrency` group. It has the same three holes as `relock.yml`. The audit tries every `*.yml` here, so a `relock.yml` passes when it equals any of the relock templates (`relock.yml`, `relock-regenerate.yml`, `relock-repin.yml`); an allowlist entry cannot hold such a file, since the daily relock changes its bytes. The ticket text of a failing `relock.yml` shows the file of the same name, so `relock.yml` here, not this one.
+
+## relock-repin.yml (bats-lang/repository-prototype#563)
+
+`relock-repin.yml` is the third relock caller and is pwa's: it calls `relock-pins.yml` with `repin-command` and `repin-paths` (the Android SDK pins, `tools/android-sdk-pins`) and `npm-ignore`, which no other template has. The text is pwa's `.github/workflows/relock.yml` byte for byte except the three holes (`@@MINUTE@@`, `@@COMMIT@@`, `@@COMMENT@@`, as in `relock.yml`); it has no hole for the paths, so the command and the paths are part of the template and a change of either in pwa is a change of this file first. An allowlist entry cannot hold it, since the daily relock moves its `relock-pins.yml@<commit>` pin. The ticket text of a failing `relock.yml` shows the file of the same name, so `relock.yml` here, not this one.
 
 ## input-overlap.yml (bats-lang/repository-prototype#544)
 
