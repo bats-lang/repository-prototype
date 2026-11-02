@@ -10,7 +10,7 @@
      head         a line "Head: <commit SHA>" is there, and the last one is the head
      evidence     an Evidence heading, and a fenced block that starts with "$ <command>"
      footer       the body ends with the footer of the template (one of the footers below),
-                  holds a single footer, and no session URL
+                  holds a single footer; a session URL is ignored (#559)
      phrases      none of the phrases of the phrases file (pattern.bats) is in the body
 
    Lines end with LF or CRLF. The body, the head and the phrases are texts in arrays. *)
@@ -350,16 +350,82 @@ in
   else here + _phrases(body, blimit, phrases, plimit, raw + 1, line + 1, out)
 end
 
+(* The session URL the harness appends (bats-lang/repository-prototype#559, keyword: session URL
+   ignored). The checks read a scrubbed copy of the body, made here and nowhere else: the same
+   length, so the line numbers of the findings are the body's, with
+     - a line that is only a https://claude.ai/code/session_... URL (blanks around it allowed)
+       made blank, and
+     - the "/session_..." of a "[Claude Code](https://claude.ai/code/session_...)" link taken out
+       of the line, its length given back as blanks at the end of the line,
+   so the body with and without the URL gets the same findings from every check. *)
+fun _spaces {used:nat}{count:nat | used + count <= 524288} .<count>.
+  (count: int count, out: !$B.builder(used) >> $B.builder(used + count)): void =
+  if count <= 0 then ()
+  else let
+    val () = $B.put_char(out, 32)
+  in _spaces(count - 1, out) end
+
+(* The first place at or after i of bytes[0, limit) where the literal starts, or limit *)
+fun _find_lit {l:agz}{n:pos}{limit:nat | limit <= n}{i:nat | i <= limit}{lit_len:nat} .<limit - i>.
+  (bytes: !$A.borrow(byte, l, n), limit: int limit, i: int i, literal: string lit_len)
+  : [j:nat | i <= j; j <= limit] int j =
+  if i >= limit then i
+  else if _starts(bytes, limit, i, literal, false) then i
+  else _find_lit(bytes, limit, i + 1, literal)
+
+(* Whether bytes[start, stop) is a session URL alone on its line (blanks around it allowed) *)
+fn _session_only {l:agz}{n:pos}{stop:nat | stop <= n}{start:nat | start <= stop}
+  (bytes: !$A.borrow(byte, l, n), stop: int stop, start: int start): bool = let
+  val a = _run(bytes, stop, start, 2)
+in
+  if a + 31 > stop then false
+  else if ~_starts(bytes, stop, a, "https://claude.ai/code/session_", false) then false
+  else let
+    val m = _run(bytes, stop, a + 31, 0)
+  in _run(bytes, stop, m, 2) >= stop end
+end
+
+(* The line bytes[start, raw) (its end without the CR is stop) scrubbed and appended to out *)
+fn _scrub_line {l:agz}{n:pos}{raw:nat | raw <= n; raw <= 524288}{stop:nat | stop <= raw}
+  {start:nat | start <= stop}
+  (bytes: !$A.borrow(byte, l, n), start: int start, stop: int stop, raw: int raw,
+   out: !$B.builder(start) >> $B.builder(raw)): void =
+  if _session_only(bytes, stop, start) then _spaces(raw - start, out)
+  else let
+    val link = _find_lit(bytes, stop, start, "[Claude Code](https://claude.ai/code/session_")
+  in
+    if link + 45 > stop then put_range(bytes, start, raw, out)
+    else let
+      val cut = link + 36
+      val q = _run(bytes, stop, link + 45, 0)
+      val () = put_range(bytes, start, cut, out)
+      val () = put_range(bytes, q, raw, out)
+    in _spaces(q - cut, out) end
+  end
+
+(* bytes[start, limit) scrubbed and appended to out, which holds start bytes: it holds limit after *)
+fun _scrub {l:agz}{n:pos}{limit:nat | limit <= n; limit <= 524288}{start:nat | start <= limit}
+  .<limit - start>.
+  (bytes: !$A.borrow(byte, l, n), limit: int limit, start: int start,
+   out: !$B.builder(start) >> $B.builder(limit)): void = let
+  val raw = find_byte(bytes, limit, start, 10)
+  val stop = _trim_cr(bytes, start, raw)
+  val () = _scrub_line(bytes, start, stop, raw, out)
+in
+  if raw >= limit then ()
+  else let
+    val () = $B.put_char(out, 10)
+  in _scrub(bytes, limit, raw + 1, out) end
+end
+
 (* The findings of the body body[0, len) for the head head[0, head_len) (an empty head is not
    compared) and the phrases phrases[0, phrases_len), one line each appended to out: how
-   many (the phrases alone are phrase_findings) *)
-#pub fn lint_body {bl,hl,pl:agz}{bn,hn,pn:pos}{len:nat | len <= bn}{head_len:nat | head_len <= hn}
+   many (the phrases alone are phrase_findings), of the body as _scrub made it *)
+fn _lint_clean {bl,hl,pl:agz}{bn,hn,pn:pos}{len:nat | len <= bn}{head_len:nat | head_len <= hn}
   {phrases_len:nat | phrases_len <= pn}
   (body: !$A.borrow(byte, bl, bn), len: int len, head: !$A.borrow(byte, hl, hn),
    head_len: int head_len, phrases: !$A.borrow(byte, pl, pn), phrases_len: int phrases_len,
-   out: !$B.sized_rope): int
-
-implement lint_body (body, len, head, head_len, phrases, phrases_len, out) = let
+   out: !$B.sized_rope): int = let
   val first_ok = _first_line_fixes(body, len)
   val () = if first_ok then () else
     $B.sized_rope_bput(out, "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\n")
@@ -392,9 +458,6 @@ implement lint_body (body, len, head, head_len, phrases, phrases_len, out) = let
     $B.sized_rope_bput(out, "PR body: it does not end with the generated-by footer of the template (footer)\n") else ()
   val () = if footer_count > 1 then
     $B.sized_rope_bput(out, "PR body: it holds more than one generated-by footer; exactly one (footer)\n") else ()
-  val session = contains_text(body, len, 0, "/code/session_")
-  val () = if session then
-    $B.sized_rope_bput(out, "PR body: it holds a session URL; the footer is the generated-by line alone (footer)\n") else ()
   val phrase_count = _phrases(body, len, phrases, phrases_len, 0, 1, out)
 in
   let
@@ -405,9 +468,25 @@ in
     val e = (if evidence = 3 then 0 else 1): int
     val f = (if last_is_footer then 0 else 1): int
     val g = (if footer_count > 1 then 1 else 0): int
-    val h = (if session then 1 else 0): int
-  in a + b + c + d + e + f + g + h + phrase_count end
+  in a + b + c + d + e + f + g + phrase_count end
 end
+
+(* The findings of the body body[0, len): the checks of _lint_clean on the scrubbed copy of it *)
+#pub fn lint_body {bl,hl,pl:agz}{bn,hn,pn:pos}{len:nat | len <= bn; len <= 524288}{head_len:nat | head_len <= hn}
+  {phrases_len:nat | phrases_len <= pn}
+  (body: !$A.borrow(byte, bl, bn), len: int len, head: !$A.borrow(byte, hl, hn),
+   head_len: int head_len, phrases: !$A.borrow(byte, pl, pn), phrases_len: int phrases_len,
+   out: !$B.sized_rope): int
+
+implement lint_body (body, len, head, head_len, phrases, phrases_len, out) = let
+  var clean : $B.builder(0) = $B.create()
+  val () = _scrub(body, len, 0, clean)
+  val @(array, used) = $B.to_arr(clean)
+  val @(frozen, view) = $A.freeze<byte>(array)
+  val count = _lint_clean(view, used, head, head_len, phrases, phrases_len, out)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+in count end
 
 (* Whether the pull request is exempt: the branch ref[0, ref_len) starts with relock/ or the
    login login[0, login_len) ends with [bot] *)
@@ -421,9 +500,16 @@ implement is_exempt (ref, ref_len, login, login_len) =
   else false
 
 (* The findings of the phrases alone, as lint_body gives them *)
-#pub fn phrase_findings {bl,pl:agz}{bn,pn:pos}{len:nat | len <= bn}{phrases_len:nat | phrases_len <= pn}
+#pub fn phrase_findings {bl,pl:agz}{bn,pn:pos}{len:nat | len <= bn; len <= 524288}{phrases_len:nat | phrases_len <= pn}
   (body: !$A.borrow(byte, bl, bn), len: int len, phrases: !$A.borrow(byte, pl, pn),
    phrases_len: int phrases_len, out: !$B.sized_rope): int
 
-implement phrase_findings (body, len, phrases, phrases_len, out) =
-  _phrases(body, len, phrases, phrases_len, 0, 1, out)
+implement phrase_findings (body, len, phrases, phrases_len, out) = let
+  var clean : $B.builder(0) = $B.create()
+  val () = _scrub(body, len, 0, clean)
+  val @(array, used) = $B.to_arr(clean)
+  val @(frozen, view) = $A.freeze<byte>(array)
+  val count = _phrases(view, used, phrases, phrases_len, 0, 1, out)
+  val () = $A.drop<byte>(frozen, view)
+  val () = $A.free<byte>($A.thaw<byte>(frozen))
+in count end

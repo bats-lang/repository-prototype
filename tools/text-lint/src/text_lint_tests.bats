@@ -612,6 +612,8 @@ fn test_passing_bodies_have_no_finding (): bool =
   && _fixture_is("tests/bodies/pass-fixes-other-repository.md", _head(), _test_phrases(), 0, "")
   && _fixture_is("tests/bodies/pass-robot-footer.md", _head(), _test_phrases(), 0, "")
   && _fixture_is("tests/bodies/pass-crlf.md", _head(), _test_phrases(), 0, "")
+  && _fixture_is("tests/bodies/pass-session-url-line.md", _head(), _test_phrases(), 0, "")
+  && _fixture_is("tests/bodies/pass-session-url-footer.md", _head(), _test_phrases(), 0, "")
 
 (* first-line: Refs for Fixes, in either spelling of the ticket *)
 fn test_refs_instead_of_fixes_is_refused (): bool =
@@ -645,8 +647,8 @@ fn test_evidence_has_a_heading_and_a_command_block (): bool =
 fn test_footer_is_the_one_of_the_template (): bool =
   _fixture_is("tests/bodies/fail-wrong-footer.md", _head(), _test_phrases(), 1,
     "PR body: it does not end with the generated-by footer of the template (footer)\n")
-  && _fixture_is("tests/bodies/fail-session-url.md", _head(), _test_phrases(), 2,
-    "PR body: it does not end with the generated-by footer of the template (footer)\nPR body: it holds a session URL; the footer is the generated-by line alone (footer)\n")
+  && _fixture_is("tests/bodies/fail-no-footer-session-url.md", _head(), _test_phrases(), 1,
+    "PR body: it does not end with the generated-by footer of the template (footer)\n")
   && _fixture_is("tests/bodies/fail-two-footers.md", _head(), _test_phrases(), 1,
     "PR body: it holds more than one generated-by footer; exactly one (footer)\n")
 
