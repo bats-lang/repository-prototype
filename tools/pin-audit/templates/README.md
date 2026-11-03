@@ -19,7 +19,7 @@ parsed as YAML.
 
 ## relock-regenerate.yml (bats-lang/repository-prototype#541)
 
-`relock-regenerate.yml` is the second relock caller (after `relock.yml`): the compiler's (bats-lang/bats), which calls only `relock-pins.yml` (so `workflow-pins` lists that one), passes `regenerate` and `regenerate-paths` (it rewrites `bootstrap/c` after a moved lock) and has a `concurrency` group. It has the same three holes as `relock.yml`. The audit tries every `*.yml` here, so a `relock.yml` passes when it equals any of the relock templates (`relock.yml`, `relock-regenerate.yml`, `relock-repin.yml`); an allowlist entry cannot hold such a file, since the daily relock changes its bytes. The ticket text of a failing `relock.yml` shows the file of the same name, so `relock.yml` here, not this one.
+`relock-regenerate.yml` is the second relock caller (after `relock.yml`): the compiler's (bats-lang/bats), which calls only `relock-pins.yml` (so `workflow-pins` lists that one), passes `regenerate` and `regenerate-paths` (it rewrites `bootstrap/c` after a moved lock) and has a `concurrency` group. It has the same three holes as `relock.yml`. The audit tries every `*.yml` here, so a `relock.yml` passes when it equals any of the relock templates (`relock.yml`, `relock-regenerate.yml`, `relock-repin.yml`, `relock-repin-before-text-lint.yml`); an allowlist entry cannot hold such a file, since the daily relock changes its bytes. The ticket text of a failing `relock.yml` shows the file of the same name, so `relock.yml` here, not this one.
 
 ## relock-repin.yml (bats-lang/repository-prototype#563)
 
