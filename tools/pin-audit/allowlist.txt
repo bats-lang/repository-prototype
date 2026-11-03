@@ -14,14 +14,14 @@
 #
 bats/.github/workflows/check.yml ee36bb7f494bb3169de50099777f82fee66f703a93dcc24032089ff3ac16f80f # bats#482
 bats/.github/workflows/relock.yml 0a9694b116fb154564aa7a91c673a5d5b96e941f18413112210e152cf540e4f9 9b014601af94b87f7994cd3be7dbd7dd8c53727321bf4db9f7ee62c746f5bb5a # bats#499
-quire/.github/workflows/check.yml c93ea037a0e02f7eab15f94e20fbcb5695262c19e05d8595e31a59b07db210a4 946c3145c13c4e7fa5bbccc241e5f1f4057ec4df5310074c987c4ec905c9b6fb # quire#896
-quire/.github/workflows/deploy.yml c8c3a855bc8a46392012be0b2ddd5b7d7e95a70814223289daca753a10fc05f6 6862e040ef7d99861fd688f2fa990c95348ba68b5ad132cdb5e67244dede592f # quire#896
-quire/.github/workflows/mutation.yml b090fd42d2fafa8622f005caaa084d7d4bc96ece79f2915ba7c6b1ce59b2ef7c # quire#896
-quire/.github/workflows/relock.yml 892a801a4fc5c36dafd60e4ba2230c61e093e63eac8ce47876db14470cecc34d # quire#896
+quire/.github/workflows/check.yml 081481b9523f6fe84ba47a427f47fe4740e44a5be932913b57681cfc56a6ee92 # quire#896
+quire/.github/workflows/deploy.yml 7cf8eae7fc540237d46064fd68a017a829dc873278d1c27f58f2420484b6af56 # quire#896
+quire/.github/workflows/mutation.yml dc6983d37aca74d5862080b4dfe07b1640c1015e897f6e2a064b6116d9583ba6 # quire#896
+quire/.github/workflows/relock.yml 6423f5cd98f32853a9c63f3c44d4e0788d4326b360b0402cda994c68f49167b9 # quire#896
 quire/.github/workflows/supersede.yml 48099ff84eaf66cae1cbe4945ee8576954471bb2acc31e78d3e8e8504ee4f430 # quire#815
-quire/.github/workflows/sync-identity.yml 9b933a266986ff1583b2cc8fba5e9a7c99aa07bbc15ec095c36607995b819607 # quire#815
-quire/.github/workflows/sync-providers.yml fc7dcc09377875f25c61fd7c2f8ee15cdf530f50969ca3fa58ce6a6c0eb4ae5d # quire#815
-quire/.github/workflows/text-lint.yml 58b727847895036c5749145688582ff238842696a3fe2da10fbb91bd295c74aa # quire#815
+quire/.github/workflows/sync-identity.yml 0e51a5f4ee3381162755e321dcc69abcc90ede52e692ae7f32c79673183e307f # quire#815
+quire/.github/workflows/sync-providers.yml b3b257a65cac9bcfdb7db0f0c453f82f48bee26fd0be6a4aa4b88096d93eadb6 # quire#815
+quire/.github/workflows/text-lint.yml fc3f79d94e3803e758e945b7a715165a2dfd2415fafa5280e02c47eababc0ade # quire#815
 pwa/.github/workflows/android.yml 40fe34eb6d27de7922fdc4f7a4af7b8b0e36dcc1e0b9552187ed9064c34559bb # pwa#225
 pwa/.github/workflows/check.yml 51417a7a1cf2104758c4aa57a12b7cd2c95c6811fbf6146daa835c98dcc88202 42b44a6f32341eb98784109a65bae7b4e298ed74c536f91262de431d7d360337 # pwa#190
 pwa/.github/workflows/play-release.yml 9a72b1428a0b40624307da9249ff7c236fa74109ad5e0d803bb839a81ed1dd4a # repository-prototype#462
