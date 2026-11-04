@@ -540,6 +540,32 @@ fn test_repinning_relock_passes (): bool = let
   val () = _names(dir, "app\n")
 in _judge(dir, 0, ".github/workflows/relock.yml: pass, equal to the template relock-repin.yml", "0 not canonical", "", "::error") end
 
+(* The new form of the library relock caller (repository-prototype#568: the text-lint-check.yml pin and its tools-ref copy) and the old form kept beside it for one cycle both pass, each by its own template's name *)
+fn test_library_relock_both_forms_pass (): bool = let
+  val dir = "build/pin-audit-tests/library-forms"
+  val () = _fresh(dir)
+  val () = _plant(dir, "new-form")
+  val () = _fill(dir, "new-form", "relock.yml", "templates/relock.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "7", ~1)
+  val () = _plant(dir, "old-form")
+  val () = _fill(dir, "old-form", "relock.yml", "templates/relock-before-text-lint.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "7", ~1)
+  val () = _commit(dir, "new-form")
+  val () = _commit(dir, "old-form")
+  val () = _names(dir, "new-form\nold-form\n")
+in _judge(dir, 0, ".github/workflows/relock.yml: pass, equal to the template relock.yml", ".github/workflows/relock.yml: pass, equal to the template relock-before-text-lint.yml", "0 not canonical", "::error") end
+
+(* The same for the compiler's regenerating caller (repository-prototype#568) *)
+fn test_regenerating_relock_both_forms_pass (): bool = let
+  val dir = "build/pin-audit-tests/regenerate-forms"
+  val () = _fresh(dir)
+  val () = _plant(dir, "new-form")
+  val () = _fill(dir, "new-form", "relock.yml", "templates/relock-regenerate.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "41", ~1)
+  val () = _plant(dir, "old-form")
+  val () = _fill(dir, "old-form", "relock.yml", "templates/relock-regenerate-before-text-lint.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "41", ~1)
+  val () = _commit(dir, "new-form")
+  val () = _commit(dir, "old-form")
+  val () = _names(dir, "new-form\nold-form\n")
+in _judge(dir, 0, ".github/workflows/relock.yml: pass, equal to the template relock-regenerate.yml", ".github/workflows/relock.yml: pass, equal to the template relock-regenerate-before-text-lint.yml", "0 not canonical", "::error") end
+
 (* The new form of pwa's repin caller (repository-prototype#567: the text-lint-check.yml pin and its tools-ref copy) and the old form kept beside it for one cycle both pass, each by its own template's name *)
 fn test_repinning_relock_both_forms_pass (): bool = let
   val dir = "build/pin-audit-tests/repin-forms"
@@ -1078,7 +1104,7 @@ fn test_issue_template_equal_passes (): bool = let
   val () = _fresh(dir)
   val () = _plant_with_issue_template(dir, "tidy", ~1)
   val () = _names(dir, "tidy\n")
-in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 11 read, 0 failing", "::error") end
+in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 13 read, 0 failing", "::error") end
 
 (* ... and the same file with one byte changed fails, named *)
 fn test_issue_template_one_byte_changed_fails (): bool = let
