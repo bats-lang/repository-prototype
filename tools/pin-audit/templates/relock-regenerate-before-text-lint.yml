@@ -1,0 +1,40 @@
+# Daily: relock the compiler's packages and move its CI pins to their
+# newest, as a pull request that runs check.yml
+# (bats-lang/repository-prototype#269). The work is the shared
+# relock-pins.yml, called by commit. The compiler builds itself from
+# bootstrap/c, so it has no compiler pin: its pins are bats.lock and
+# .github/repository-version.
+name: relock
+
+on:
+  schedule:
+    - cron: '@@MINUTE@@ 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  issues: write
+
+# one relock of this repository at a time, a schedule run and a dispatch
+# never interleaving their pushes (the shared workflow has a group of its own)
+concurrency:
+  group: relock
+  cancel-in-progress: false
+
+jobs:
+  relock:
+    uses: bats-lang/repository-prototype/.github/workflows/relock-pins.yml@@@COMMIT@@ # @@COMMENT@@
+    secrets: inherit
+    with:
+      # bootstrap/c is the C of the compiler and its locked packages, so a
+      # moved bats.lock changes it (bats#299): regenerate it as CI checks it
+      # (check.yml, "Verify bootstrap/c matches sources")
+      regenerate: |
+        bats build --repository "$BATS_REPOSITORY"
+        scripts/bootstrap-c.sh dist/debug/bats "$BATS_REPOSITORY"
+      regenerate-paths: |
+        bootstrap/c
+      workflow-pins: |
+        bats-lang/repository-prototype/.github/workflows/relock-pins.yml
