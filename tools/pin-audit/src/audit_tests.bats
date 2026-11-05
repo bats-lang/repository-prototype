@@ -579,6 +579,19 @@ fn test_repinning_relock_both_forms_pass (): bool = let
   val () = _names(dir, "new-form\nold-form\n")
 in _judge(dir, 0, ".github/workflows/relock.yml: pass, equal to the template relock-repin.yml", ".github/workflows/relock.yml: pass, equal to the template relock-repin-before-text-lint.yml", "0 not canonical", "::error") end
 
+(* The new form of quire's relock caller (repository-prototype#574: the text-lint-check.yml pin and its tools-ref copy) and the old form kept beside it for one cycle both pass, each by its own template's name *)
+fn test_quire_relock_both_forms_pass (): bool = let
+  val dir = "build/pin-audit-tests/quire-forms"
+  val () = _fresh(dir)
+  val () = _plant(dir, "new-form")
+  val () = _fill(dir, "new-form", "relock.yml", "templates/relock-quire.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "17", ~1)
+  val () = _plant(dir, "old-form")
+  val () = _fill(dir, "old-form", "relock.yml", "templates/relock-quire-before-text-lint.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "17", ~1)
+  val () = _commit(dir, "new-form")
+  val () = _commit(dir, "old-form")
+  val () = _names(dir, "new-form\nold-form\n")
+in _judge(dir, 0, ".github/workflows/relock.yml: pass, equal to the template relock-quire.yml", ".github/workflows/relock.yml: pass, equal to the template relock-quire-before-text-lint.yml", "0 not canonical", "::error") end
+
 (* A canonical file with one byte changed fails *)
 fn test_one_byte_changed_fails (): bool = let
   val dir = "build/pin-audit-tests/one-byte"
@@ -1104,7 +1117,7 @@ fn test_issue_template_equal_passes (): bool = let
   val () = _fresh(dir)
   val () = _plant_with_issue_template(dir, "tidy", ~1)
   val () = _names(dir, "tidy\n")
-in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 13 read, 0 failing", "::error") end
+in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 15 read, 0 failing", "::error") end
 
 (* ... and the same file with one byte changed fails, named *)
 fn test_issue_template_one_byte_changed_fails (): bool = let
