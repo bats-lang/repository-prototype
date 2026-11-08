@@ -16,24 +16,57 @@
 # .github/bats-version, set up by bats's setup action (pinned by commit,
 # #334), pushes the archive to a publish/<archive> branch here, opens a
 # pull request, waits for verify, and merges only when verify passes. See
-# PUBLISHING-SETUP.md for the REPO_PUBLISH_TOKEN secret it needs.
+# PUBLISHING-SETUP.md for the REPO_PUBLISH_TOKEN secret it uses (without a
+# usable one the run is green and skips, with a notice).
 name: publish
 
 on:
   workflow_call:
     secrets:
       REPO_PUBLISH_TOKEN:
-        required: true
+        required: false
 
 jobs:
   publish:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # Keyword: publish-token-skip (#585). A token that is unset, expired
+      # or revoked (the push was rejected with "Authentication failed" in
+      # eight packages) skips the publish with a notice and a green run;
+      # the package is then published by hand (CLAUDE.md, "Publishing
+      # Packages"). Any other failure of the probe fails the step. Shell
+      # because bats has no HTTP client (gh is the third-party tool).
+      - name: Check that the publish token can push
+        id: token
+        env:
+          GH_TOKEN: ${{ secrets.REPO_PUBLISH_TOKEN }}
+        run: |
+          set -u
+          R=bats-lang/repository-prototype
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::REPO_PUBLISH_TOKEN is not set: publishing skipped, publish by hand (bats upload)"
+            echo "usable=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          rc=0
+          out=$(gh api "repos/$R" --jq '.permissions.push' 2>&1) || rc=$?
+          if [ "$rc" -eq 0 ] && [ "$out" = "true" ]; then
+            echo "usable=yes" >> "$GITHUB_OUTPUT"
+          elif [ "$rc" -eq 0 ] || printf '%s' "$out" | grep -q 'HTTP 401'; then
+            echo "::notice::REPO_PUBLISH_TOKEN cannot push to $R (expired, revoked or read-only): publishing skipped, publish by hand (bats upload)"
+            echo "usable=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "$out"
+            exit 1
+          fi
+
+      - if: steps.token.outputs.usable == 'yes'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # checkout leaves a detached HEAD, which bats upload versions as dev1
       # (as the Rust bats does); put it back on the pushed branch.
       - name: Check out the pushed branch
+        if: steps.token.outputs.usable == 'yes'
         run: git checkout -B "$GITHUB_REF_NAME"
 
       # The compiler the package pins (.github/bats-version) is built from
@@ -42,11 +75,13 @@ jobs:
       # commit). require-lock is off because a package with no dependencies
       # has no bats.lock (arith); the lock is checked by its own CI.
       - name: Set up bats
+        if: steps.token.outputs.usable == 'yes'
         uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
         with:
           require-lock: 'false'
 
       - name: Upload, open the pull request, merge when verify passes
+        if: steps.token.outputs.usable == 'yes'
         env:
           GH_TOKEN: ${{ secrets.REPO_PUBLISH_TOKEN }}
           SOURCE: ${{ github.repository }}@${{ github.sha }}
