@@ -21,7 +21,7 @@ repository does both.
 4. Click **Generate new token**.
 5. **Token name**: `bats-lang publish`.
 6. **Expiration**: pick a date (a year is fine) and put a reminder in your
-   calendar to rotate it: when it expires, publishing stops.
+   calendar to rotate it: when it expires, publishing is skipped.
 7. **Description**: `Opens publish PRs in bats-lang/repository-prototype`.
 8. **Resource owner**: `bats-lang`. (If the organization requires approval
    for tokens, fill in the justification box that appears; see below.)
