@@ -65,3 +65,42 @@ waiting-go	waiting for a "?go"?\b	waiting for a go	No step waits for a go: do it
 waiting-go	waiting for the "?go"?\b	waiting for the "go"	No step waits for a go: do it as written.
 measure	stop measuring	stop measuring	Measure as the Done-when says, in full.
 measure	narrow the measurement	narrow the measurement	Measure as the Done-when says, in full.
+unverified	haven'?t checked	I haven't checked the PR	Look, and say what was found; that something was not checked is never said.
+unverified	haven'?t looked	I haven't looked at it	Look, and say what was found; that something was not checked is never said.
+unverified	didn'?t check	I didn't check the PR	Look, and say what was found; that something was not checked is never said.
+unverified	didn'?t look	I didn't look at it	Look, and say what was found; that something was not checked is never said.
+unverified	didn'?t verify	I didn't verify it	Look, and say what was found; that something was not checked is never said.
+unverified	i'?ve not checked	I've not checked it	Look, and say what was found; that something was not checked is never said.
+unverified	i'?ve not verified	I've not verified it	Look, and say what was found; that something was not checked is never said.
+unverified	i'?ve not looked	I've not looked at it	Look, and say what was found; that something was not checked is never said.
+unverified	i have not checked	I have not checked it	Look, and say what was found; that something was not checked is never said.
+unverified	i have not verified	I have not verified it	Look, and say what was found; that something was not checked is never said.
+unverified	i have not looked	I have not looked at it	Look, and say what was found; that something was not checked is never said.
+half-done	\bin par[t]\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	\bthe par[t] that\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	\bthe par[t] of\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	\bthe par[t] which\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	\bpar[t]s? is done\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	\bpar[t]s? is left\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	\bpar[t]s? is owed\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	\bpar[t]s? is not done\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	\bpar[t]s? are done\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	\bpar[t]s? are left\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	\bpar[t]s? are owed\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+half-done	\bpar[t]s? are not done\b	-	Half done is not a state: the Done-when is met as written or the work goes on.
+background	run_in_background	start it with run_in_background	A command is never run in the background: a check of more than a few minutes is left to CI.
+background	\bin the background\b	run the suite in the background	A command is never run in the background: a check of more than a few minutes is left to CI.
+background	\binto the background\b	moved into the background	A command is never run in the background: a check of more than a few minutes is left to CI.
+background	\bto the background\b	sent to the background	A command is never run in the background: a check of more than a few minutes is left to CI.
+background	\bnohup\b	nohup bats check &	A command is never run in the background: a check of more than a few minutes is left to CI.
+polling	\bsleep\s+\d+	poll it with sleep 60	No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks.
+polling	\bsleep loop\b	a sleep loop	No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks.
+polling	\bsleep until\b	sleep until it ends	No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks.
+polling	\bpolling loop\b	a polling loop	No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks.
+polling	\bpolling until\b	polling until it ends	No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks.
+polling	\bloops? with sleep\b	a loop with sleep until green	No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks.
+polling	\bloops? using sleep\b	loops using sleep	No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks.
+polling	\bloops? and sleep\b	a loop and sleep	No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks.
+polling	\blooping with sleep\b	looping with sleep	No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks.
+polling	\blooping using sleep\b	looping using sleep	No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks.
+polling	\blooping and sleep\b	looping and sleep	No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks.
