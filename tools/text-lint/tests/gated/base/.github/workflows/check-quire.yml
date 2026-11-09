@@ -1,0 +1,27 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  # A draft pull request runs no job: the transition to ready starts the check
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  # A merge queue runs the check on its own merge group
+  merge_group:
+    types: [checks_requested, destroyed]
+  # The relock workflow starts it on its relock/<date> branch
+  workflow_dispatch:
+  # A check of main from nothing every night
+  schedule:
+    - cron: '47 3 * * *'
+
+jobs:
+  build:
+    if: github.event.action != 'destroyed' && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 2
+      - run: echo one

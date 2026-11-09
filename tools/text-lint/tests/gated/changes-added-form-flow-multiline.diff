@@ -2,7 +2,7 @@ diff --git a/.github/workflows/new.yml b/.github/workflows/new.yml
 @@ -0,0 +1,6 @@
 +name: new
 +on: [
-+  push,
++  workflow_dispatch,
 +  watch
 +]
 +jobs: {}
