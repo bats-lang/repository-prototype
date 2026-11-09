@@ -327,6 +327,18 @@ implement digits_upto_two (b, k, i) =
      else 1)
   else 0
 
+(* Whether the c digits at i of b[0, k) are a cron minute: a number from 0 to 59 followed by a byte that is neither a digit nor
+   a character of a name (a third digit, "5x"); the digits are the ones digits_upto_two counted, so c is 1 or 2 here *)
+#pub fn minute_ok {l:agz}{n:pos}{k:nat | k <= n}{i:nat}{c:nat | c <= 2; i + c <= k}
+  (b: !$A.borrow(byte, l, n), k: int k, i: int i, c: int c): bool
+
+implement minute_ok (b, k, i, c) =
+  if c <= 0 then false
+  else if i + c >= k then false
+  else if _in_class(byte2int0($A.read<byte>(b, i + c)), Class_name()) then false
+  else if c = 2 then byte2int0($A.read<byte>(b, i)) <= 53
+  else true
+
 (* ============================================================
    Files
    ============================================================ *)

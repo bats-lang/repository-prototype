@@ -36,7 +36,8 @@
    repository, bats-lang/repository-prototype#619) is filled for each
    repository from the file it has, by the rule of pin_audit --file-tickets:
    the digits (one or two) that follow the template's own text from the start
-   of the line of the hole up to the hole, else 17. adopt prints the minute it
+   of the line of the hole up to the hole when they are a number from 0 to 59
+   followed by a byte that is no digit or name character, else 17 (99, 123, 5x). adopt prints the minute it
    used for each repository (`NAME: minute 41, ...`). A file that differs from
    the template is the repository's own and is refused, except when the
    template has a @@MINUTE@@ hole and the file has that cron line: it is a
@@ -168,20 +169,21 @@ fun _hole_at {l:agz}{n:pos}{tlen:nat | tlen <= n}{at:nat | at <= tlen} .<tlen - 
   else _hole_at(t, tlen, at + 1)
 
 (* The first place p at or after from of e[0, elen) that holds t[prefix_start, hole) and then a digit: the place of the
-   digits (at most two) and how many; none is a count of 0 *)
+   digits (at most two) and how many, none is a count of 0, and whether they are a minute (minute_ok: 0 to 59, then no digit or name
+   character; the line is found either way, so the file is a caller of this shape, and the minute used is 17 when it is not) *)
 fun _find_minute {t_l,e_l:agz}{elen:nat | elen <= 524288}{prefix_start,hole:nat | prefix_start <= hole; hole <= 524288}{from:nat | from <= elen} .<elen - from>.
   (t: !$A.borrow(byte, t_l, 524288), prefix_start: int prefix_start, hole: int hole,
    e: !$A.borrow(byte, e_l, 524288), elen: int elen, from: int from)
-  : [digits_start,digit_count:nat | digit_count <= 2; digits_start + digit_count <= elen] @(int digits_start, int digit_count) =
-  if from >= elen then @(0, 0)
+  : [digits_start,digit_count:nat | digit_count <= 2; digits_start + digit_count <= elen] @(int digits_start, int digit_count, bool) =
+  if from >= elen then @(0, 0, false)
   else let
     val digits_at = from + (hole - prefix_start)
   in
-    if digits_at > elen then @(0, 0)
+    if digits_at > elen then @(0, 0, false)
     else if range_eq(t, prefix_start, hole, e, from) then let
       val counted = digits_upto_two(e, elen, digits_at)
     in
-      if counted >= 1 then @(digits_at, counted)
+      if counted >= 1 then @(digits_at, counted, minute_ok(e, elen, digits_at, counted))
       else _find_minute(t, prefix_start, hole, e, elen, from + 1)
     end
     else _find_minute(t, prefix_start, hole, e, elen, from + 1)
@@ -191,11 +193,11 @@ fun _find_minute {t_l,e_l:agz}{elen:nat | elen <= 524288}{prefix_start,hole:nat 
    (pin_audit --file-tickets' rule); a count of 0 when the template has no hole, the file was not read whole or it has no such line *)
 fn _minute_of {t_l,e_l:agz}{tlen,elen:nat | tlen <= 524288; elen <= 524288}
   (t: !$A.borrow(byte, t_l, 524288), tlen: int tlen, e: !$A.borrow(byte, e_l, 524288), elen: int elen, e_whole: bool)
-  : [digits_start,digit_count:nat | digit_count <= 2; digits_start + digit_count <= elen] @(int digits_start, int digit_count) = let
+  : [digits_start,digit_count:nat | digit_count <= 2; digits_start + digit_count <= elen] @(int digits_start, int digit_count, bool) = let
   val hole = _hole_at(t, tlen, 0)
 in
-  if ~e_whole then @(0, 0)
-  else if hole < 0 then @(0, 0)
+  if ~e_whole then @(0, 0, false)
+  else if hole < 0 then @(0, 0, false)
   else let
     val prefix_start = _line_start(t, tlen, hole)
   in _find_minute(t, prefix_start, hole, e, elen, 0) end
@@ -568,9 +570,9 @@ in
     val _ = run_program("mkdir", args3(arg_text("-p"), arg_text("--"), _directory_arg(a, name, is_issue)))
     val existing_whole = (case+ existing_ended of | Read_whole() => true | Read_too_long() => false | Read_failed() => false): bool
     val has_hole = (_hole_at(t, tlen, 0) >= 0): bool
-    val @(minute_start, minute_count) = _minute_of(t, tlen, existing_view, existing_len, existing_whole)
+    val @(minute_start, minute_count, minute_valid) = _minute_of(t, tlen, existing_view, existing_len, existing_whole)
     var rope : $B.sized_rope = $B.sized_rope_create()
-    val () = _fill(t, tlen, 0, rope, a, cs, ce, ms, me, existing_view, minute_start, minute_start + minute_count, minute_count = 0)
+    val () = _fill(t, tlen, 0, rope, a, cs, ce, ms, me, existing_view, minute_start, minute_start + minute_count, ~minute_valid)
     val written = write_rope(_target_path(a, name, target, is_issue), rope)
     val @(back_array, back_len) = _target_path(a, name, target, is_issue)
     val @(back_frozen, back_view) = $A.freeze<byte>(back_array)
@@ -610,10 +612,11 @@ in
              val () = _line(a, name)
              val () = print! ("minute ")
            in
-             if minute_count > 0 then let
+             if minute_valid then let
                val () = print_range(existing_view, minute_start, minute_start + minute_count)
              in println! (", the minute of the cron line of the file it replaces") end
-             else println! ("17, the default: the repository has no such cron line")
+             else if minute_count > 0 then println! ("17, the default: the cron line of the file it replaces has no minute from 0 to 59")
+             else println!("17, the default: the repository has no such cron line")
            end
            else ()
          val () = if show then let
