@@ -616,6 +616,37 @@ fn test_as_writes_the_template_under_another_name (): bool = let
   val only_one = _file_judge(dir, "adopt-clones/alpha.body.md", " .github/workflows/relock.yml | ", "relock-regenerate.yml | ")
 in ran && pushed && written && body && title && only_one end
 
+(* A cron minute that is no minute is 17, said, and the file (which differs from the template at its first byte) is replaced: 99 is over 59,
+   123 has a third digit and 5x has a letter after the digit (bats-lang/repository-prototype#622); the minute 59 beside them is kept *)
+fn test_minute_outside_zero_to_fifty_nine_is_seventeen (): bool = let
+  val dir = "build/adopt-tests/minute-invalid"
+  val () = _fresh(dir)
+  val () = _plant(dir, "alpha")
+  val () = _plant_file(dir, "alpha", ".github/workflows/", "relock.yml", "99", 0)
+  val () = _plant(dir, "beta")
+  val () = _plant_file(dir, "beta", ".github/workflows/", "relock.yml", "123", 0)
+  val () = _plant(dir, "gamma")
+  val () = _plant_file(dir, "gamma", ".github/workflows/", "relock.yml", "5x", 0)
+  val () = _plant(dir, "delta")
+  val () = _plant_file(dir, "delta", ".github/workflows/", "relock.yml", "59", 0)
+  val () = _expect(dir, "expected-17.yml", "relock.yml", "17")
+  val () = _expect(dir, "expected-59.yml", "relock.yml", "59")
+  val ran = _judge(dir, _standard("relock.yml", args3(arg_text("alpha#7"), arg_text("beta#8"), arg_text("gamma#9"))), 0,
+    "alpha: minute 17, the default: the cron line of the file it replaces has no minute from 0 to 59\n",
+    "beta: minute 17, the default: the cron line of the file it replaces has no minute from 0 to 59\n",
+    "gamma: minute 17, the default: the cron line of the file it replaces has no minute from 0 to 59\n", "failed")
+  val alpha_pushed = _checkout(dir, "alpha", "adopt-7")
+  val alpha_written = _planted_is(dir, "alpha", ".github/workflows/relock.yml", "/expected-17.yml")
+  val beta_pushed = _checkout(dir, "beta", "adopt-8")
+  val beta_written = _planted_is(dir, "beta", ".github/workflows/relock.yml", "/expected-17.yml")
+  val gamma_pushed = _checkout(dir, "gamma", "adopt-9")
+  val gamma_written = _planted_is(dir, "gamma", ".github/workflows/relock.yml", "/expected-17.yml")
+  val kept = _judge(dir, _standard("relock.yml", args1(arg_text("delta#10"))), 0,
+    "delta: minute 59, the minute of the cron line of the file it replaces\n", "", "", "the default")
+  val delta_pushed = _checkout(dir, "delta", "adopt-10")
+  val delta_written = _planted_is(dir, "delta", ".github/workflows/relock.yml", "/expected-59.yml")
+in ran && alpha_pushed && alpha_written && beta_pushed && beta_written && gamma_pushed && gamma_written && kept && delta_pushed && delta_written end
+
 (* The nearest input the loosened refusal must still reject: a file that differs from a template with a @@MINUTE@@ hole and has no
    cron line of the template is the repository's own, refused with its first differing byte, and nothing is pushed *)
 fn test_minute_file_without_the_cron_line_is_refused (): bool = let
