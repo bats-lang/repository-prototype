@@ -3,7 +3,7 @@ diff --git a/.github/workflows/new.yml b/.github/workflows/new.yml
 +name: new
 +
 +on:
-+  push:
++  workflow_dispatch:
 +    branches: [main]
 +  check_suite:
 +

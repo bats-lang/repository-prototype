@@ -1,0 +1,11 @@
+name: check-hunk
+
+on:
+  workflow_dispatch:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo one

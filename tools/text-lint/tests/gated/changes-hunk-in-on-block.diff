@@ -1,8 +1,8 @@
-diff --git a/.github/workflows/check-plain.yml b/.github/workflows/check-plain.yml
+diff --git a/.github/workflows/check-hunk.yml b/.github/workflows/check-hunk.yml
 @@ -3,6 +3,7 @@ on:
-   push:
+   workflow_dispatch:
      branches: [main]
 +  watch:
- 
+
  jobs:
    build:

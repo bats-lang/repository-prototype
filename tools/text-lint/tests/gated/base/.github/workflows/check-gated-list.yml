@@ -1,6 +1,6 @@
 name: check-gated-list
 
-on: [push, issue_comment]
+on: [workflow_dispatch, issue_comment]
 
 jobs:
   go:

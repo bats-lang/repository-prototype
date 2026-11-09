@@ -1,0 +1,5 @@
+diff --git a/.github/workflows/check-schedule-words.yml b/.github/workflows/check-schedule-words.yml
+@@ -13,3 +13,3 @@ jobs:
+     steps:
+-      - run: echo one # push pull_request
++      - run: echo two # push pull_request

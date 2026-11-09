@@ -22,7 +22,8 @@
    permissions:), as an option of a trigger or in a step is not one. In a patch the block is read
    from the lines it shows: a hunk header ends it and git's text after the second @@ (the last
    line that starts a section, here on:) opens it again. A file with no base copy is new: only its
-   patch is read. A deleted file (a hunk "+0,0 @@") runs nothing after the merge and is not gated.
+   patch is read. A file that has pull_request or push as a trigger too is not gated (#597): the
+   pull request's own run executes its changed steps on that trigger. A deleted file (a hunk "+0,0 @@") runs nothing after the merge and is not gated.
    The URL is cited, not checked: the reviewer opens the run
    (the check needs the network, which text-lint does not use). *)
 
@@ -80,37 +81,39 @@ in
 end
 
 (* Whether text[ws, we) is the name of an event of the events file events[start, elimit): one
-   name on each line, a line that starts with "#" is a note *)
+   name on each line, a line that starts with "#" is a note: where the line of that name starts in
+   the events file, else a negative number *)
 fun _is_event {el,tl:agz}{en,tn:pos}{elimit:nat | elimit <= en}{start:nat | start <= elimit}
   {ws,we:nat | ws <= we; we <= tn} .<elimit - start>.
   (events: !$A.borrow(byte, el, en), elimit: int elimit, start: int start,
-   text: !$A.borrow(byte, tl, tn), ws: int ws, we: int we): bool = let
+   text: !$A.borrow(byte, tl, tn), ws: int ws, we: int we): [r:int | r <= elimit] int r = let
   val raw = find_byte(events, elimit, start, 10)
   val here =
     (if raw <= start then false
      else if byte2int0($A.read<byte>(events, start)) = 35 then false
      else spans_equal(events, start, raw, text, ws, we)): bool
 in
-  if here then true
-  else if raw >= elimit then false
+  if here then start
+  else if raw >= elimit then ~1
   else _is_event(events, elimit, raw + 1, text, ws, we)
 end
 
-(* Whether a word of text[a, limit) up to a "#" is an event: a flow list, a single event or
-   the words after "Called on:" *)
+(* Where the event of the first word of text[a, limit) up to a "#" starts in the events file: a
+   flow list, a single event or the words after "Called on:"; a negative number when none is *)
 fun _words_gated {el,tl:agz}{en,tn:pos}{elimit:nat | elimit <= en}{limit:nat | limit <= tn}
   {a:nat | a <= limit} .<limit - a>.
   (events: !$A.borrow(byte, el, en), elimit: int elimit,
-   text: !$A.borrow(byte, tl, tn), limit: int limit, a: int a): bool =
-  if a >= limit then false
+   text: !$A.borrow(byte, tl, tn), limit: int limit, a: int a): [r:int | r <= elimit] int r =
+  if a >= limit then ~1
   else let
     val c = byte2int0($A.read<byte>(text, a))
   in
-    if c = 35 then false
+    if c = 35 then ~1
     else if _is_name_char(c) then let
       val e = _name_end(text, limit, a + 1)
+      val found = _is_event(events, elimit, 0, text, a, e)
     in
-      if _is_event(events, elimit, 0, text, a, e) then true
+      if found >= 0 then found
       else _words_gated(events, elimit, text, limit, e)
     end
     else _words_gated(events, elimit, text, limit, a + 1)
@@ -146,18 +149,18 @@ fn _item_start {l:agz}{n:pos}{raw:nat | raw <= n}{c0:nat | c0 <= raw}
 fn _line {el,tl:agz}{en,tn:pos}{elimit:nat | elimit <= en}{raw:nat | raw <= tn}{ls:nat | ls <= raw}
   (events: !$A.borrow(byte, el, en), elimit: int elimit,
    text: !$A.borrow(byte, tl, tn), raw: int raw, ls: int ls, mode: int, baseline: int)
-  : @(bool, int, int) = let
+  : @([x:int | x <= elimit] int x, int, int) = let
   val c0 = _skip_spaces(text, raw, ls)
 in
-  if c0 >= raw then @(false, mode, baseline)
+  if c0 >= raw then @(~1, mode, baseline)
   else let
     val c = byte2int0($A.read<byte>(text, c0))
   in
-    if c = 13 then @(false, mode, baseline)
+    if c = 13 then @(~1, mode, baseline)
     else if c = 35 then let
       val p = _find_literal(text, raw, c0, "Called on:")
     in
-      if p + 10 > raw then @(false, mode, baseline)
+      if p + 10 > raw then @(~1, mode, baseline)
       else @(_words_gated(events, elimit, text, raw, p + 10), mode, baseline)
     end
     else if mode = 2 then
@@ -166,25 +169,29 @@ in
     else if c0 = ls then let
       val r = _on_rest(text, raw, c0)
     in
-      if r < 0 then @(false, 0, ~1)
-      else if _words_gated(events, elimit, text, raw, r) then @(true, 0, ~1)
-      else if ~_has_content(text, raw, r) then @(false, 1, ~1)
-      else if _has_either(text, raw, r, 91, 123) && ~_has_either(text, raw, r, 93, 125) then
-        @(false, 2, ~1)
-      else @(false, 0, ~1)
+      if r < 0 then @(~1, 0, ~1)
+      else let
+        val found = _words_gated(events, elimit, text, raw, r)
+      in
+        if found >= 0 then @(found, 0, ~1)
+        else if ~_has_content(text, raw, r) then @(~1, 1, ~1)
+        else if _has_either(text, raw, r, 91, 123) && ~_has_either(text, raw, r, 93, 125) then
+          @(~1, 2, ~1)
+        else @(~1, 0, ~1)
+      end
     end
     else if mode = 1 then
-      (if baseline >= 0 && c0 - ls > baseline then @(false, mode, baseline)
+      (if baseline >= 0 && c0 - ls > baseline then @(~1, mode, baseline)
        else let
          val w = _item_start(text, raw, c0)
        in
-         if w >= raw then @(false, mode, c0 - ls)
-         else if ~_is_name_char(byte2int0($A.read<byte>(text, w))) then @(false, mode, c0 - ls)
+         if w >= raw then @(~1, mode, c0 - ls)
+         else if ~_is_name_char(byte2int0($A.read<byte>(text, w))) then @(~1, mode, c0 - ls)
          else let
            val e = _name_end(text, raw, w + 1)
          in @(_is_event(events, elimit, 0, text, w, e), mode, c0 - ls) end
        end)
-    else @(false, mode, baseline)
+    else @(~1, mode, baseline)
   end
 end
 
@@ -210,7 +217,8 @@ fn _line_start {l:agz}{n:pos}{raw:nat | raw <= n}{start:nat | start <= raw}
   : [x:nat | start <= x; x <= raw] int x =
   if patch then _content_start(text, raw, start, hunk) else start
 
-(* Whether the workflow text[start, hi) has an event of the events file as a trigger. The text
+(* Where the line of the first event of the events file that is a trigger of the workflow
+   text[start, hi) starts in the events file, else a negative number. The text
    is a file, or a patch (the lines have a byte before them that says added, removed or kept,
    a hunk header ends the block of on:, and its text after the second @@ is a line of the file
    at column 0). *)
@@ -218,20 +226,20 @@ fun _triggers_in {el,tl:agz}{en,tn:pos}{elimit:nat | elimit <= en}{hi:nat | hi <
   {start:nat | start <= hi} .<hi - start>.
   (events: !$A.borrow(byte, el, en), elimit: int elimit,
    text: !$A.borrow(byte, tl, tn), hi: int hi, start: int start, patch: bool,
-   mode: int, baseline: int): bool =
-  if start >= hi then false
+   mode: int, baseline: int): [r:int | r <= elimit] int r =
+  if start >= hi then ~1
   else let
     val raw = find_byte(text, hi, start, 10)
     val hunk = (patch && start + 2 <= raw && starts_with(text, raw, start, "@@")): bool
     val no_newline = (patch && start < raw && byte2int0($A.read<byte>(text, start)) = 92): bool
     val ls = _line_start(text, raw, start, patch, hunk)
     val @(found, mode2, baseline2) =
-      (if no_newline then @(false, mode, baseline)
+      (if no_newline then @(~1, mode, baseline)
        else _line(events, elimit, text, raw, ls, (if hunk then 0 else mode),
-         (if hunk then ~1 else baseline))): @(bool, int, int)
+         (if hunk then ~1 else baseline))): @([x:int | x <= elimit] int x, int, int)
   in
-    if found then true
-    else if raw >= hi then false
+    if found >= 0 then found
+    else if raw >= hi then ~1
     else _triggers_in(events, elimit, text, hi, raw + 1, patch, mode2, baseline2)
   end
 
@@ -268,16 +276,17 @@ fun _find_b {l:agz}{n:pos}{stop:nat | stop <= n}{i:nat | i <= stop} .<stop - i>.
   else if starts_with(diff, stop, i, " b/") then i
   else _find_b(diff, stop, i + 1)
 
-(* Whether a trigger of the events is in the file at base_dir/path, path being
-   diff[path_start, path_stop); a file that cannot be read has no base copy *)
+(* Where the line of the first event that is a trigger of the file at base_dir/path starts in
+   the events file, path being diff[path_start, path_stop); a negative number when none is; a
+   file that cannot be read has no base copy *)
 fn _base_has {dl,bl,pl:agz}{dn,bn,pn:pos}{plimit:nat | plimit <= pn}
   {path_start,path_stop:nat | path_start <= path_stop; path_stop <= dn}
   {base_len:nat | base_len <= bn}
   (diff: !$A.borrow(byte, dl, dn), path_start: int path_start, path_stop: int path_stop,
    base: !$A.borrow(byte, bl, bn), base_len: int base_len,
-   events: !$A.borrow(byte, pl, pn), plimit: int plimit): bool =
-  if base_len > 1000 then false
-  else if path_stop - path_start > 1000 then false
+   events: !$A.borrow(byte, pl, pn), plimit: int plimit): [r:int | r <= plimit] int r =
+  if base_len > 1000 then ~1
+  else if path_stop - path_start > 1000 then ~1
   else let
     var path : $B.builder(0) = $B.create()
     val () = put_range(base, 0, base_len, path)
@@ -294,54 +303,98 @@ fn _base_has {dl,bl,pl:agz}{dn,bn,pn:pos}{plimit:nat | plimit <= pn}
     val found =
       (case+ ended of
        | Read_whole() => _triggers_in(events, plimit, text_view, text_len, 0, false, 0, ~1)
-       | Read_too_long() => false
-       | Read_failed() => false): bool
+       | Read_too_long() => ~1
+       | Read_failed() => ~1): [r:int | r <= plimit] int r
     val () = $A.drop<byte>(text_frozen, text_view)
     val () = $A.free<byte>($A.thaw<byte>(text_frozen))
   in found end
 
-(* Whether the file of the section diff[header_end, section_end) (its header line is
-   diff[header_start, header_end), b_at the place of " b/") is a workflow the base branch runs
-   and the change keeps *)
-fn _section_gated {dl,bl,pl:agz}{dn,bn,pn:pos}{plimit:nat | plimit <= pn}
+(* Where the line of the first event of the events file that is a trigger of the file in the
+   section diff[header_end, section_end) (its patch) or of its base copy starts in the events
+   file, else a negative number *)
+fn _section_hit {dl,bl,pl:agz}{dn,bn,pn:pos}{plimit:nat | plimit <= pn}
   {header_start,b_at,header_end,section_end:nat | header_start + 13 <= b_at; b_at + 3 <= header_end;
    header_end <= section_end; section_end <= dn}{base_len:nat | base_len <= bn}
   (diff: !$A.borrow(byte, dl, dn), header_start: int header_start, b_at: int b_at,
    header_end: int header_end, section_end: int section_end,
    base: !$A.borrow(byte, bl, bn), base_len: int base_len,
-   events: !$A.borrow(byte, pl, pn), plimit: int plimit): bool =
-  if ~starts_with(diff, header_end, b_at + 3, ".github/workflows/") then false
-  else if contains_text(diff, section_end, header_end, "+0,0 @@") then false
-  else if _triggers_in(events, plimit, diff, section_end, header_end, true, 0, ~1) then true
+   events: !$A.borrow(byte, pl, pn), plimit: int plimit): [r:int | r <= plimit] int r = let
+  val in_patch = _triggers_in(events, plimit, diff, section_end, header_end, true, 0, ~1)
+in
+  if in_patch >= 0 then in_patch
   else _base_has(diff, header_start + 13, b_at, base, base_len, events, plimit)
+end
 
-(* The findings of the sections diff[start, limit): one for each gated file, its path in it *)
-fun _sections {dl,bl,pl:agz}{dn,bn,pn:pos}{limit:nat | limit <= dn}{start:nat | start <= limit}
-  {plimit:nat | plimit <= pn}{base_len:nat | base_len <= bn} .<limit - start>.
+(* Where the event that gates the file of the section diff[header_end, section_end) (its header
+   line is diff[header_start, header_end), b_at the place of " b/") starts in the events file: a
+   workflow the base branch runs and the change keeps, and that no event of the exempt file
+   (pull_request, push) beside it runs from the pull request's own head; else a negative number *)
+fn _section_gated {dl,bl,pl,xl:agz}{dn,bn,pn,xn:pos}{plimit:nat | plimit <= pn}
+  {xlimit:nat | xlimit <= xn}
+  {header_start,b_at,header_end,section_end:nat | header_start + 13 <= b_at; b_at + 3 <= header_end;
+   header_end <= section_end; section_end <= dn}{base_len:nat | base_len <= bn}
+  (diff: !$A.borrow(byte, dl, dn), header_start: int header_start, b_at: int b_at,
+   header_end: int header_end, section_end: int section_end,
+   base: !$A.borrow(byte, bl, bn), base_len: int base_len,
+   events: !$A.borrow(byte, pl, pn), plimit: int plimit,
+   exempt: !$A.borrow(byte, xl, xn), xlimit: int xlimit): [r:int | r <= plimit] int r =
+  if ~starts_with(diff, header_end, b_at + 3, ".github/workflows/") then ~1
+  else if contains_text(diff, section_end, header_end, "+0,0 @@") then ~1
+  else let
+    val gate = _section_hit(diff, header_start, b_at, header_end, section_end, base, base_len,
+      events, plimit)
+  in
+    if gate < 0 then ~1
+    else if _section_hit(diff, header_start, b_at, header_end, section_end, base, base_len,
+      exempt, xlimit) >= 0 then ~1
+    else gate
+  end
+
+(* The findings of the sections diff[start, limit): one for each gated file, its path and the
+   trigger that gates it in it *)
+fun _sections {dl,bl,pl,xl:agz}{dn,bn,pn,xn:pos}{limit:nat | limit <= dn}{start:nat | start <= limit}
+  {plimit:nat | plimit <= pn}{xlimit:nat | xlimit <= xn}{base_len:nat | base_len <= bn}
+  .<limit - start>.
   (diff: !$A.borrow(byte, dl, dn), limit: int limit, start: int start,
    base: !$A.borrow(byte, bl, bn), base_len: int base_len,
-   events: !$A.borrow(byte, pl, pn), plimit: int plimit, out: !$B.sized_rope, count: int): int =
+   events: !$A.borrow(byte, pl, pn), plimit: int plimit,
+   exempt: !$A.borrow(byte, xl, xn), xlimit: int xlimit, out: !$B.sized_rope, count: int): int =
   if start >= limit then count
   else let
     val @(header_end, next) = _span_of_header(diff, limit, start)
   in
     if start + 13 > header_end then
-      _sections(diff, limit, next, base, base_len, events, plimit, out, count)
+      _sections(diff, limit, next, base, base_len, events, plimit, exempt, xlimit, out, count)
     else if ~starts_with(diff, header_end, start, "diff --git a/") then
-      _sections(diff, limit, next, base, base_len, events, plimit, out, count)
+      _sections(diff, limit, next, base, base_len, events, plimit, exempt, xlimit, out, count)
     else let
       val b_at = _find_b(diff, header_end, start + 13)
     in
       if b_at + 3 > header_end then
-        _sections(diff, limit, next, base, base_len, events, plimit, out, count)
-      else if _section_gated(diff, start, b_at, header_end, next, base, base_len, events, plimit) then let
-        val () = $B.sized_rope_bput(out, "PR body: ")
-        val () = $B.sized_rope_copy(out, diff, b_at + 3, header_end)
-        val () = $B.sized_rope_bput(out, " runs from the default branch: cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
-      in _sections(diff, limit, next, base, base_len, events, plimit, out, count + 1) end
-      else _sections(diff, limit, next, base, base_len, events, plimit, out, count)
+        _sections(diff, limit, next, base, base_len, events, plimit, exempt, xlimit, out, count)
+      else let
+        val gate = _section_gated(diff, start, b_at, header_end, next, base, base_len, events,
+          plimit, exempt, xlimit)
+      in
+        if gate >= 0 then let
+          val trigger_end = find_byte(events, plimit, gate, 10)
+          val () = $B.sized_rope_bput(out, "PR body: ")
+          val () = $B.sized_rope_copy(out, diff, b_at + 3, header_end)
+          val () = $B.sized_rope_bput(out, " runs from the default branch on its trigger ")
+          val () = $B.sized_rope_copy(out, events, gate, trigger_end)
+          val () = $B.sized_rope_bput(out, ": cite its job URL in bats-lang/relock-scratch (scratch-run)\n")
+        in _sections(diff, limit, next, base, base_len, events, plimit, exempt, xlimit, out, count + 1) end
+        else _sections(diff, limit, next, base, base_len, events, plimit, exempt, xlimit, out, count)
+      end
     end
   end
+
+(* The events that run the pull request's own head: a workflow with one of them beside a gated
+   event is shown running by the pull request's own run (bats-lang/repository-prototype#597) *)
+fn _exempt_events (): @([m:agz] $A.arr(byte, m, $B.BUILDER_CAP), [k:nat | k <= $B.BUILDER_CAP] int k) = let
+  var events : $B.builder(0) = $B.create()
+  val () = $B.bput(events, "pull_request\npush\n")
+in $B.to_arr(events) end
 
 (* The scratch-run pattern in an array: a job URL of bats-lang/relock-scratch *)
 fn _run_pattern (): @([m:agz] $A.arr(byte, m, $B.BUILDER_CAP), [k:nat | k <= $B.BUILDER_CAP] int k) = let
@@ -369,5 +422,12 @@ implement lint_gated (body, len, changes, changes_len, base, base_len, triggers,
   val () = $A.free<byte>($A.thaw<byte>(pattern_frozen))
 in
   if cited then 0
-  else _sections(changes, changes_len, 0, base, base_len, triggers, triggers_len, out, 0)
+  else let
+    val @(exempt_array, exempt_len) = _exempt_events()
+    val @(exempt_frozen, exempt_view) = $A.freeze<byte>(exempt_array)
+    val found = _sections(changes, changes_len, 0, base, base_len, triggers, triggers_len,
+      exempt_view, exempt_len, out, 0)
+    val () = $A.drop<byte>(exempt_frozen, exempt_view)
+    val () = $A.free<byte>($A.thaw<byte>(exempt_frozen))
+  in found end
 end

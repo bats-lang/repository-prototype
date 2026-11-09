@@ -1,0 +1,7 @@
+diff --git a/.github/workflows/check-quire.yml b/.github/workflows/check-quire.yml
+@@ -22,3 +22,4 @@ jobs:
+         with:
+           fetch-depth: 2
+-      - run: echo one
++      - run: echo two
++      - run: echo three

@@ -1,0 +1,5 @@
+diff --git a/.github/workflows/check-schedule-only.yml b/.github/workflows/check-schedule-only.yml
+@@ -9,3 +9,3 @@ jobs:
+     steps:
+-      - run: echo one
++      - run: echo two
