@@ -2,7 +2,8 @@
 # audit (tools/pin-audit, planted git repositories), of the relock's pin mover
 # (tools/repin, #410 and #411: the age rule, the table, the action pins), of the pull request body
 # lint (tools/text-lint, #487: the checks of the form on fixture bodies and events), of the removed-input
-# check (tools/input-overlap, #544: the inputs of an action and a reusable workflow) and of the script that
+# check (tools/input-overlap, #544: the inputs of an action and a reusable workflow), of the program that
+# adopts a template in repositories (tools/adopt, #607: a stand-in gh, planted git repositories) and of the script that
 # verifies added archives (tests/verify-archives: scripts/verify-archives.sh on
 # planted git repositories, with a stand-in bats). Each test package is built
 # first, since its tests run the binaries it builds.
@@ -86,6 +87,19 @@ jobs:
 
       - name: Test the removed-input check
         working-directory: tools/input-overlap
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats test --repository "$REPOSITORY"
+
+      # adopt (#607) runs the pin audit and the pull request body lint on what it wrote, so both are built above.
+      - name: Build the template adoption program and its stand-in gh
+        working-directory: tools/adopt
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
+
+      - name: Test the template adoption program
+        working-directory: tools/adopt
         env:
           REPOSITORY: ${{ github.workspace }}
         run: bats test --repository "$REPOSITORY"
