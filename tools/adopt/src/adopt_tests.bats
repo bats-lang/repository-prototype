@@ -405,13 +405,14 @@ fn test_body_lines (): bool = let
   val first = _file_begins(dir, "adopt-clones/alpha.body.md", "Fixes bats-lang/alpha#7\n")
   val plan = _file_judge(dir, "adopt-clones/alpha.body.md", "\n## Plan\n\nDone when: the file `.github/workflows/canonical-files.yml` is `tools/pin-audit/templates/canonical-files.yml` of bats-lang/repository-prototype at `0123456789abcdef0123456789abcdef01234567` with its holes filled.\n\n1. `git show --stat --format= HEAD`", "")
   val execution = _file_judge(dir, "adopt-clones/alpha.body.md", "\n## Execution\n\n`adopt` cloned bats-lang/alpha, filled `@@COMMIT@@` with `0123456789abcdef0123456789abcdef01234567` and `@@COMMENT@@` with `repository-prototype main 0123456`", "")
+  val pointer = _file_judge(dir, "adopt-clones/alpha.body.md", "\n2. CI of the head, workflow `canonical-files.yml`, job `canonical-files`, step `Refuse a changed file that is not canonical`, greppable `== canonical-files`: the step prints that line with 0 not canonical when the file equals the template with its holes filled (found with the run and job of the head under actions).\n\n## Execution", "pin_audit --repository")
   val evidence = _file_judge(dir, "adopt-clones/alpha.body.md", "\n## Evidence\n\n```\n$ git rev-parse HEAD\n", "")
-  val stat = _file_judge(dir, "adopt-clones/alpha.body.md", "$ git show --stat --format= HEAD\n .github/workflows/canonical-files.yml | ", "")
+  val stat =_file_judge(dir, "adopt-clones/alpha.body.md", "$ git show --stat --format= HEAD\n .github/workflows/canonical-files.yml | ", "")
   val head = _body_has_head(dir, "alpha", "adopt-7", "/adopt-clones/alpha.body.md")
   val footer = _file_ends(dir, "adopt-clones/alpha.body.md", " Generated with [Claude Code](https://claude.com/claude-code)\n")
   val footer_line = _has_line(dir, "/adopt-clones/alpha.body.md", "🤖 Generated with [Claude Code](https://claude.com/claude-code)")
   val head_line = _file_judge(dir, "adopt-clones/alpha.body.md", "```\n\nHead: ", "")
-in ran && first && plan && execution && evidence && stat && head && footer && footer_line && head_line end
+in ran && first && plan && pointer && execution && evidence && stat && head && footer && footer_line && head_line end
 
 (* The pull request body lint of the organisation (tools/text-lint, built before this test) finds nothing in the body for the pushed head *)
 fn test_body_passes_the_body_lint (): bool = let
