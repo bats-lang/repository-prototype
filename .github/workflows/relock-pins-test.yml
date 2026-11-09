@@ -22,9 +22,10 @@
 # all current (changed is no, no patch, no body); the first job above, which
 # gives neither input and whose workflows hold no third-party action, must have
 # no `### Actions` section (a caller that passes nothing new is relocked as
-# before). `actions-left` runs the awk programs between the `actions-left` and
-# `actions-bullet` markers of relock-pins.yml, which list the moves a run with
-# no RELOCK_TOKEN cannot make as `not moved`, on fixture records.
+# before). `no-token` runs the text between the `no-token` markers of
+# relock-pins.yml (area: relock token, repository-prototype#593), which fails a
+# run that publishes with no RELOCK_TOKEN and a workflow pin or an action pin
+# to move and passes otherwise, on fixture pins and records.
 # `actions-fetch` gives neither input, so the releases of a fixture's real
 # actions/checkout pin (v4.0.0) are fetched from GitHub, and
 # `actions-fetch-check` requires a move to a v4 release at least 7 days old.
@@ -412,35 +413,46 @@ jobs:
           fi
           echo "no Actions section for a caller with no third-party action"
 
-  actions-left:
+  no-token:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Without a RELOCK_TOKEN the moves are listed as not moved
+      - name: Without a RELOCK_TOKEN a pin to move fails the run and none to move passes
         run: |
           set -eu
-          work="$RUNNER_TEMP/actions-left"
+          work="$RUNNER_TEMP/no-token"
           mkdir -p "$work"
           dir=tests/relock-pins/actions
-          # the programs as relock-pins.yml has them, between their markers
-          awk '/# actions-left end/ { on = 0 } on { print } /# actions-left begin/ { on = 1 }' \
-            .github/workflows/relock-pins.yml > "$work/split.awk"
-          awk '/# actions-bullet end/ { on = 0 } on { print } /# actions-bullet begin/ { on = 1 }' \
-            .github/workflows/relock-pins.yml > "$work/bullet.awk"
-          [ -s "$work/split.awk" ] && [ -s "$work/bullet.awk" ] \
-            || { echo "::error::no actions-left or actions-bullet program in relock-pins.yml"; exit 1; }
-          : > "$work/shown"
-          : > "$work/left"
-          awk -F'\t' -v shown="$work/shown" -v left="$work/left" -f "$work/split.awk" "$dir/records-left.txt"
-          cmp "$work/shown" "$dir/shown.expected.txt" \
-            || { echo "::error::the records kept in the table are not the expected ones"; diff "$dir/shown.expected.txt" "$work/shown" || true; exit 1; }
-          cmp "$work/left" "$dir/left.expected.txt" \
-            || { echo "::error::the moves not made are not the expected ones"; diff "$dir/left.expected.txt" "$work/left" || true; exit 1; }
-          awk -F'\t' -f "$work/bullet.awk" "$work/left" > "$work/bullets"
-          cat "$work/bullets"
-          cmp "$work/bullets" "$dir/left.expected.md" \
-            || { echo "::error::the list of moves not made is not the expected one"; diff "$dir/left.expected.md" "$work/bullets" || true; exit 1; }
-          echo "a move that cannot be made is listed as not moved; the other records stay in the table"
+          # the text as relock-pins.yml has it, between its markers
+          awk '/# no-token end/ { on = 0 } on { print } /# no-token begin/ { on = 1 }' \
+            .github/workflows/relock-pins.yml > "$work/rule.sh"
+          [ -s "$work/rule.sh" ] || { echo "::error::no no-token text in relock-pins.yml"; exit 1; }
+          mkdir -p "$work/home/relock"
+          pin='publish.yml bats-lang/repository-prototype 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222'
+          # play NAME TOKEN PUBLISH PINS RECORDS EXPECTED: EXPECTED is the exit status
+          play() {
+            name="$1"; token="$2"; publish="$3"; pins="$4"; records="$5"; expected="$6"
+            printf '%s' "$pins" > "$work/home/relock/pins"
+            cp "$records" "$work/home/relock/actions-records"
+            status=0
+            HOME="$work/home" HAS_RELOCK_TOKEN="$token" PUBLISH="$publish" bash "$work/rule.sh" > "$work/$name.out" 2>&1 || status=$?
+            cat "$work/$name.out"
+            [ "$status" -eq "$expected" ] || { echo "::error::case $name: exit status $status, expected $expected"; exit 1; }
+            if [ "$expected" -ne 0 ]; then
+              grep -q '^::error::RELOCK_TOKEN is not set' "$work/$name.out" \
+                || { echo "::error::case $name: the error does not name RELOCK_TOKEN"; exit 1; }
+            fi
+            echo "case $name: ok"
+          }
+          # a workflow pin to move, no token, publishing: fails
+          play pin-no-token false true "$pin" "$dir/shown.expected.txt" 1
+          # an action pin to move, no token, publishing: fails
+          play action-no-token false true '' "$dir/records-left.txt" 1
+          # nothing to move: passes without the token (major, too new and current rows are not moves)
+          play none-no-token false true '' "$dir/shown.expected.txt" 0
+          # the nearest inputs that must still pass: a token, or a run that publishes nothing
+          play pin-token true true "$pin" "$dir/records-left.txt" 0
+          play pin-no-publish false false "$pin" "$dir/records-left.txt" 0
 
   actions-fetch:
     if: inputs.refusal == ''
