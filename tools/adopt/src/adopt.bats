@@ -14,11 +14,15 @@
    writes the template with its holes filled at its path
    (.github/workflows/<file>, or .github/ISSUE_TEMPLATE/<file>) on the
    branch adopt-TICKET, pushes the branch and opens a draft pull request
-   with gh, whose body it makes (first line `Fixes bats-lang/NAME#TICKET`,
-   Plan, Execution, Evidence, `Head:` and the footer), and prints a line for
-   the repository: its pull request, its head and its state. A repository
-   that already has the file as the template gives is left alone ("no-op"),
-   and so is one whose branch is already pushed; one whose file differs is
+   with the REST API (`gh api repos/bats-lang/NAME/pulls -X POST`, never
+   `gh pr create`, which is GraphQL and refused; #611), whose body it makes
+   (first line `Fixes bats-lang/NAME#TICKET`, Plan, Execution, Evidence,
+   `Head:` and the footer), and prints a line for the repository: its pull
+   request, its head and its state. A repository that already has the file as
+   the template gives is left alone ("no-op"), and so is one whose branch is
+   already pushed and has an open pull request; one whose branch is pushed
+   with no open pull request gets the pull request opened from the branch's
+   tip (the body made from that commit); one whose file differs is
    refused with the first byte that differs (the file is the repository's
    own to change, not adopt's). --only NAME does the one repository of the
    list and prints the file it wrote. The exit status is 1 when a
@@ -237,6 +241,18 @@ fn _title_arg {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), template: r
   val @(arr, k) = $B.to_arr(out)
 in @(arr, k) end
 
+(* `title=Adopt <template> at repository-prototype <commit>`: the title as a field of gh api *)
+fn _title_field {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), template: range(n), commit: range(n)): $P.arg_entry = let
+  val @(ts, te) = template
+  val @(cs, ce) = commit
+  var out : $B.builder(0) = $B.create()
+  val () = $B.bput(out, "title=Adopt ")
+  val () = put_range(a, ts, te, out)
+  val () = $B.bput(out, " at repository-prototype ")
+  val () = put_range(a, cs, ce, out)
+  val @(arr, k) = $B.to_arr(out)
+in @(arr, k) end
+
 (* ============================================================
    The pull request's body
    ============================================================ *)
@@ -314,12 +330,6 @@ fn _refuse {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), name: range(n)
   val () = println! ("- - refused: ", reason)
 in 1 end
 
-(* A repository adopt leaves alone: not counted (0) *)
-fn _leave {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), name: range(n), reason: string): int = let
-  val () = _line(a, name)
-  val () = println! ("- - no-op: ", reason)
-in 0 end
-
 (* git -C <the clone> and the arguments *)
 fn _git_in {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), name: range(n), rest: $L.listv($P.arg_entry)): $L.listv($P.arg_entry) =
   $L.list_vt_cons(arg_text("-C"), $L.list_vt_cons(_clone_arg(a, name, ""), rest))
@@ -334,47 +344,32 @@ fn _body_path {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), name: range
   val @(arr, k) = $B.to_arr(out)
 in @(arr, k) end
 
-(* The pull request, once the file is written in the clone: the branch, the commit, the push, the body and gh; the failures counted *)
-fn _publish {a_l:agz}{n:pos | n <= 4096}
-  (a: !$A.borrow(byte, a_l, n), name: range(n), ticket: range(n), template: range(n), is_issue: bool, commit: range(n), comment: range(n)): int = let
+(* Two arguments in front of the rest of a list *)
+fn _push2 (x: $P.arg_entry, y: $P.arg_entry, rest: $L.listv($P.arg_entry)): $L.listv($P.arg_entry) =
+  $L.list_vt_cons(x, $L.list_vt_cons(y, rest))
+
+(* The pull request of the branch adopt-TICKET at its tip rev (HEAD of the clone, or FETCH_HEAD of a branch fetched), with the REST API
+   (keyword: rest pull request; gh pr create is GraphQL, which is refused): the head, the push (when push), the body and gh api; the failures counted *)
+fn _open {a_l:agz}{n:pos | n <= 4096}{rev_len:nat | rev_len <= 1000}
+  (a: !$A.borrow(byte, a_l, n), name: range(n), ticket: range(n), template: range(n), is_issue: bool, commit: range(n), comment: range(n),
+   rev: string rev_len, push: bool): int = let
   val @(ns, ne) = name
   val @(ks, ke) = ticket
-  var remote : $B.builder(0) = $B.create()
-  val @(listed, _) = capture_with("git",
-    $L.list_vt_cons(arg_text("git"), _git_in(a, name, $L.list_vt_cons(arg_text("ls-remote"), args3(arg_text("--heads"), arg_text("origin"), arg_range("refs/heads/adopt-", a, ks, ke, ""))))),
-    no_arguments(), remote)
-  val @(remote_array, remote_len) = $B.to_arr(remote)
-  val () = $A.free<byte>(remote_array)
-in
-  if listed != 0 then _fail(a, name, "git ls-remote", listed)
-  else if remote_len > 0 then _leave(a, name, "the branch is already pushed")
-  else let
-    val checked = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("checkout"), args3(arg_text("--quiet"), arg_text("-b"), arg_range("adopt-", a, ks, ke, "")))))
-  in
-    if checked != 0 then _fail(a, name, "git checkout", checked)
-    else let
-      val added = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("add"), args2(arg_text("--"), _relative_arg(a, template, is_issue)))))
-    in
-      if added != 0 then _fail(a, name, "git add", added)
-      else let
-        val committed = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("commit"), args3(arg_text("--quiet"), arg_text("-m"), _title_arg(a, template, commit)))))
-      in
-        if committed != 0 then _fail(a, name, "git commit", committed)
-        else let
-          var head : $B.builder(0) = $B.create()
-          val @(parsed, _) = capture_with("git", $L.list_vt_cons(arg_text("git"), _git_in(a, name, args2(arg_text("rev-parse"), arg_text("HEAD")))), no_arguments(), head)
+  var head : $B.builder(0) = $B.create()
+          val @(parsed, _) = capture_with("git", $L.list_vt_cons(arg_text("git"), _git_in(a, name, args2(arg_text("rev-parse"), arg_text(rev)))), no_arguments(), head)
           val @(head_array, head_len) = $B.to_arr(head)
           val @(head_frozen, head_view) = $A.freeze<byte>(head_array)
           val head_ok = (parsed = 0 && hex_step(head_view, head_len, 0, 40) >= 0): bool
           val result =
-            (if ~head_ok then _fail(a, name, "git rev-parse HEAD", parsed)
+            (if ~head_ok then _fail(a, name, "git rev-parse", parsed)
              else let
-               val pushed = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("push"), args3(arg_text("--quiet"), arg_text("origin"), arg_range("adopt-", a, ks, ke, "")))))
+               val pushed =
+                 (if push then run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("push"), args3(arg_text("--quiet"), arg_text("origin"), arg_range("adopt-", a, ks, ke, ""))))) else 0): int
              in
                if pushed != 0 then _fail(a, name, "git push", pushed)
                else let
                  var stat : $B.builder(0) = $B.create()
-                 val @(shown, _) = capture_with("git", $L.list_vt_cons(arg_text("git"), _git_in(a, name, $L.list_vt_cons(arg_text("show"), args3(arg_text("--stat"), arg_text("--format="), arg_text("HEAD"))))), no_arguments(), stat)
+                 val @(shown, _) = capture_with("git", $L.list_vt_cons(arg_text("git"), _git_in(a, name, $L.list_vt_cons(arg_text("show"), args3(arg_text("--stat"), arg_text("--format="), arg_text(rev))))), no_arguments(), stat)
                  val @(stat_array, stat_len) = $B.to_arr(stat)
                  val @(stat_frozen, stat_view) = $A.freeze<byte>(stat_array)
                  val written =
@@ -385,18 +380,22 @@ in
                     else let
                       var url : $B.builder(0) = $B.create()
                       val @(opened, _) = capture_with("gh",
-                        $L.list_vt_cons(arg_text("gh"), $L.list_vt_cons(arg_text("pr"), $L.list_vt_cons(arg_text("create"),
-                        $L.list_vt_cons(arg_text("-R"), $L.list_vt_cons(arg_range("bats-lang/", a, ns, ne, ""),
-                        $L.list_vt_cons(arg_text("--draft"), $L.list_vt_cons(arg_text("--head"), $L.list_vt_cons(arg_range("adopt-", a, ks, ke, ""),
-                        $L.list_vt_cons(arg_text("--title"), $L.list_vt_cons(_title_arg(a, template, commit),
-                        $L.list_vt_cons(arg_text("--body-file"), $L.list_vt_cons(_clone_arg(a, name, ".body.md"), $L.list_vt_nil())))))))))))),
+                        $L.list_vt_cons(arg_text("gh"),
+                        _push2(arg_text("api"), arg_range("repos/bats-lang/", a, ns, ne, "/pulls"),
+                        _push2(arg_text("-X"), arg_text("POST"),
+                        _push2(arg_text("-f"), _title_field(a, template, commit),
+                        _push2(arg_text("-f"), arg_range("head=adopt-", a, ks, ke, ""),
+                        _push2(arg_text("-f"), arg_text("base=main"),
+                        _push2(arg_text("-F"), arg_text("draft=true"),
+                        _push2(arg_text("-F"), arg_range("body=@adopt-clones/", a, ns, ne, ".body.md"),
+                        args2(arg_text("--jq"), arg_text(".html_url")))))))))),
                         no_arguments(), url)
                       val @(url_array, url_len) = $B.to_arr(url)
                       val @(url_frozen, url_view) = $A.freeze<byte>(url_array)
                       val url_stop = find_byte(url_view, url_len, 0, 10)
                       val result =
-                        (if opened != 0 then _fail(a, name, "gh pr create", opened)
-                         else if url_stop <= 0 then _fail(a, name, "gh pr create printed no pull request", opened)
+                        (if opened != 0 then _fail(a, name, "gh api pulls", opened)
+                         else if url_stop <= 0 then _fail(a, name, "gh api pulls printed no pull request", opened)
                          else let
                            val () = _line(a, name)
                            val () = print_range(url_view, 0, url_stop)
@@ -412,7 +411,70 @@ in
              end): int
           val () = $A.drop<byte>(head_frozen, head_view)
           val () = $A.free<byte>($A.thaw<byte>(head_frozen))
-        in result end
+in result end
+
+(* The branch is already pushed: its open pull request, if it has one, is left alone (and said); else the pull request is opened from the branch's tip *)
+fn _resume {a_l:agz}{n:pos | n <= 4096}
+  (a: !$A.borrow(byte, a_l, n), name: range(n), ticket: range(n), template: range(n), is_issue: bool, commit: range(n), comment: range(n)): int = let
+  val @(ns, ne) = name
+  val @(ks, ke) = ticket
+  var found : $B.builder(0) = $B.create()
+  val @(listed, _) = capture_with("gh",
+    $L.list_vt_cons(arg_text("gh"),
+    _push2(arg_text("api"), arg_range("repos/bats-lang/", a, ns, ne, "/pulls"),
+    _push2(arg_text("-X"), arg_text("GET"),
+    _push2(arg_text("-f"), arg_range("head=bats-lang:adopt-", a, ks, ke, ""),
+    _push2(arg_text("-f"), arg_text("state=open"),
+    args2(arg_text("--jq"), arg_text(".[] | .html_url"))))))),
+    no_arguments(), found)
+  val @(found_array, found_len) = $B.to_arr(found)
+  val @(found_frozen, found_view) = $A.freeze<byte>(found_array)
+  val found_stop = find_byte(found_view, found_len, 0, 10)
+  val result =
+    (if listed != 0 then _fail(a, name, "gh api pulls list", listed)
+     else if found_len > 0 then
+       (if found_stop <= 0 then _fail(a, name, "gh api pulls list printed no address", listed)
+        else let
+          val () = _line(a, name)
+          val () = print! ("- - no-op: the branch is already pushed and has the open pull request ")
+          val () = print_range(found_view, 0, found_stop)
+        in (println! (); 0) end)
+     else let
+       val fetched = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("fetch"), args3(arg_text("--quiet"), arg_text("origin"), arg_range("adopt-", a, ks, ke, "")))))
+     in
+       if fetched != 0 then _fail(a, name, "git fetch", fetched)
+       else _open(a, name, ticket, template, is_issue, commit, comment, "FETCH_HEAD", false)
+     end): int
+  val () = $A.drop<byte>(found_frozen, found_view)
+  val () = $A.free<byte>($A.thaw<byte>(found_frozen))
+in result end
+
+(* The pull request, once the file is written in the clone: a branch not pushed is made, committed, pushed and opened; one pushed is resumed *)
+fn _publish {a_l:agz}{n:pos | n <= 4096}
+  (a: !$A.borrow(byte, a_l, n), name: range(n), ticket: range(n), template: range(n), is_issue: bool, commit: range(n), comment: range(n)): int = let
+  val @(ks, ke) = ticket
+  var remote : $B.builder(0) = $B.create()
+  val @(listed, _) = capture_with("git",
+    $L.list_vt_cons(arg_text("git"), _git_in(a, name, $L.list_vt_cons(arg_text("ls-remote"), args3(arg_text("--heads"), arg_text("origin"), arg_range("refs/heads/adopt-", a, ks, ke, ""))))),
+    no_arguments(), remote)
+  val @(remote_array, remote_len) = $B.to_arr(remote)
+  val () = $A.free<byte>(remote_array)
+in
+  if listed != 0 then _fail(a, name, "git ls-remote", listed)
+  else if remote_len > 0 then _resume(a, name, ticket, template, is_issue, commit, comment)
+  else let
+    val checked = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("checkout"), args3(arg_text("--quiet"), arg_text("-b"), arg_range("adopt-", a, ks, ke, "")))))
+  in
+    if checked != 0 then _fail(a, name, "git checkout", checked)
+    else let
+      val added = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("add"), args2(arg_text("--"), _relative_arg(a, template, is_issue)))))
+    in
+      if added != 0 then _fail(a, name, "git add", added)
+      else let
+        val committed = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("commit"), args3(arg_text("--quiet"), arg_text("-m"), _title_arg(a, template, commit)))))
+      in
+        if committed != 0 then _fail(a, name, "git commit", committed)
+        else _open(a, name, ticket, template, is_issue, commit, comment, "HEAD", true)
       end
     end
   end
