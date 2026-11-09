@@ -14,7 +14,7 @@
 #
 bats/.github/workflows/check.yml ee36bb7f494bb3169de50099777f82fee66f703a93dcc24032089ff3ac16f80f 8f22cab9a88a7aa0f167b1e3e24feb21055408c494b8f4c3cfb4a79e924df817 # bats#482
 bats/.github/workflows/relock.yml 0a9694b116fb154564aa7a91c673a5d5b96e941f18413112210e152cf540e4f9 9b014601af94b87f7994cd3be7dbd7dd8c53727321bf4db9f7ee62c746f5bb5a # bats#499
-quire/.github/workflows/check.yml 30e8a6ee99610af4f29d2559eb5c54fcec311e47179ba7ee0448c4a924c74255 # quire#896
+quire/.github/workflows/check.yml a7ed59da9d00fcde1deb787e5bb33c51483d46fb70615a61a73ac35db58755b8 # quire#1093
 quire/.github/workflows/deploy.yml 62bacb737c2a19ed97f3e64cf27963fd0498eaa62ff7e2ae57a30c86fc119d05 # quire#896
 quire/.github/workflows/guidelines-lint.yml bfff683e2c435aeacaf9c9e6ad5670ec282eaae48f67da811e3a68042f5ef238 # quire#815
 quire/.github/workflows/mutation.yml f108786dfc81178806a9283898bfa964e8ba1ccd0f63b8a0c03a053a41df1701 # quire#896
