@@ -25,8 +25,10 @@ jobs:
         bats-lang/repository-prototype/.github/workflows/publish.yml
         bats-lang/repository-prototype/.github/workflows/relock-pins.yml
         bats-lang/repository-prototype/.github/workflows/text-lint-check.yml
+        bats-lang/repository-prototype/.github/workflows/canonical-files-check.yml
       pin-copies: |
         bats-lang/repository-prototype/.github/workflows/text-lint-check.yml tools-ref
+        bats-lang/repository-prototype/.github/workflows/canonical-files-check.yml tools-ref
       repin-command: |
         sh tools/android-sdk-pins/relock.sh tools/android-sdk-pins
       repin-paths: |

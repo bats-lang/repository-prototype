@@ -24,5 +24,7 @@ jobs:
         bats-lang/repository-prototype/.github/workflows/package-check.yml
         bats-lang/repository-prototype/.github/workflows/relock-pins.yml
         bats-lang/repository-prototype/.github/workflows/text-lint-check.yml
+        bats-lang/repository-prototype/.github/workflows/canonical-files-check.yml
       pin-copies: |
         bats-lang/repository-prototype/.github/workflows/text-lint-check.yml tools-ref
+        bats-lang/repository-prototype/.github/workflows/canonical-files-check.yml tools-ref

@@ -121,9 +121,11 @@ jobs:
       workflows-directory: tests/relock-pins/workflows
       workflow-pins: |
         bats-lang/repository-prototype/.github/workflows/publish.yml
+        bats-lang/repository-prototype/.github/workflows/canonical-files-check.yml
         bats-lang/bats/.github/actions/setup
       pin-copies: |
         bats-lang/repository-prototype/.github/workflows/publish.yml source-ref
+        bats-lang/repository-prototype/.github/workflows/canonical-files-check.yml tools-ref
       # under workflows-directory: the patch stages .github and that directory only (#457)
       compiler-pin-file: tests/relock-pins/workflows/pins/bats-version
       repository-pin-file: tests/relock-pins/workflows/pins/repository-version
@@ -172,7 +174,7 @@ jobs:
           # The rule: each added line with `uses:` is exactly
           # `uses: <owner>/<repo>/<path>@<40 hex> # <repo> main <7 hex>`, the
           # 7 hex are the first of the 40, and the commit is not the old one.
-          # Three lines are expected: the scratch caller's.
+          # Four lines are expected: the scratch caller's.
           cat > "$RUNNER_TEMP/t/rule.sh" <<'RULE'
           set -eu
           count=0
@@ -196,7 +198,7 @@ jobs:
               67ebbf0c4744edce26584eef60ea26438945bab7|678ecb3*) echo "refused (not moved): $line"; exit 1 ;;
             esac
           done < "$1"
-          [ "$count" -eq 3 ] || { echo "refused: $count added uses lines, expected 3"; exit 1; }
+          [ "$count" -eq 4 ] || { echo "refused: $count added uses lines, expected 4"; exit 1; }
           RULE
           sh "$RUNNER_TEMP/t/rule.sh" "$RUNNER_TEMP/t/good.patch"
           echo "the moved lines carry the comment"
@@ -213,6 +215,19 @@ jobs:
             echo "::error::a line that is not a copy was changed"; exit 1
           fi
           echo "source-ref moved with the pin to $pin; other-ref was left alone"
+
+      # #605: canonical-files.yml's pin and its tools-ref copy, both on an older commit in the fixture, move to one commit
+      - name: The canonical-files-check.yml pin and its tools-ref copy move to the same commit
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP/t"
+          pin=$(awk '/^\+.*uses: bats-lang\/repository-prototype\/.github\/workflows\/canonical-files-check.yml@/ { t = $0; sub(/^.*@/, "", t); sub(/ .*$/, "", t); print t; exit }' good.patch)
+          copy=$(awk '/^\+ *tools-ref: / { print $3; exit }' good.patch)
+          [ -n "$pin" ] && [ "$copy" = "$pin" ] \
+            || { echo "::error::tools-ref is '$copy', the canonical-files-check.yml pin moved to '$pin'"; exit 1; }
+          grep -Fxq -- '-      tools-ref: 678ecb32ccab6a10bff3061dc7a6c6468d2b323d' good.patch \
+            || { echo "::error::tools-ref did not move from the fixture's older commit"; exit 1; }
+          echo "tools-ref moved with the canonical-files-check.yml pin to $pin"
 
       - name: A missing, a doubled and a wrong comment are refused
         run: |
@@ -1084,9 +1099,11 @@ jobs:
       # the scratch caller's outdated pins are this run's own: it is not vacuous when they move
       workflow-pins: |
         bats-lang/repository-prototype/.github/workflows/publish.yml
+        bats-lang/repository-prototype/.github/workflows/canonical-files-check.yml
         bats-lang/bats/.github/actions/setup
       pin-copies: |
         bats-lang/repository-prototype/.github/workflows/publish.yml source-ref
+        bats-lang/repository-prototype/.github/workflows/canonical-files-check.yml tools-ref
       npm-now: '1792800000'
       npm-node-version-file: tests/relock-pins/npm/project/.nvmrc
       gradle-now: '1792843200'

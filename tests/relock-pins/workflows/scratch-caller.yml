@@ -14,6 +14,10 @@ jobs:
       other-ref: 678ecb32ccab6a10bff3061dc7a6c6468d2b323d
   right-form-older-commit:
     uses: bats-lang/repository-prototype/.github/workflows/publish.yml@678ecb32ccab6a10bff3061dc7a6c6468d2b323d # repository-prototype main 678ecb3
+  canonical-files:
+    uses: bats-lang/repository-prototype/.github/workflows/canonical-files-check.yml@678ecb32ccab6a10bff3061dc7a6c6468d2b323d # repository-prototype main 678ecb3
+    with:
+      tools-ref: 678ecb32ccab6a10bff3061dc7a6c6468d2b323d
   no-comment:
     runs-on: ubuntu-24.04
     steps:
