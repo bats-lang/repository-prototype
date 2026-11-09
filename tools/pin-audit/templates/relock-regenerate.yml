@@ -39,5 +39,6 @@ jobs:
       workflow-pins: |
         bats-lang/repository-prototype/.github/workflows/relock-pins.yml
         bats-lang/repository-prototype/.github/workflows/text-lint-check.yml
+        bats-lang/repository-prototype/.github/actions/check-aggregate
       pin-copies: |
         bats-lang/repository-prototype/.github/workflows/text-lint-check.yml tools-ref
