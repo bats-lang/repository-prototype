@@ -592,6 +592,42 @@ fn test_quire_relock_both_forms_pass (): bool = let
   val () = _names(dir, "new-form\nold-form\n")
 in _judge(dir, 0, ".github/workflows/relock.yml: pass, equal to the template relock-quire.yml", ".github/workflows/relock.yml: pass, equal to the template relock-quire-before-text-lint.yml", "0 not canonical", "::error") end
 
+(* The old forms of the library and the compiler's relock callers (repository-prototype#605: before the canonical-files-check.yml pin and its tools-ref copy) stay beside the new ones for one cycle, each by its own template's name *)
+fn test_library_and_regenerating_relock_before_canonical_files_pass (): bool = let
+  val dir = "build/pin-audit-tests/before-canonical-files-a"
+  val () = _fresh(dir)
+  val () = _plant(dir, "library")
+  val () = _fill(dir, "library", "relock.yml", "templates/relock-before-canonical-files.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "7", ~1)
+  val () = _plant(dir, "regenerate")
+  val () = _fill(dir, "regenerate", "relock.yml", "templates/relock-regenerate-before-canonical-files.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "41", ~1)
+  val () = _commit(dir, "library")
+  val () = _commit(dir, "regenerate")
+  val () = _names(dir, "library\nregenerate\n")
+in _judge(dir, 0, ".github/workflows/relock.yml: pass, equal to the template relock-before-canonical-files.yml", ".github/workflows/relock.yml: pass, equal to the template relock-regenerate-before-canonical-files.yml", "0 not canonical", "::error") end
+
+(* The same for pwa's repin caller and quire's (repository-prototype#605) *)
+fn test_repinning_and_quire_relock_before_canonical_files_pass (): bool = let
+  val dir = "build/pin-audit-tests/before-canonical-files-b"
+  val () = _fresh(dir)
+  val () = _plant(dir, "repin")
+  val () = _fill(dir, "repin", "relock.yml", "templates/relock-repin-before-canonical-files.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "13", ~1)
+  val () = _plant(dir, "quire")
+  val () = _fill(dir, "quire", "relock.yml", "templates/relock-quire-before-canonical-files.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "17", ~1)
+  val () = _commit(dir, "repin")
+  val () = _commit(dir, "quire")
+  val () = _names(dir, "quire\nrepin\n")
+in _judge(dir, 0, ".github/workflows/relock.yml: pass, equal to the template relock-repin-before-canonical-files.yml", ".github/workflows/relock.yml: pass, equal to the template relock-quire-before-canonical-files.yml", "0 not canonical", "::error") end
+
+(* The nearest refused input: the new library form with one byte of the canonical-files-check.yml line changed (offset 851 of the template, inside `bats-lang`) is neither form *)
+fn test_library_relock_canonical_files_line_changed_fails (): bool = let
+  val dir = "build/pin-audit-tests/canonical-files-changed"
+  val () = _fresh(dir)
+  val () = _plant(dir, "changed")
+  val () = _fill(dir, "changed", "relock.yml", "templates/relock.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "7", 851)
+  val () = _commit(dir, "changed")
+  val () = _names(dir, "changed\n")
+in _judge(dir, 1, "::error title=pin audit::changed: .github/workflows/relock.yml: not canonical", "1 not canonical", "", "pass, equal") end
+
 (* The new form of the compiler's relock caller (repository-prototype#599: the check-aggregate action in workflow-pins) and the old form kept beside it for one cycle both pass, each by its own template's name *)
 fn test_regenerating_relock_check_aggregate_forms_pass (): bool = let
   val dir = "build/pin-audit-tests/regenerate-aggregate-forms"
@@ -1140,7 +1176,7 @@ fn test_issue_template_equal_passes (): bool = let
   val () = _fresh(dir)
   val () = _plant_with_issue_template(dir, "tidy", ~1)
   val () = _names(dir, "tidy\n")
-in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 17 read, 0 failing", "::error") end
+in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 21 read, 0 failing", "::error") end
 
 (* ... and the same file with one byte changed fails, named *)
 fn test_issue_template_one_byte_changed_fails (): bool = let
