@@ -1140,7 +1140,7 @@ fn test_issue_template_equal_passes (): bool = let
   val () = _fresh(dir)
   val () = _plant_with_issue_template(dir, "tidy", ~1)
   val () = _names(dir, "tidy\n")
-in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 16 read, 0 failing", "::error") end
+in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 17 read, 0 failing", "::error") end
 
 (* ... and the same file with one byte changed fails, named *)
 fn test_issue_template_one_byte_changed_fails (): bool = let
@@ -1205,5 +1205,177 @@ fn test_issue_template_ticket_shows_canonical (): bool = let
   val () = _expect_end(expected, "drift")
   val body = _body_is(dir, "drift", expected)
 in judged && body end
+
+(* ============================================================
+   canonical-files: pin_audit --check (bats-lang/repository-prototype#603)
+   ============================================================ *)
+
+(* The list of the changed paths of the case, as the workflow writes it: one path on each line *)
+fn _changes {dir_len,content_len:nat | dir_len < 200; content_len < 100000} (dir: string dir_len, content: string content_len): void = let
+  var text : $B.sized_rope = $B.sized_rope_create()
+  val () = $B.sized_rope_bput(text, content)
+  val _ = write_rope(join_path3(dir, "/", "changes.txt"), text)
+in () end
+
+(* `--check <repository> <head directory> changes.txt`: the head is the planted repository's working tree *)
+fn _check_options {repository_len,head_len:nat | repository_len < 100; head_len < 100} (repository: string repository_len, head: string head_len): $L.listv($P.arg_entry) =
+  $L.list_vt_cons(arg_text("--check"), $L.list_vt_cons(arg_text(repository), args2(arg_text(head), arg_text("changes.txt"))))
+
+(* A changed file that is neither a template nor listed is refused with its sha256 and the entry to add *)
+fn test_check_non_canonical_changed_file_is_refused (): bool = let
+  val dir = "build/pin-audit-tests/check-refused"
+  val () = _fresh(dir)
+  val () = _plant(dir, "bespoke")
+  val () = _workflow(dir, "bespoke", "own.yml", "name: own\non: push\n")
+  val () = _changes(dir, ".github/workflows/own.yml\n")
+in _judge_run(dir, _check_options("bespoke", "planted/bespoke.git"), "GH_TOKEN=", 1,
+     "::error title=pin audit::bespoke: .github/workflows/own.yml: not canonical: its sha256 c827200992319731f2099c53f3a4e356dba9163637f3494c3a0af6ae48499340 is not listed",
+     "   bespoke/.github/workflows/own.yml c827200992319731f2099c53f3a4e356dba9163637f3494c3a0af6ae48499340 # <repository>#",
+     "1 changed workflow or issue-template files: 0 passed by an allowlisted hash, 0 passed by a template, 1 not canonical", "pass, its") end
+
+(* ... a file listed with its old hash gets the line with the new hash as the next one, the comment kept *)
+fn test_check_listed_file_changed_gets_the_next_hash_line (): bool = let
+  val dir = "build/pin-audit-tests/check-next-line"
+  val () = _fresh(dir)
+  val () = _plant(dir, "bespoke")
+  val () = _workflow(dir, "bespoke", "own.yml", "name: next\non: push\n")
+  val () = _changes(dir, ".github/workflows/own.yml\n")
+  val () = _allow(dir, "bespoke/.github/workflows/own.yml", "name: own\non: push\n", "", "bespoke#1")
+in _judge_run(dir, _check_options("bespoke", "planted/bespoke.git"), "GH_TOKEN=", 1,
+     "not canonical: its sha256 0622510f36059d31967295fa89aac42a499d125f130e228fb20e9f75875173c3 is not listed",
+     "   bespoke/.github/workflows/own.yml c827200992319731f2099c53f3a4e356dba9163637f3494c3a0af6ae48499340 0622510f36059d31967295fa89aac42a499d125f130e228fb20e9f75875173c3 # bespoke#1\n",
+     "1 not canonical", "<repository>#") end
+
+(* ... one listed with two hashes, neither the file's, gets the line without the first hash (a third is not an entry) *)
+fn test_check_third_hash_is_refused_and_the_first_dropped (): bool = let
+  val dir = "build/pin-audit-tests/check-third"
+  val () = _fresh(dir)
+  val () = _plant(dir, "bespoke")
+  val () = _workflow(dir, "bespoke", "own.yml", "name: third\non: push\n")
+  val () = _changes(dir, ".github/workflows/own.yml\n")
+  val () = _allow(dir, "bespoke/.github/workflows/own.yml", "name: own\non: push\n", "name: next\non: push\n", "bespoke#1")
+in _judge_run(dir, _check_options("bespoke", "planted/bespoke.git"), "GH_TOKEN=", 1,
+     "not canonical: its sha256 8b01d26399fcc47e52fc740101c2c74a75e369a560dd98ff5dda22de0289ce28 is not listed",
+     "   bespoke/.github/workflows/own.yml 0622510f36059d31967295fa89aac42a499d125f130e228fb20e9f75875173c3 8b01d26399fcc47e52fc740101c2c74a75e369a560dd98ff5dda22de0289ce28 # bespoke#1\n",
+     "1 not canonical", "bespoke/.github/workflows/own.yml c827") end
+
+(* A changed file whose next hash is listed passes *)
+fn test_check_next_hash_passes (): bool = let
+  val dir = "build/pin-audit-tests/check-next"
+  val () = _fresh(dir)
+  val () = _plant(dir, "bespoke")
+  val () = _workflow(dir, "bespoke", "own.yml", "name: next\non: push\n")
+  val () = _changes(dir, ".github/workflows/own.yml\n")
+  val () = _allow(dir, "bespoke/.github/workflows/own.yml", "name: own\non: push\n", "name: next\non: push\n", "bespoke#1")
+in _judge_run(dir, _check_options("bespoke", "planted/bespoke.git"), "GH_TOKEN=", 0,
+     "own.yml: pass, its sha256 is the next hash of tools/pin-audit/allowlist.txt line 1", "1 passed by an allowlisted hash", "", "::error") end
+
+(* ... and one whose current hash is listed *)
+fn test_check_current_hash_passes (): bool = let
+  val dir = "build/pin-audit-tests/check-current"
+  val () = _fresh(dir)
+  val () = _plant(dir, "bespoke")
+  val () = _workflow(dir, "bespoke", "own.yml", "name: own\non: push\n")
+  val () = _changes(dir, ".github/workflows/own.yml\n")
+  val () = _allow(dir, "bespoke/.github/workflows/own.yml", "name: own\non: push\n", "name: next\non: push\n", "bespoke#1")
+in _judge_run(dir, _check_options("bespoke", "planted/bespoke.git"), "GH_TOKEN=", 0,
+     "own.yml: pass, its sha256 is the current hash of tools/pin-audit/allowlist.txt line 1", "1 passed by an allowlisted hash", "", "::error") end
+
+(* A changed file equal to a template with its holes filled passes *)
+fn test_check_template_equal_passes (): bool = let
+  val dir = "build/pin-audit-tests/check-template"
+  val () = _fresh(dir)
+  val () = _plant(dir, "ok")
+  val () = _fill(dir, "ok", "check.yml", "templates/check.yml", "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", "17", ~1)
+  val () = _changes(dir, ".github/workflows/check.yml\n")
+in _judge_run(dir, _check_options("ok", "planted/ok.git"), "GH_TOKEN=", 0,
+     ".github/workflows/check.yml: pass, equal to the template check.yml with its holes filled", "1 passed by a template", "", "::error") end
+
+(* ... the same file with one byte changed is refused *)
+fn test_check_template_one_byte_changed_is_refused (): bool = let
+  val dir = "build/pin-audit-tests/check-template-changed"
+  val () = _fresh(dir)
+  val () = _plant(dir, "ok")
+  val () = _fill(dir, "ok", "check.yml", "templates/check.yml", "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", "17", 100)
+  val () = _changes(dir, ".github/workflows/check.yml\n")
+in _judge_run(dir, _check_options("ok", "planted/ok.git"), "GH_TOKEN=", 1,
+     "::error title=pin audit::ok: .github/workflows/check.yml: not canonical", "1 not canonical", "", "pass, equal") end
+
+(* The caller template of this check, filled, passes by its own name *)
+fn test_check_canonical_files_caller_passes (): bool = let
+  val dir = "build/pin-audit-tests/check-caller"
+  val () = _fresh(dir)
+  val () = _plant(dir, "ok")
+  val () = _fill(dir, "ok", "canonical-files.yml", "templates/canonical-files.yml", "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", "17", ~1)
+  val () = _changes(dir, ".github/workflows/canonical-files.yml\n")
+in _judge_run(dir, _check_options("ok", "planted/ok.git"), "GH_TOKEN=", 0,
+     ".github/workflows/canonical-files.yml: pass, equal to the template canonical-files.yml with its holes filled", "1 passed by a template", "", "::error") end
+
+(* Only the changed files are judged: a file of the head that is not canonical and not in the list is not read *)
+fn test_check_unchanged_file_is_not_judged (): bool = let
+  val dir = "build/pin-audit-tests/check-unchanged"
+  val () = _fresh(dir)
+  val () = _plant(dir, "ok")
+  val () = _fill(dir, "ok", "check.yml", "templates/check.yml", "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", "17", ~1)
+  val () = _workflow(dir, "ok", "own.yml", "name: own\non: push\n")
+  val () = _changes(dir, ".github/workflows/check.yml\n")
+in _judge_run(dir, _check_options("ok", "planted/ok.git"), "GH_TOKEN=", 0,
+     "1 changed workflow or issue-template files: 0 passed by an allowlisted hash, 1 passed by a template, 0 not canonical", "check.yml: pass", "", "own.yml") end
+
+(* A changed file the head does not have (deleted) is not judged *)
+fn test_check_deleted_file_is_not_judged (): bool = let
+  val dir = "build/pin-audit-tests/check-deleted"
+  val () = _fresh(dir)
+  val () = _plant(dir, "ok")
+  val () = _changes(dir, ".github/workflows/gone.yml\n")
+in _judge_run(dir, _check_options("ok", "planted/ok.git"), "GH_TOKEN=", 0,
+     ".github/workflows/gone.yml: not in the head (deleted or renamed away), not judged", "0 changed workflow or issue-template files", "", "::error") end
+
+(* A path that is not a workflow or issue-template file of the repository itself is not judged, whatever the head holds there *)
+fn test_check_other_paths_are_not_judged (): bool = let
+  val dir = "build/pin-audit-tests/check-other"
+  val () = _fresh(dir)
+  val () = _plant(dir, "ok")
+  val () = _put(dir, "ok", "", "README.md", "not a workflow\n")
+  val () = _put(dir, "ok", ".github/workflows/sub/", "deep.yml", "name: deep\n")
+  val () = _put(dir, "ok", ".github/workflows/", "notes.txt", "notes\n")
+  val () = _changes(dir, "README.md\n.github/workflows/sub/deep.yml\n.github/workflows/notes.txt\n")
+in _judge_run(dir, _check_options("ok", "planted/ok.git"), "GH_TOKEN=", 0,
+     "0 changed workflow or issue-template files", "allowlist: 0 entries", "", "::error") end
+
+(* A changed issue-template file is judged as the audit judges it: canonical passes, one byte changed is refused *)
+fn test_check_issue_template_equal_passes (): bool = let
+  val dir = "build/pin-audit-tests/check-issue-equal"
+  val () = _fresh(dir)
+  val () = _plant(dir, "tidy")
+  val () = _issue_template(dir, "tidy", "ticket.md", ~1)
+  val () = _changes(dir, ".github/ISSUE_TEMPLATE/ticket.md\n")
+in _judge_run(dir, _check_options("tidy", "planted/tidy.git"), "GH_TOKEN=", 0,
+     ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 passed by a template", "", "::error") end
+
+fn test_check_issue_template_one_byte_changed_is_refused (): bool = let
+  val dir = "build/pin-audit-tests/check-issue-changed"
+  val () = _fresh(dir)
+  val () = _plant(dir, "drift")
+  val () = _issue_template(dir, "drift", "ticket.md", 100)
+  val () = _changes(dir, ".github/ISSUE_TEMPLATE/ticket.md\n")
+in _judge_run(dir, _check_options("drift", "planted/drift.git"), "GH_TOKEN=", 1,
+     "::error title=pin audit::drift: .github/ISSUE_TEMPLATE/ticket.md: not canonical", "1 not canonical", "", "pass, equal") end
+
+(* The arguments are exactly the three values: fewer or more are refused with status 2 *)
+fn test_check_arguments_are_refused (): bool = let
+  val dir = "build/pin-audit-tests/check-arguments"
+  val () = _fresh(dir)
+  val () = _changes(dir, "")
+  val few = _judge_run(dir, args2(arg_text("--check"), arg_text("ok")), "GH_TOKEN=", 2, "usage: pin_audit", "--check <repository> <head directory> <changes file>", "", "::error")
+  val many = _judge_run(dir, $L.list_vt_cons(arg_text("--check"), $L.list_vt_cons(arg_text("ok"), args3(arg_text("planted/ok.git"), arg_text("changes.txt"), arg_text("extra")))), "GH_TOKEN=", 2, "usage: pin_audit", "", "", "::error")
+in few && many end
+
+(* A list of changed files that cannot be read fails, named *)
+fn test_check_missing_changes_file_fails (): bool = let
+  val dir = "build/pin-audit-tests/check-no-list"
+  val () = _fresh(dir)
+in _judge_run(dir, $L.list_vt_cons(arg_text("--check"), $L.list_vt_cons(arg_text("ok"), args2(arg_text("planted/ok.git"), arg_text("absent.txt")))), "GH_TOKEN=", 1,
+     "::error title=pin audit::the list of changed files could not be read", "", "", "pass") end
 
 end

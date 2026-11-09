@@ -212,3 +212,79 @@ end
 
 implement allowlist_find (allowlist_text, allowlist_len, repository_text, repository_start, repository_end, path_text, path_start, path_end, hash_text) =
   _find(allowlist_text, allowlist_len, 0, repository_text, repository_start, repository_end, path_text, path_start, path_end, hash_text, 1)
+
+(* The entry text[i, key_end) keeping the hash text[keep, keep + 64), then the new hash, then the rest of the line from tail *)
+fn _print_entry {allowlist_loc,hash_loc:agz}{i,key_end,keep,tail,j:nat | i <= key_end; key_end < keep; keep + 64 <= tail; tail <= j; j <= 524288}
+  (allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), i: int i, key_end: int key_end, keep: int keep, tail: int tail, j: int j,
+   hash_text: !$A.borrow(byte, hash_loc, 64)): void = let
+  val () = print_range(allowlist_text, i, key_end)
+  val () = print! (" ")
+  val () = print_range(allowlist_text, keep, keep + 64)
+  val () = print! (" ")
+  val () = print_range(hash_text, 0, 64)
+  val () = print_range(allowlist_text, tail, j)
+in println! () end
+
+(* The entry text[i, j) when it lists the file path_text[path_start, path_end) of the repository
+   repository_text[repository_start, repository_end) (with any hashes): its next-hash line printed, and true *)
+fn _print_here {allowlist_loc,repository_loc,path_loc,hash_loc:agz}{i,j:nat | i <= j; j <= 524288}{repository_start,repository_end:nat | repository_start <= repository_end; repository_end <= 524288}{path_start,path_end:nat | path_start <= path_end; path_end <= 524288}
+  (allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), i: int i, j: int j,
+   repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
+   path_text: !$A.borrow(byte, path_loc, 524288), path_start: int path_start, path_end: int path_end,
+   hash_text: !$A.borrow(byte, hash_loc, 64)): bool = let
+  val key_end = i + (repository_end - repository_start) + 1 + (path_end - path_start)
+in
+  if key_end + 65 > j then false
+  else if ~range_eq(repository_text, repository_start, repository_end, allowlist_text, i) then false
+  else if byte2int0($A.read<byte>(allowlist_text, i + (repository_end - repository_start))) != 47 then false
+  else if ~range_eq(path_text, path_start, path_end, allowlist_text, i + (repository_end - repository_start) + 1) then false
+  else if byte2int0($A.read<byte>(allowlist_text, key_end)) != 32 then false
+  else let
+    (* two hashes: the next one becomes the current one, a third is not an entry *)
+    val () =
+      (if key_end + 130 <= j then
+         (if byte2int0($A.read<byte>(allowlist_text, key_end + 65)) = 32 then _print_entry(allowlist_text, i, key_end, key_end + 66, key_end + 130, j, hash_text)
+          else _print_entry(allowlist_text, i, key_end, key_end + 1, key_end + 65, j, hash_text))
+       else _print_entry(allowlist_text, i, key_end, key_end + 1, key_end + 65, j, hash_text))
+  in true end
+end
+
+fun _print_next {allowlist_loc,repository_loc,path_loc,hash_loc:agz}{allowlist_len:nat | allowlist_len <= 524288}{i:nat | i <= allowlist_len}{repository_start,repository_end:nat | repository_start <= repository_end; repository_end <= 524288}{path_start,path_end:nat | path_start <= path_end; path_end <= 524288} .<allowlist_len - i>.
+  (allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len, i: int i,
+   repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
+   path_text: !$A.borrow(byte, path_loc, 524288), path_start: int path_start, path_end: int path_end,
+   hash_text: !$A.borrow(byte, hash_loc, 64)): bool = let
+  val j = line_end(allowlist_text, allowlist_len, i)
+  val valid =
+    (if j > i && byte2int0($A.read<byte>(allowlist_text, i)) != 35 then _is_valid(entry_check(allowlist_text, i, j)) else false): bool
+  val printed =
+    (if valid then _print_here(allowlist_text, i, j, repository_text, repository_start, repository_end, path_text, path_start, path_end, hash_text) else false): bool
+in
+  if printed then true
+  else if j >= allowlist_len then false
+  else _print_next(allowlist_text, allowlist_len, j + 1, repository_text, repository_start, repository_end, path_text, path_start, path_end, hash_text)
+end
+
+(* The allowlist line that makes the file path_text[path_start, path_end) of the repository
+   repository_text[repository_start, repository_end) with the sha256 hash_text[0, 64) canonical,
+   printed (bats-lang/repository-prototype#603, keyword: canonical-files): the entry of the file with its hash
+   as the next one (the old next hash becomes the current one when the entry has two), the comment kept; a
+   file no entry lists gets a new entry whose comment is for the writer to fill *)
+#pub fn allowlist_print_next {allowlist_loc,repository_loc,path_loc,hash_loc:agz}{allowlist_len:nat | allowlist_len <= 524288}{repository_start,repository_end:nat | repository_start <= repository_end; repository_end <= 524288}{path_start,path_end:nat | path_start <= path_end; path_end <= 524288}
+  (allowlist_text: !$A.borrow(byte, allowlist_loc, 524288), allowlist_len: int allowlist_len,
+   repository_text: !$A.borrow(byte, repository_loc, 524288), repository_start: int repository_start, repository_end: int repository_end,
+   path_text: !$A.borrow(byte, path_loc, 524288), path_start: int path_start, path_end: int path_end,
+   hash_text: !$A.borrow(byte, hash_loc, 64)): void
+
+implement allowlist_print_next (allowlist_text, allowlist_len, repository_text, repository_start, repository_end, path_text, path_start, path_end, hash_text) = let
+  val found = _print_next(allowlist_text, allowlist_len, 0, repository_text, repository_start, repository_end, path_text, path_start, path_end, hash_text)
+in
+  if found then ()
+  else let
+    val () = print_range(repository_text, repository_start, repository_end)
+    val () = print! ("/")
+    val () = print_range(path_text, path_start, path_end)
+    val () = print! (" ")
+    val () = print_range(hash_text, 0, 64)
+  in println! (" # <repository>#<the ticket that says to fix the file>") end
+end
