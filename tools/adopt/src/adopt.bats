@@ -1,7 +1,11 @@
 (* adopt -- adopts a template of tools/pin-audit/templates in repositories
    (bats-lang/repository-prototype#607). Keyword: adopt.
 
-   adopt [--only NAME] TEMPLATE COMMIT COMMENT NAME#TICKET...
+   adopt [--only NAME] [--as FILE] TEMPLATE COMMIT COMMENT NAME#TICKET...
+
+   --as FILE is the name the template is written as in .github/workflows
+   (relock-regenerate.yml is a form of relock.yml: --as relock.yml,
+   bats-lang/repository-prototype#619); by default the template's own name.
 
    Run at the root of a checkout of repository-prototype. TEMPLATE is a file
    of tools/pin-audit/templates (canonical-files.yml, or
@@ -28,8 +32,16 @@
    list and prints the file it wrote. The exit status is 1 when a
    repository is refused or failed, 2 for arguments it does not take.
 
-   A template with a @@MINUTE@@ hole is refused: the minute is chosen once
-   for a repository and adopt does not choose it. Nothing here reads YAML.
+   A @@MINUTE@@ hole (the minute of a relock's cron line, chosen once for a
+   repository, bats-lang/repository-prototype#619) is filled for each
+   repository from the file it has, by the rule of pin_audit --file-tickets:
+   the digits (one or two) that follow the template's own text from the start
+   of the line of the hole up to the hole, else 17. adopt prints the minute it
+   used for each repository (`NAME: minute 41, ...`). A file that differs from
+   the template is the repository's own and is refused, except when the
+   template has a @@MINUTE@@ hole and the file has that cron line: it is a
+   caller of this shape (an older form of the template), so it is replaced and
+   the pull request shows the diff. Nothing here reads YAML.
 
    Bounds: a name, a template, a comment and a ticket are at most 255
    bytes, a text at most 524288 bytes. *)
@@ -141,28 +153,83 @@ fun _survey {l:agz}{n:pos | n <= 4096}{len:nat | len <= n}{at:nat | at <= len} .
    The file: a template with its holes filled
    ============================================================ *)
 
-(* The template t[at, tlen) written to out with @@COMMIT@@ replaced by a[cs, ce) and @@COMMENT@@ by a[ms, me):
-   false when it has a @@MINUTE@@ hole, which adopt does not fill *)
-fun _fill {t_l,a_l:agz}{tlen:nat | tlen <= 524288}{n:pos}{cs,ce,ms,me:nat | cs <= ce; ce <= n; ms <= me; me <= n}{at:nat | at <= tlen} .<tlen - at>.
+(* The start of the line of t[0, tlen) that holds the place at *)
+fun _line_start {l:agz}{n:pos}{tlen:nat | tlen <= n}{at:nat | at <= tlen} .<at>.
+  (t: !$A.borrow(byte, l, n), tlen: int tlen, at: int at): [start:nat | start <= at] int start =
+  if at <= 0 then 0
+  else if byte2int0($A.read<byte>(t, at - 1)) = 10 then at
+  else _line_start(t, tlen, at - 1)
+
+(* The first place at or after at of t[0, tlen) where the minute hole begins, or ~1 *)
+fun _hole_at {l:agz}{n:pos}{tlen:nat | tlen <= n}{at:nat | at <= tlen} .<tlen - at>.
+  (t: !$A.borrow(byte, l, n), tlen: int tlen, at: int at): [hole:int | hole < 0 || (hole >= at && hole <= tlen)] int hole =
+  if at >= tlen then ~1
+  else if lit_step(t, tlen, at, "@@MINUTE@@") >= 0 then at
+  else _hole_at(t, tlen, at + 1)
+
+(* The first place p at or after from of e[0, elen) that holds t[prefix_start, hole) and then a digit: the place of the
+   digits (at most two) and how many; none is a count of 0 *)
+fun _find_minute {t_l,e_l:agz}{elen:nat | elen <= 524288}{prefix_start,hole:nat | prefix_start <= hole; hole <= 524288}{from:nat | from <= elen} .<elen - from>.
+  (t: !$A.borrow(byte, t_l, 524288), prefix_start: int prefix_start, hole: int hole,
+   e: !$A.borrow(byte, e_l, 524288), elen: int elen, from: int from)
+  : [digits_start,digit_count:nat | digit_count <= 2; digits_start + digit_count <= elen] @(int digits_start, int digit_count) =
+  if from >= elen then @(0, 0)
+  else let
+    val digits_at = from + (hole - prefix_start)
+  in
+    if digits_at > elen then @(0, 0)
+    else if range_eq(t, prefix_start, hole, e, from) then let
+      val counted = digits_upto_two(e, elen, digits_at)
+    in
+      if counted >= 1 then @(digits_at, counted)
+      else _find_minute(t, prefix_start, hole, e, elen, from + 1)
+    end
+    else _find_minute(t, prefix_start, hole, e, elen, from + 1)
+  end
+
+(* The place and the count (at most two) of the digits the file e[0, elen) has for the template's first minute hole
+   (pin_audit --file-tickets' rule); a count of 0 when the template has no hole, the file was not read whole or it has no such line *)
+fn _minute_of {t_l,e_l:agz}{tlen,elen:nat | tlen <= 524288; elen <= 524288}
+  (t: !$A.borrow(byte, t_l, 524288), tlen: int tlen, e: !$A.borrow(byte, e_l, 524288), elen: int elen, e_whole: bool)
+  : [digits_start,digit_count:nat | digit_count <= 2; digits_start + digit_count <= elen] @(int digits_start, int digit_count) = let
+  val hole = _hole_at(t, tlen, 0)
+in
+  if ~e_whole then @(0, 0)
+  else if hole < 0 then @(0, 0)
+  else let
+    val prefix_start = _line_start(t, tlen, hole)
+  in _find_minute(t, prefix_start, hole, e, elen, 0) end
+end
+
+(* The template t[at, tlen) written to out with @@COMMIT@@ replaced by a[cs, ce), @@COMMENT@@ by a[ms, me) and @@MINUTE@@ by
+   e[es, ee), or by 17 when no_minute *)
+fun _fill {t_l,a_l,e_l:agz}{tlen:nat | tlen <= 524288}{n:pos}{cs,ce,ms,me:nat | cs <= ce; ce <= n; ms <= me; me <= n}{es,ee:nat | es <= ee; ee <= 524288}{at:nat | at <= tlen} .<tlen - at>.
   (t: !$A.borrow(byte, t_l, 524288), tlen: int tlen, at: int at, out: !$B.sized_rope,
-   a: !$A.borrow(byte, a_l, n), cs: int cs, ce: int ce, ms: int ms, me: int me): bool =
-  if at >= tlen then true
+   a: !$A.borrow(byte, a_l, n), cs: int cs, ce: int ce, ms: int ms, me: int me,
+   e: !$A.borrow(byte, e_l, 524288), es: int es, ee: int ee, no_minute: bool): void =
+  if at >= tlen then ()
   else let
     val commit_end = lit_step(t, tlen, at, "@@COMMIT@@")
   in
     if commit_end >= 0 then let
       val () = $B.sized_rope_copy(out, a, cs, ce)
-    in _fill(t, tlen, commit_end, out, a, cs, ce, ms, me) end
+    in _fill(t, tlen, commit_end, out, a, cs, ce, ms, me, e, es, ee, no_minute) end
     else let
       val comment_end = lit_step(t, tlen, at, "@@COMMENT@@")
     in
       if comment_end >= 0 then let
         val () = $B.sized_rope_copy(out, a, ms, me)
-      in _fill(t, tlen, comment_end, out, a, cs, ce, ms, me) end
-      else if lit_step(t, tlen, at, "@@MINUTE@@") >= 0 then false
+      in _fill(t, tlen, comment_end, out, a, cs, ce, ms, me, e, es, ee, no_minute) end
       else let
-        val () = $B.sized_rope_put(out, $AR.low_byte(byte2int0($A.read<byte>(t, at))))
-      in _fill(t, tlen, at + 1, out, a, cs, ce, ms, me) end
+        val minute_end = lit_step(t, tlen, at, "@@MINUTE@@")
+      in
+        if minute_end >= 0 then let
+          val () = (if no_minute then $B.sized_rope_bput(out, "17") else $B.sized_rope_copy(out, e, es, ee))
+        in _fill(t, tlen, minute_end, out, a, cs, ce, ms, me, e, es, ee, no_minute) end
+        else let
+          val () = $B.sized_rope_put(out, $AR.low_byte(byte2int0($A.read<byte>(t, at))))
+        in _fill(t, tlen, at + 1, out, a, cs, ce, ms, me, e, es, ee, no_minute) end
+      end
     end
   end
 
@@ -184,10 +251,10 @@ fn _clone_arg {l:agz}{n:pos | n <= 4096}{suffix_len:nat | suffix_len <= 1000}
   val @(ns, ne) = name
 in arg_range("adopt-clones/", a, ns, ne, suffix) end
 
-(* The file in the clone: adopt-clones/NAME/.github/workflows/<template>, or .github/ISSUE_TEMPLATE/<file> *)
-fn _target_path {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), name: range(n), template: range(n), is_issue: bool): path_text = let
+(* The file in the clone: adopt-clones/NAME/.github/workflows/<target>, or .github/ISSUE_TEMPLATE/<file> *)
+fn _target_path {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), name: range(n), target: range(n), is_issue: bool): path_text = let
   val @(ns, ne) = name
-  val @(ts, te) = template
+  val @(ts, te) = target
 in
   if is_issue then let
     var out : $B.builder(0) = $B.create()
@@ -207,9 +274,9 @@ in
   in @(arr, k) end
 end
 
-(* The file's path in the repository: .github/workflows/<template>, or .github/<ISSUE_TEMPLATE/file> *)
-fn _relative_arg {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), template: range(n), is_issue: bool): $P.arg_entry = let
-  val @(ts, te) = template
+(* The file's path in the repository: .github/workflows/<target>, or .github/<ISSUE_TEMPLATE/file> *)
+fn _relative_arg {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), target: range(n), is_issue: bool): $P.arg_entry = let
+  val @(ts, te) = target
 in
   if is_issue then arg_range(".github/", a, ts, te, "")
   else arg_range(".github/workflows/", a, ts, te, "")
@@ -259,11 +326,12 @@ in @(arr, k) end
 
 (* The body: its first line, Plan, Execution, Evidence (the two commands adopt ran, with their output), the Head line and the footer *)
 fn _body {l,head_l,stat_l:agz}{n:pos | n <= 4096}{stat_len:nat | stat_len <= 524288}
-  (a: !$A.borrow(byte, l, n), name: range(n), ticket: range(n), template: range(n), commit: range(n), comment: range(n), is_issue: bool,
+  (a: !$A.borrow(byte, l, n), name: range(n), ticket: range(n), template: range(n), target: range(n), commit: range(n), comment: range(n), is_issue: bool,
    head: !$A.borrow(byte, head_l, 524288), stat: !$A.borrow(byte, stat_l, 524288), stat_len: int stat_len): $B.sized_rope = let
   val @(ns, ne) = name
   val @(ks, ke) = ticket
   val @(ts, te) = template
+  val @(gs, ge) = target
   val @(cs, ce) = commit
   val @(ms, me) = comment
   var body : $B.sized_rope = $B.sized_rope_create()
@@ -277,7 +345,7 @@ fn _body {l,head_l,stat_l:agz}{n:pos | n <= 4096}{stat_len:nat | stat_len <= 524
   val () = $B.sized_rope_copy(body, a, cs, ce)
   val () = $B.sized_rope_bput(body, "` in this repository. `adopt` (tools/adopt of repository-prototype) made this pull request: it wrote the file from the template and did not type it.\n\n## Plan\n\nDone when: the file `")
   val () = (if is_issue then $B.sized_rope_bput(body, ".github/") else $B.sized_rope_bput(body, ".github/workflows/"))
-  val () = $B.sized_rope_copy(body, a, ts, te)
+  val () = $B.sized_rope_copy(body, a, gs, ge)
   val () = $B.sized_rope_bput(body, "` is `tools/pin-audit/templates/")
   val () = $B.sized_rope_copy(body, a, ts, te)
   val () = $B.sized_rope_bput(body, "` of bats-lang/repository-prototype at `")
@@ -304,8 +372,8 @@ in body end
    ============================================================ *)
 
 (* The path of the file in the repository, printed *)
-fn _print_path {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), template: range(n), is_issue: bool): void = let
-  val @(ts, te) = template
+fn _print_path {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), target: range(n), is_issue: bool): void = let
+  val @(ts, te) = target
   val () = print! (".github/")
   val () = if is_issue then () else print! ("workflows/")
 in print_range(a, ts, te) end
@@ -320,12 +388,6 @@ in print! (": ") end
 fn _fail {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), name: range(n), step: string, status: int): int = let
   val () = _line(a, name)
   val () = println! ("- - failed: ", step, " (status ", status, ")")
-in 1 end
-
-(* A repository adopt refuses: counted (1) *)
-fn _refuse {l:agz}{n:pos | n <= 4096} (a: !$A.borrow(byte, l, n), name: range(n), reason: string): int = let
-  val () = _line(a, name)
-  val () = println! ("- - refused: ", reason)
 in 1 end
 
 (* git -C <the clone> and the arguments *)
@@ -349,7 +411,7 @@ fn _push2 (x: $P.arg_entry, y: $P.arg_entry, rest: $L.listv($P.arg_entry)): $L.l
 (* The pull request of the branch adopt-TICKET at its tip rev (HEAD of the clone, or FETCH_HEAD of a branch fetched), with the REST API
    (keyword: rest pull request; gh pr create is GraphQL, which is refused): the head, the push (when push), the body and gh api; the failures counted *)
 fn _open {a_l:agz}{n:pos | n <= 4096}{rev_len:nat | rev_len <= 1000}
-  (a: !$A.borrow(byte, a_l, n), name: range(n), ticket: range(n), template: range(n), is_issue: bool, commit: range(n), comment: range(n),
+  (a: !$A.borrow(byte, a_l, n), name: range(n), ticket: range(n), template: range(n), target: range(n), is_issue: bool, commit: range(n), comment: range(n),
    rev: string rev_len, push: bool): int = let
   val @(ns, ne) = name
   val @(ks, ke) = ticket
@@ -372,7 +434,7 @@ fn _open {a_l:agz}{n:pos | n <= 4096}{rev_len:nat | rev_len <= 1000}
                  val @(stat_frozen, stat_view) = $A.freeze<byte>(stat_array)
                  val written =
                    (if shown != 0 then false
-                    else write_rope(_body_path(a, name), _body(a, name, ticket, template, commit, comment, is_issue, head_view, stat_view, stat_len))): bool
+                    else write_rope(_body_path(a, name), _body(a, name, ticket, template, target, commit, comment, is_issue, head_view, stat_view, stat_len))): bool
                  val result =
                    (if ~written then _fail(a, name, "writing the body", shown)
                     else let
@@ -413,7 +475,7 @@ in result end
 
 (* The branch is already pushed: its open pull request, if it has one, is left alone (and said); else the pull request is opened from the branch's tip *)
 fn _resume {a_l:agz}{n:pos | n <= 4096}
-  (a: !$A.borrow(byte, a_l, n), name: range(n), ticket: range(n), template: range(n), is_issue: bool, commit: range(n), comment: range(n)): int = let
+  (a: !$A.borrow(byte, a_l, n), name: range(n), ticket: range(n), template: range(n), target: range(n), is_issue: bool, commit: range(n), comment: range(n)): int = let
   val @(ns, ne) = name
   val @(ks, ke) = ticket
   var found : $B.builder(0) = $B.create()
@@ -441,7 +503,7 @@ fn _resume {a_l:agz}{n:pos | n <= 4096}
        val fetched = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("fetch"), args3(arg_text("--quiet"), arg_text("origin"), arg_range("adopt-", a, ks, ke, "")))))
      in
        if fetched != 0 then _fail(a, name, "git fetch", fetched)
-       else _open(a, name, ticket, template, is_issue, commit, comment, "FETCH_HEAD", false)
+       else _open(a, name, ticket, template, target, is_issue, commit, comment, "FETCH_HEAD", false)
      end): int
   val () = $A.drop<byte>(found_frozen, found_view)
   val () = $A.free<byte>($A.thaw<byte>(found_frozen))
@@ -449,7 +511,7 @@ in result end
 
 (* The pull request, once the file is written in the clone: a branch not pushed is made, committed, pushed and opened; one pushed is resumed *)
 fn _publish {a_l:agz}{n:pos | n <= 4096}
-  (a: !$A.borrow(byte, a_l, n), name: range(n), ticket: range(n), template: range(n), is_issue: bool, commit: range(n), comment: range(n)): int = let
+  (a: !$A.borrow(byte, a_l, n), name: range(n), ticket: range(n), template: range(n), target: range(n), is_issue: bool, commit: range(n), comment: range(n)): int = let
   val @(ks, ke) = ticket
   var remote : $B.builder(0) = $B.create()
   val @(listed, _) = capture_with("git",
@@ -459,20 +521,20 @@ fn _publish {a_l:agz}{n:pos | n <= 4096}
   val () = $A.free<byte>(remote_array)
 in
   if listed != 0 then _fail(a, name, "git ls-remote", listed)
-  else if remote_len > 0 then _resume(a, name, ticket, template, is_issue, commit, comment)
+  else if remote_len > 0 then _resume(a, name, ticket, template, target, is_issue, commit, comment)
   else let
     val checked = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("checkout"), args3(arg_text("--quiet"), arg_text("-b"), arg_range("adopt-", a, ks, ke, "")))))
   in
     if checked != 0 then _fail(a, name, "git checkout", checked)
     else let
-      val added = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("add"), args2(arg_text("--"), _relative_arg(a, template, is_issue)))))
+      val added = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("add"), args2(arg_text("--"), _relative_arg(a, target, is_issue)))))
     in
       if added != 0 then _fail(a, name, "git add", added)
       else let
         val committed = run_program("git", _git_in(a, name, $L.list_vt_cons(arg_text("commit"), args3(arg_text("--quiet"), arg_text("-m"), _title_arg(a, template, commit)))))
       in
         if committed != 0 then _fail(a, name, "git commit", committed)
-        else _open(a, name, ticket, template, is_issue, commit, comment, "HEAD", true)
+        else _open(a, name, ticket, template, target, is_issue, commit, comment, "HEAD", true)
       end
     end
   end
@@ -480,7 +542,7 @@ end
 
 (* One repository: cloned, the file written and compared with the one it has, then published; 1 when it was refused or failed *)
 fn _one {a_l,t_l:agz}{n:pos | n <= 4096}{tlen:nat | tlen <= 524288}
-  (a: !$A.borrow(byte, a_l, n), name: range(n), ticket: range(n), template: range(n), is_issue: bool, commit: range(n), comment: range(n),
+  (a: !$A.borrow(byte, a_l, n), name: range(n), ticket: range(n), template: range(n), target: range(n), is_issue: bool, commit: range(n), comment: range(n),
    t: !$A.borrow(byte, t_l, 524288), tlen: int tlen, show: bool): int = let
   val @(ns, ne) = name
   val @(cs, ce) = commit
@@ -494,7 +556,7 @@ in
   if cloned != 0 then _fail(a, name, "git clone", cloned)
   else let
     (* the file the repository has, if any *)
-    val @(target_array, target_len) = _target_path(a, name, template, is_issue)
+    val @(target_array, target_len) = _target_path(a, name, target, is_issue)
     val @(target_frozen, target_view) = $A.freeze<byte>(target_array)
     var existing : $B.builder(0) = $B.create()
     val @(existing_ended, _) = read_file(target_view, target_len, existing)
@@ -504,10 +566,13 @@ in
     val @(existing_frozen, existing_view) = $A.freeze<byte>(existing_array)
     (* the template filled, written over it, and read back *)
     val _ = run_program("mkdir", args3(arg_text("-p"), arg_text("--"), _directory_arg(a, name, is_issue)))
+    val existing_whole = (case+ existing_ended of | Read_whole() => true | Read_too_long() => false | Read_failed() => false): bool
+    val has_hole = (_hole_at(t, tlen, 0) >= 0): bool
+    val @(minute_start, minute_count) = _minute_of(t, tlen, existing_view, existing_len, existing_whole)
     var rope : $B.sized_rope = $B.sized_rope_create()
-    val filled = _fill(t, tlen, 0, rope, a, cs, ce, ms, me)
-    val written = write_rope(_target_path(a, name, template, is_issue), rope)
-    val @(back_array, back_len) = _target_path(a, name, template, is_issue)
+    val () = _fill(t, tlen, 0, rope, a, cs, ce, ms, me, existing_view, minute_start, minute_start + minute_count, minute_count = 0)
+    val written = write_rope(_target_path(a, name, target, is_issue), rope)
+    val @(back_array, back_len) = _target_path(a, name, target, is_issue)
     val @(back_frozen, back_view) = $A.freeze<byte>(back_array)
     var again : $B.builder(0) = $B.create()
     val @(again_ended, _) = read_file(back_view, back_len, again)
@@ -523,33 +588,42 @@ in
        | Read_too_long() => ~2
        | Read_failed() => ~3): int
     val result =
-      (if ~filled then _refuse(a, name, "the template has a @@MINUTE@@ hole, which adopt does not fill")
-       else if ~written then _fail(a, name, "writing the file", 0)
+      (if ~written then _fail(a, name, "writing the file", 0)
        else if ~again_whole then _fail(a, name, "reading the file back", 0)
        else if differs = ~1 then let
          val () = _line(a, name)
          val () = print! ("- - no-op: ")
-         val () = _print_path(a, template, is_issue)
+         val () = _print_path(a, target, is_issue)
        in (println! (" is already the template with its holes filled"); 0) end
        else if differs = ~2 then let
          val () = _line(a, name)
          val () = print! ("- - refused: ")
-         val () = _print_path(a, template, is_issue)
+         val () = _print_path(a, target, is_issue)
        in (println! (" is longer than 524288 bytes"); 1) end
-       else if differs >= 0 then let
+       else if differs >= 0 && ~(has_hole && minute_count > 0) then let
          val () = _line(a, name)
          val () = print! ("- - refused: ")
-         val () = _print_path(a, template, is_issue)
+         val () = _print_path(a, target, is_issue)
        in (println! (" differs from the template with its holes filled at byte ", differs + 1); 1) end
        else let
+         val () = if has_hole then let
+             val () = _line(a, name)
+             val () = print! ("minute ")
+           in
+             if minute_count > 0 then let
+               val () = print_range(existing_view, minute_start, minute_start + minute_count)
+             in println! (", the minute of the cron line of the file it replaces") end
+             else println! ("17, the default: the repository has no such cron line")
+           end
+           else ()
          val () = if show then let
              val () = _line(a, name)
              val () = print! ("wrote ")
-             val () = _print_path(a, template, is_issue)
+             val () = _print_path(a, target, is_issue)
              val () = println! (":")
            in print_range(again_view, 0, again_len) end
            else ()
-       in _publish(a, name, ticket, template, is_issue, commit, comment) end): int
+       in _publish(a, name, ticket, template, target, is_issue, commit, comment) end): int
     val () = $A.drop<byte>(again_frozen, again_view)
     val () = $A.free<byte>($A.thaw<byte>(again_frozen))
     val () = $A.drop<byte>(existing_frozen, existing_view)
@@ -560,15 +634,15 @@ end
 (* The entries from at, each adopted (or those named only); the failures counted *)
 fun _each {a_l,t_l:agz}{n:pos | n <= 4096}{len:nat | len <= n}{tlen:nat | tlen <= 524288}{at:nat | at <= len} .<len - at>.
   (a: !$A.borrow(byte, a_l, n), len: int len, at: int at, has_only: bool, only: range(n),
-   template: range(n), is_issue: bool, commit: range(n), comment: range(n),
+   template: range(n), target: range(n), is_issue: bool, commit: range(n), comment: range(n),
    t: !$A.borrow(byte, t_l, 524288), tlen: int tlen, failures: int): int =
   if at >= len then failures
   else let
     val @(ok, name, ticket, next) = _entry(a, len, at)
     val status =
-      (if ok && (~has_only || _same(a, name, only)) then _one(a, name, ticket, template, is_issue, commit, comment, t, tlen, has_only)
+      (if ok && (~has_only || _same(a, name, only)) then _one(a, name, ticket, template, target, is_issue, commit, comment, t, tlen, has_only)
        else 0): int
-  in _each(a, len, next, has_only, only, template, is_issue, commit, comment, t, tlen, (if status != 0 then failures + 1 else failures)) end
+  in _each(a, len, next, has_only, only, template, target, is_issue, commit, comment, t, tlen, (if status != 0 then failures + 1 else failures)) end
 
 (* ============================================================
    The run
@@ -588,17 +662,26 @@ implement adopt_run () = let
   val after_flag = (if has_only then _arg_next(view, len, first) else first): [p:nat | p <= len] int p
   val @(only_ok, only, after_only) =
     (if has_only then _take(view, len, after_flag) else @(true, @(0, 0), after_flag)): @(bool, range(4096), [p:nat | p <= len] int p)
-  val @(template_ok, template, after_template) = _take(view, len, after_only)
+  val as_stop = _arg_stop(view, len, after_only)
+  val has_as = line_is(view, after_only, as_stop, "--as")
+  val after_as_flag = (if has_as then _arg_next(view, len, after_only) else after_only): [p:nat | p <= len] int p
+  val @(as_ok, as_file, after_as) =
+    (if has_as then _take(view, len, after_as_flag) else @(true, @(0, 0), after_as_flag)): @(bool, range(4096), [p:nat | p <= len] int p)
+  val @(template_ok, template, after_template) = _take(view, len, after_as)
+  val target = (if has_as then as_file else template): range(4096)
+  val @(target_start, target_stop) = target
+  val target_ok = as_ok && class_end(view, target_stop, target_start, Class_name()) = target_stop: bool
   val @(commit_ok, commit, after_commit) = _take(view, len, after_template)
   val @(comment_ok, comment, after_comment) = _take(view, len, after_commit)
   val @(kind_ok, is_issue) = _template_kind(view, template)
   val surveyed = _survey(view, len, after_comment, has_only, only, 0)
-  val usable = only_ok && template_ok && commit_ok && comment_ok && kind_ok && _is_commit(view, commit) && _is_comment(view, comment) && surveyed > 0: bool
+  val usable = only_ok && (~has_as || target_ok) && template_ok && commit_ok && comment_ok && kind_ok && _is_commit(view, commit) && _is_comment(view, comment) && surveyed > 0: bool
   val status =
     (if ~usable then let
-       val () = println! ("usage: adopt [--only NAME] TEMPLATE COMMIT COMMENT NAME#TICKET...")
+       val () = println! ("usage: adopt [--only NAME] [--as FILE] TEMPLATE COMMIT COMMENT NAME#TICKET...")
        val () = println! ("  TEMPLATE a file of tools/pin-audit/templates (or ISSUE_TEMPLATE/<file>), COMMIT 40 lowercase hex digits, COMMENT the pin's version comment,")
-       val () = println! ("  each NAME#TICKET a repository of bats-lang and the ticket that asks it to adopt the template; --only NAME must be one of them")
+       val () = println! ("  each NAME#TICKET a repository of bats-lang and the ticket that asks it to adopt the template; --only NAME must be one of them;")
+       val () = println! ("  --as FILE the name in .github/workflows the template is written as (relock-regenerate.yml as relock.yml), the template's own name by default")
      in 2 end
      else let
        val @(template_array, template_len) = _template_path(view, template)
@@ -611,7 +694,7 @@ implement adopt_run () = let
        val @(text_frozen, text_view) = $A.freeze<byte>(text_array)
        val result =
          (case+ ended of
-          | Read_whole() => (if _each(view, len, after_comment, has_only, only, template, is_issue, commit, comment, text_view, text_len, 0) > 0 then 1 else 0)
+          | Read_whole() => (if _each(view, len, after_comment, has_only, only, template, target, is_issue, commit, comment, text_view, text_len, 0) > 0 then 1 else 0)
           | Read_too_long() => let
               val () = println! ("adopt: the template is longer than the 524288 bytes adopt reads")
             in 1 end

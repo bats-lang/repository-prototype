@@ -301,6 +301,32 @@ fun _range_eq_in {l:agz}{n:pos}{i,k:nat | i <= k; k <= n}{j:nat | j + (k - i) <=
 
 implement range_eq_in (text, i, k, j) = _range_eq_in(text, i, k, j)
 
+fun _range_eq {l,other_loc:agz}{n,other_size:pos}{i,k:nat | i <= k; k <= n}{j:nat | j + (k - i) <= other_size} .<k - i>.
+  (left: !$A.borrow(byte, l, n), i: int i, k: int k,
+   right: !$A.borrow(byte, other_loc, other_size), j: int j): bool =
+  if i >= k then true
+  else if byte2int0($A.read<byte>(left, i)) = byte2int0($A.read<byte>(right, j)) then _range_eq(left, i + 1, k, right, j + 1)
+  else false
+
+(* Whether left[i, k) is the same bytes as right[j, j + (k - i)), in two arrays (as pin-audit's support has it) *)
+#pub fn range_eq {l,other_loc:agz}{n,other_size:pos}{i,k:nat | i <= k; k <= n}{j:nat | j + (k - i) <= other_size}
+  (left: !$A.borrow(byte, l, n), i: int i, k: int k,
+   right: !$A.borrow(byte, other_loc, other_size), j: int j): bool
+
+implement range_eq (left, i, k, right, j) = _range_eq(left, i, k, right, j)
+
+(* How many digits (at most two) are at i of b[0, k) *)
+#pub fn digits_upto_two {l:agz}{n:pos}{k:nat | k <= n}{i:nat | i <= k}
+  (b: !$A.borrow(byte, l, n), k: int k, i: int i): [c:nat | c <= 2; i + c <= k] int c
+
+implement digits_upto_two (b, k, i) =
+  if i >= k then 0
+  else if _in_class(byte2int0($A.read<byte>(b, i)), Class_digit()) then
+    (if i + 1 >= k then 1
+     else if _in_class(byte2int0($A.read<byte>(b, i + 1)), Class_digit()) then 2
+     else 1)
+  else 0
+
 (* ============================================================
    Files
    ============================================================ *)
