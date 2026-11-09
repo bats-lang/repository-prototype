@@ -1,203 +1,323 @@
-text:1: row 1: "provisional verdict": A review is the posted comment; a verdict anywhere else is no review.
-text:2: row 1: "PROVISIONAL VERDICT": A review is the posted comment; a verdict anywhere else is no review.
-text:3: row 1: "provisional verdict": A review is the posted comment; a verdict anywhere else is no review.
-text:5: row 2: "instead of fixes": Nobody offers a way to ship less than the ticket says: the verdict is changes needed, and the finding is to do the Done-when as written.
-text:6: row 2: "INSTEAD OF FIXES": Nobody offers a way to ship less than the ticket says: the verdict is changes needed, and the finding is to do the Done-when as written.
-text:7: row 2: "instead of fixes": Nobody offers a way to ship less than the ticket says: the verdict is changes needed, and the finding is to do the Done-when as written.
-text:9: row 2: "unless narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:10: row 2: "UNLESS NARROW": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:11: row 2: "unless narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:13: row 2: "unless the narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:14: row 2: "UNLESS THE NARROW": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:15: row 2: "unless the narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:17: row 2: "unless owner narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:18: row 2: "UNLESS OWNER NARROW": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:19: row 2: "unless owner narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:21: row 2: "unless the owner narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:22: row 2: "UNLESS THE OWNER NARROW": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:23: row 2: "unless the owner narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:25: row 2: "or narrow": Narrowing is the owner's, never offered.
-text:26: row 2: "OR NARROW": Narrowing is the owner's, never offered.
-text:27: row 2: "or narrow": Narrowing is the owner's, never offered.
-text:29: row 2: "or narrowing": Narrowing is the owner's, never offered.
-text:30: row 2: "OR NARROWING": Narrowing is the owner's, never offered.
-text:31: row 2: "or narrowing": Narrowing is the owner's, never offered.
-text:33: row 2: "fixes #12 to refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
-text:34: row 2: "FIXES #12 TO REFS": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
-text:35: row 2: "fixes #12 to refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
-text:37: row 2: "fixes #n to refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
-text:38: row 2: "FIXES #N TO REFS": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
-text:39: row 2: "fixes #n to refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
-text:41: row 2: "fixes #<ticket> to refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
-text:42: row 2: "FIXES #<TICKET> TO REFS": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
-text:43: row 2: "fixes #<ticket> to refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
-text:45: row 2: "open it as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:45: row 2: "as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:46: row 2: "OPEN IT AS REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:46: row 2: "AS REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:47: row 2: "open it as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:47: row 2: "as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:49: row 2: "use refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:49: row 2: "use refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:50: row 2: "USE REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:50: row 2: "USE REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:51: row 2: "use refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:51: row 2: "use refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:53: row 2: "open it as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:53: row 2: "as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:54: row 2: "OPEN IT AS REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:54: row 2: "AS REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:55: row 2: "open it as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:55: row 2: "as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:57: row 2: "opened it as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:57: row 2: "as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:58: row 2: "OPENED IT AS REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:58: row 2: "AS REFS": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:59: row 2: "opened it as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:59: row 2: "as refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:61: row 3: "partly": Partly is not a state: the Done-when is met as written or the work goes on.
-text:62: row 3: "PARTLY": Partly is not a state: the Done-when is met as written or the work goes on.
-text:63: row 3: "partly": Partly is not a state: the Done-when is met as written or the work goes on.
-text:65: row 3: "partially": Partially is not a state: the Done-when is met as written or the work goes on.
-text:66: row 3: "PARTIALLY": Partially is not a state: the Done-when is met as written or the work goes on.
-text:67: row 3: "partially": Partially is not a state: the Done-when is met as written or the work goes on.
-text:69: row 3: "hand-picked": A local sample is random, with its seed and size named; the Done-when's own command runs in CI on the whole population.
-text:70: row 3: "HAND-PICKED": A local sample is random, with its seed and size named; the Done-when's own command runs in CI on the whole population.
-text:71: row 3: "hand-picked": A local sample is random, with its seed and size named; the Done-when's own command runs in CI on the whole population.
-text:73: row 6: "passed this time": A red test is root-caused; "it passed again" is not a cause.
-text:74: row 6: "PASSED THIS TIME": A red test is root-caused; "it passed again" is not a cause.
-text:75: row 6: "passed this time": A red test is root-caused; "it passed again" is not a cause.
-text:77: row 6: "passed alone": A red test is root-caused; "it passed again" is not a cause.
-text:78: row 6: "PASSED ALONE": A red test is root-caused; "it passed again" is not a cause.
-text:79: row 6: "passed alone": A red test is root-caused; "it passed again" is not a cause.
-text:81: row 6: "passed on rerun": A red test is root-caused; "it passed again" is not a cause.
-text:82: row 6: "PASSED ON RERUN": A red test is root-caused; "it passed again" is not a cause.
-text:83: row 6: "passed on rerun": A red test is root-caused; "it passed again" is not a cause.
-text:85: row 6: "passed on a re-run": A red test is root-caused; "it passed again" is not a cause.
-text:86: row 6: "PASSED ON A RE-RUN": A red test is root-caused; "it passed again" is not a cause.
-text:87: row 6: "passed on a re-run": A red test is root-caused; "it passed again" is not a cause.
-text:89: row 6: "pass alone": A red test is root-caused; "it passes again" is not a cause.
-text:90: row 6: "PASS ALONE": A red test is root-caused; "it passes again" is not a cause.
-text:91: row 6: "pass alone": A red test is root-caused; "it passes again" is not a cause.
-text:93: row 6: "passes alone": A red test is root-caused; "it passes again" is not a cause.
-text:94: row 6: "PASSES ALONE": A red test is root-caused; "it passes again" is not a cause.
-text:95: row 6: "passes alone": A red test is root-caused; "it passes again" is not a cause.
-text:97: row 6: "pass this time": A red test is root-caused; "it passes again" is not a cause.
-text:98: row 6: "PASS THIS TIME": A red test is root-caused; "it passes again" is not a cause.
-text:99: row 6: "pass this time": A red test is root-caused; "it passes again" is not a cause.
-text:101: row 6: "passes this time": A red test is root-caused; "it passes again" is not a cause.
-text:102: row 6: "PASSES THIS TIME": A red test is root-caused; "it passes again" is not a cause.
-text:103: row 6: "passes this time": A red test is root-caused; "it passes again" is not a cause.
-text:105: row 6: "pass on rerun": A red test is root-caused; "it passes again" is not a cause.
-text:106: row 6: "PASS ON RERUN": A red test is root-caused; "it passes again" is not a cause.
-text:107: row 6: "pass on rerun": A red test is root-caused; "it passes again" is not a cause.
-text:109: row 6: "pass on a re-run": A red test is root-caused; "it passes again" is not a cause.
-text:110: row 6: "PASS ON A RE-RUN": A red test is root-caused; "it passes again" is not a cause.
-text:111: row 6: "pass on a re-run": A red test is root-caused; "it passes again" is not a cause.
-text:113: row 6: "passes on rerun": A red test is root-caused; "it passes again" is not a cause.
-text:114: row 6: "PASSES ON RERUN": A red test is root-caused; "it passes again" is not a cause.
-text:115: row 6: "passes on rerun": A red test is root-caused; "it passes again" is not a cause.
-text:117: row 6: "passes on a re-run": A red test is root-caused; "it passes again" is not a cause.
-text:118: row 6: "PASSES ON A RE-RUN": A red test is root-caused; "it passes again" is not a cause.
-text:119: row 6: "passes on a re-run": A red test is root-caused; "it passes again" is not a cause.
-text:121: row 6: "nothing touches it": A red test is root-caused; "nothing touches it" is not a cause.
-text:121: row 23: "contention": A red test is root-caused or the test is made robust; "contention" is not a cause.
-text:122: row 6: "NOTHING TOUCHES IT": A red test is root-caused; "nothing touches it" is not a cause.
-text:122: row 23: "CONTENTION": A red test is root-caused or the test is made robust; "contention" is not a cause.
-text:123: row 6: "nothing touches it": A red test is root-caused; "nothing touches it" is not a cause.
-text:123: row 23: "contention": A red test is root-caused or the test is made robust; "contention" is not a cause.
-text:125: row 23: "contention": A red test is root-caused or the test is made robust; "contention" is not a cause.
-text:126: row 23: "CONTENTION": A red test is root-caused or the test is made robust; "contention" is not a cause.
-text:127: row 23: "contention": A red test is root-caused or the test is made robust; "contention" is not a cause.
-text:129: row 10: "honest": State the fact; the word adds nothing and offers an exit.
-text:130: row 10: "HONEST": State the fact; the word adds nothing and offers an exit.
-text:131: row 10: "honest": State the fact; the word adds nothing and offers an exit.
-text:133: row 10: "frank": State the fact; the word adds nothing and offers an exit.
-text:134: row 10: "FRANK": State the fact; the word adds nothing and offers an exit.
-text:135: row 10: "frank": State the fact; the word adds nothing and offers an exit.
-text:137: row 10: "frankly": State the fact; the word adds nothing and offers an exit.
-text:138: row 10: "FRANKLY": State the fact; the word adds nothing and offers an exit.
-text:139: row 10: "frankly": State the fact; the word adds nothing and offers an exit.
-text:141: row 10: "not run locally": Run what the change needs; what CI runs is CI's and is not a caveat.
-text:142: row 10: "NOT RUN LOCALLY": Run what the change needs; what CI runs is CI's and is not a caveat.
-text:143: row 10: "not run locally": Run what the change needs; what CI runs is CI's and is not a caveat.
-text:145: row 10: "haven't verified": Run the check and say what it printed.
-text:146: row 10: "HAVEN'T VERIFIED": Run the check and say what it printed.
-text:147: row 10: "haven't verified": Run the check and say what it printed.
-text:149: row 16: "or say what is true": A brief never offers an alternative to the Done-when.
-text:150: row 16: "OR SAY WHAT IS TRUE": A brief never offers an alternative to the Done-when.
-text:151: row 16: "or say what is true": A brief never offers an alternative to the Done-when.
-text:153: row 16: "or remove the claim": A claim is never weakened: the code is made to match it.
-text:154: row 16: "OR REMOVE THE CLAIM": A claim is never weakened: the code is made to match it.
-text:155: row 16: "or remove the claim": A claim is never weakened: the code is made to match it.
-text:157: row 16: "or remove the sentence": A claim is never weakened: the code is made to match it.
-text:158: row 16: "OR REMOVE THE SENTENCE": A claim is never weakened: the code is made to match it.
-text:159: row 16: "or remove the sentence": A claim is never weakened: the code is made to match it.
-text:161: row 16: "or remove the line": A claim is never weakened: the code is made to match it.
-text:162: row 16: "OR REMOVE THE LINE": A claim is never weakened: the code is made to match it.
-text:163: row 16: "or remove the line": A claim is never weakened: the code is made to match it.
-text:165: row 13: "after a day": A step that waits for time is done now.
-text:166: row 13: "AFTER A DAY": A step that waits for time is done now.
-text:167: row 13: "after a day": A step that waits for time is done now.
-text:169: row 13: "after a week": A step that waits for time is done now.
-text:170: row 13: "AFTER A WEEK": A step that waits for time is done now.
-text:171: row 13: "after a week": A step that waits for time is done now.
-text:173: row 13: "after a month": A step that waits for time is done now.
-text:174: row 13: "AFTER A MONTH": A step that waits for time is done now.
-text:175: row 13: "after a month": A step that waits for time is done now.
-text:177: row 13: "after a session": A step that waits for time is done now.
-text:178: row 13: "AFTER A SESSION": A step that waits for time is done now.
-text:179: row 13: "after a session": A step that waits for time is done now.
-text:181: row 13: "after 3 sessions": A step that waits for time is done now.
-text:182: row 13: "AFTER 3 SESSIONS": A step that waits for time is done now.
-text:183: row 13: "after 3 sessions": A step that waits for time is done now.
-text:185: row 13: "the next capture": A step that waits for a recurrence is done now: produce what the wait would produce.
-text:186: row 13: "THE NEXT CAPTURE": A step that waits for a recurrence is done now: produce what the wait would produce.
-text:187: row 13: "the next capture": A step that waits for a recurrence is done now: produce what the wait would produce.
-text:189: row 13: "the next run": A step that waits for a recurrence is done now: produce what the wait would produce.
-text:190: row 13: "THE NEXT RUN": A step that waits for a recurrence is done now: produce what the wait would produce.
-text:191: row 13: "the next run": A step that waits for a recurrence is done now: produce what the wait would produce.
-text:193: row 13: "the next occurrence": A step that waits for a recurrence is done now: produce what the wait would produce.
-text:194: row 13: "THE NEXT OCCURRENCE": A step that waits for a recurrence is done now: produce what the wait would produce.
-text:195: row 13: "the next occurrence": A step that waits for a recurrence is done now: produce what the wait would produce.
-text:197: row 13: "wait and see": A ticket whose only content is waiting is closed; the work is done now.
-text:198: row 13: "WAIT AND SEE": A ticket whose only content is waiting is closed; the work is done now.
-text:199: row 13: "wait and see": A ticket whose only content is waiting is closed; the work is done now.
-text:201: row 14: "holding the slot": A free slot is filled the same turn, in the owner's order.
-text:202: row 14: "HOLDING THE SLOT": A free slot is filled the same turn, in the owner's order.
-text:203: row 14: "holding the slot": A free slot is filled the same turn, in the owner's order.
-text:205: row 18: "blocked on evidence": Producing the evidence is the work.
-text:206: row 18: "BLOCKED ON EVIDENCE": Producing the evidence is the work.
-text:207: row 18: "blocked on evidence": Producing the evidence is the work.
-text:209: row 18: "waiting for evidence": Producing the evidence is the work.
-text:210: row 18: "WAITING FOR EVIDENCE": Producing the evidence is the work.
-text:211: row 18: "waiting for evidence": Producing the evidence is the work.
-text:213: row 20: "waiting for a go": An interrupt that killed agents means restart them fresh; nobody waits for a go.
-text:214: row 20: "WAITING FOR A GO": An interrupt that killed agents means restart them fresh; nobody waits for a go.
-text:215: row 20: "waiting for a go": An interrupt that killed agents means restart them fresh; nobody waits for a go.
-text:217: row 20: "waiting for the "go": An interrupt that killed agents means restart them fresh; nobody waits for a go.
-text:218: row 20: "WAITING FOR THE "GO": An interrupt that killed agents means restart them fresh; nobody waits for a go.
-text:219: row 20: "waiting for the "go": An interrupt that killed agents means restart them fresh; nobody waits for a go.
-text:221: row 21: "stop measuring": The Done-when is measured as written.
-text:222: row 21: "STOP MEASURING": The Done-when is measured as written.
-text:223: row 21: "stop measuring": The Done-when is measured as written.
-text:225: row 21: "narrow the measurement": The Done-when is measured as written.
-text:226: row 21: "NARROW THE MEASUREMENT": The Done-when is measured as written.
-text:227: row 21: "narrow the measurement": The Done-when is measured as written.
-text:229: row 2: "instead of Fixes": Nobody offers a way to ship less than the ticket says: the verdict is changes needed, and the finding is to do the Done-when as written.
-text:230: row 2: "unless the owner narrow": Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
-text:231: row 3: "partly": Partly is not a state: the Done-when is met as written or the work goes on.
-text:232: row 3: "partially": Partially is not a state: the Done-when is met as written or the work goes on.
-text:233: row 3: "hand-picked": A local sample is random, with its seed and size named; the Done-when's own command runs in CI on the whole population.
-text:234: row 10: "Not run locally": Run what the change needs; what CI runs is CI's and is not a caveat.
-text:235: row 16: "or say what is true": A brief never offers an alternative to the Done-when.
-text:236: row 14: "holding the slot": A free slot is filled the same turn, in the owner's order.
-text:237: row 10: "haven't verified": Run the check and say what it printed.
-text:238: row 2: "Fixes #368 to Refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
-text:239: row 2: "Fixes #N to Refs": Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
-text:240: row 2: "open it as Refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:240: row 2: "as Refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:241: row 2: "as Refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:241: row 2: "as Refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:242: row 2: "use Refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
-text:242: row 2: "use Refs": A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:1: row 1: the line "11:1+ my provisional verdict is approved" holds the phrase "provisional verdict", which is refused: A review is the posted comment; a verdict anywhere else is no review.
+text:2: row 1: the line "11:1+ MY PROVISIONAL VERDICT IS APPROVED" holds the phrase "PROVISIONAL VERDICT", which is refused: A review is the posted comment; a verdict anywhere else is no review.
+text:3: row 1: the line "11:1+ so my provisional verdict is approved again" holds the phrase "provisional verdict", which is refused: A review is the posted comment; a verdict anywhere else is no review.
+text:5: row 2: the line "12:2+ change refs instead of fixes" holds the phrase "instead of fixes", which is refused: Nobody offers a way to ship less than the ticket says: the verdict is changes needed, and the finding is to do the Done-when as written.
+text:6: row 2: the line "12:2+ CHANGE REFS INSTEAD OF FIXES" holds the phrase "INSTEAD OF FIXES", which is refused: Nobody offers a way to ship less than the ticket says: the verdict is changes needed, and the finding is to do the Done-when as written.
+text:7: row 2: the line "12:2+ so change refs instead of fixes again" holds the phrase "instead of fixes", which is refused: Nobody offers a way to ship less than the ticket says: the verdict is changes needed, and the finding is to do the Done-when as written.
+text:9: row 2: the line "13:2+ refs unless narrows it" holds the phrase "unless narrow", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:10: row 2: the line "13:2+ REFS UNLESS NARROWS IT" holds the phrase "UNLESS NARROW", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:11: row 2: the line "13:2+ so refs unless narrows it again" holds the phrase "unless narrow", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:13: row 2: the line "14:2+ refs unless the narrows it" holds the phrase "unless the narrow", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:14: row 2: the line "14:2+ REFS UNLESS THE NARROWS IT" holds the phrase "UNLESS THE NARROW", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:15: row 2: the line "14:2+ so refs unless the narrows it again" holds the phrase "unless the narrow", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:17: row 2: the line "15:2+ refs unless owner narrows it" holds the phrase "unless owner narrow", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:18: row 2: the line "15:2+ REFS UNLESS OWNER NARROWS IT" holds the phrase "UNLESS OWNER NARROW", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:19: row 2: the line "15:2+ so refs unless owner narrows it again" holds the phrase "unless owner narrow", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:21: row 2: the line "16:2+ refs unless the owner narrows it" holds the phrase "unless the owner narrow", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:22: row 2: the line "16:2+ REFS UNLESS THE OWNER NARROWS IT" holds the phrase "UNLESS THE OWNER NARROW", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:23: row 2: the line "16:2+ so refs unless the owner narrows it again" holds the phrase "unless the owner narrow", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:25: row 2: the line "17:2+ do it or narrow" holds the phrase "or narrow", which is refused: Narrowing is the owner's, never offered.
+text:26: row 2: the line "17:2+ DO IT OR NARROW" holds the phrase "OR NARROW", which is refused: Narrowing is the owner's, never offered.
+text:27: row 2: the line "17:2+ so do it or narrow again" holds the phrase "or narrow", which is refused: Narrowing is the owner's, never offered.
+text:29: row 2: the line "18:2+ do it or narrowing" holds the phrase "or narrowing", which is refused: Narrowing is the owner's, never offered.
+text:30: row 2: the line "18:2+ DO IT OR NARROWING" holds the phrase "OR NARROWING", which is refused: Narrowing is the owner's, never offered.
+text:31: row 2: the line "18:2+ so do it or narrowing again" holds the phrase "or narrowing", which is refused: Narrowing is the owner's, never offered.
+text:33: row 2: the line "19:2+ change fixes #12 to refs" holds the phrase "fixes #12 to refs", which is refused: Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:34: row 2: the line "19:2+ CHANGE FIXES #12 TO REFS" holds the phrase "FIXES #12 TO REFS", which is refused: Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:35: row 2: the line "19:2+ so change fixes #12 to refs again" holds the phrase "fixes #12 to refs", which is refused: Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:37: row 2: the line "20:2+ change fixes #n to refs" holds the phrase "fixes #n to refs", which is refused: Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:38: row 2: the line "20:2+ CHANGE FIXES #N TO REFS" holds the phrase "FIXES #N TO REFS", which is refused: Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:39: row 2: the line "20:2+ so change fixes #n to refs again" holds the phrase "fixes #n to refs", which is refused: Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:41: row 2: the line "21:2+ change fixes #<ticket> to refs" holds the phrase "fixes #<ticket> to refs", which is refused: Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:42: row 2: the line "21:2+ CHANGE FIXES #<TICKET> TO REFS" holds the phrase "FIXES #<TICKET> TO REFS", which is refused: Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:43: row 2: the line "21:2+ so change fixes #<ticket> to refs again" holds the phrase "fixes #<ticket> to refs", which is refused: Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:45: row 2: the line "22:2+ open it as refs" holds the phrase "open it as refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:45: row 2: the line "22:2+ open it as refs" holds the phrase "as refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:46: row 2: the line "22:2+ OPEN IT AS REFS" holds the phrase "OPEN IT AS REFS", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:46: row 2: the line "22:2+ OPEN IT AS REFS" holds the phrase "AS REFS", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:47: row 2: the line "22:2+ so open it as refs again" holds the phrase "open it as refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:47: row 2: the line "22:2+ so open it as refs again" holds the phrase "as refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:49: row 2: the line "23:2+ use refs here" holds the phrase "use refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:49: row 2: the line "23:2+ use refs here" holds the phrase "use refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:50: row 2: the line "23:2+ USE REFS HERE" holds the phrase "USE REFS", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:50: row 2: the line "23:2+ USE REFS HERE" holds the phrase "USE REFS", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:51: row 2: the line "23:2+ so use refs here again" holds the phrase "use refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:51: row 2: the line "23:2+ so use refs here again" holds the phrase "use refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:53: row 2: the line "24:2+ then open it as refs" holds the phrase "open it as refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:53: row 2: the line "24:2+ then open it as refs" holds the phrase "as refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:54: row 2: the line "24:2+ THEN OPEN IT AS REFS" holds the phrase "OPEN IT AS REFS", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:54: row 2: the line "24:2+ THEN OPEN IT AS REFS" holds the phrase "AS REFS", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:55: row 2: the line "24:2+ so then open it as refs again" holds the phrase "open it as refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:55: row 2: the line "24:2+ so then open it as refs again" holds the phrase "as refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:57: row 2: the line "25:2+ we opened it as refs" holds the phrase "opened it as refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:57: row 2: the line "25:2+ we opened it as refs" holds the phrase "as refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:58: row 2: the line "25:2+ WE OPENED IT AS REFS" holds the phrase "OPENED IT AS REFS", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:58: row 2: the line "25:2+ WE OPENED IT AS REFS" holds the phrase "AS REFS", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:59: row 2: the line "25:2+ so we opened it as refs again" holds the phrase "opened it as refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:59: row 2: the line "25:2+ so we opened it as refs again" holds the phrase "as refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:61: row 3: the line "26:3+ the work is partly done" holds the phrase "partly", which is refused: Partly is not a state: the Done-when is met as written or the work goes on.
+text:62: row 3: the line "26:3+ THE WORK IS PARTLY DONE" holds the phrase "PARTLY", which is refused: Partly is not a state: the Done-when is met as written or the work goes on.
+text:63: row 3: the line "26:3+ so the work is partly done again" holds the phrase "partly", which is refused: Partly is not a state: the Done-when is met as written or the work goes on.
+text:65: row 3: the line "27:3+ the work is partially done" holds the phrase "partially", which is refused: Partially is not a state: the Done-when is met as written or the work goes on.
+text:66: row 3: the line "27:3+ THE WORK IS PARTIALLY DONE" holds the phrase "PARTIALLY", which is refused: Partially is not a state: the Done-when is met as written or the work goes on.
+text:67: row 3: the line "27:3+ so the work is partially done again" holds the phrase "partially", which is refused: Partially is not a state: the Done-when is met as written or the work goes on.
+text:69: row 3: the line "28:3+ a hand-picked sample" holds the phrase "hand-picked", which is refused: A local sample is random, with its seed and size named; the Done-when's own command runs in CI on the whole population.
+text:70: row 3: the line "28:3+ A HAND-PICKED SAMPLE" holds the phrase "HAND-PICKED", which is refused: A local sample is random, with its seed and size named; the Done-when's own command runs in CI on the whole population.
+text:71: row 3: the line "28:3+ so a hand-picked sample again" holds the phrase "hand-picked", which is refused: A local sample is random, with its seed and size named; the Done-when's own command runs in CI on the whole population.
+text:73: row 6: the line "29:6+ it passed this time" holds the phrase "passed this time", which is refused: A red test is root-caused; "it passed again" is not a cause.
+text:74: row 6: the line "29:6+ IT PASSED THIS TIME" holds the phrase "PASSED THIS TIME", which is refused: A red test is root-caused; "it passed again" is not a cause.
+text:75: row 6: the line "29:6+ so it passed this time again" holds the phrase "passed this time", which is refused: A red test is root-caused; "it passed again" is not a cause.
+text:77: row 6: the line "30:6+ it passed alone" holds the phrase "passed alone", which is refused: A red test is root-caused; "it passed again" is not a cause.
+text:78: row 6: the line "30:6+ IT PASSED ALONE" holds the phrase "PASSED ALONE", which is refused: A red test is root-caused; "it passed again" is not a cause.
+text:79: row 6: the line "30:6+ so it passed alone again" holds the phrase "passed alone", which is refused: A red test is root-caused; "it passed again" is not a cause.
+text:81: row 6: the line "31:6+ it passed on rerun" holds the phrase "passed on rerun", which is refused: A red test is root-caused; "it passed again" is not a cause.
+text:82: row 6: the line "31:6+ IT PASSED ON RERUN" holds the phrase "PASSED ON RERUN", which is refused: A red test is root-caused; "it passed again" is not a cause.
+text:83: row 6: the line "31:6+ so it passed on rerun again" holds the phrase "passed on rerun", which is refused: A red test is root-caused; "it passed again" is not a cause.
+text:85: row 6: the line "32:6+ it passed on a re-run" holds the phrase "passed on a re-run", which is refused: A red test is root-caused; "it passed again" is not a cause.
+text:86: row 6: the line "32:6+ IT PASSED ON A RE-RUN" holds the phrase "PASSED ON A RE-RUN", which is refused: A red test is root-caused; "it passed again" is not a cause.
+text:87: row 6: the line "32:6+ so it passed on a re-run again" holds the phrase "passed on a re-run", which is refused: A red test is root-caused; "it passed again" is not a cause.
+text:89: row 6: the line "33:6+ it will pass alone" holds the phrase "pass alone", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:90: row 6: the line "33:6+ IT WILL PASS ALONE" holds the phrase "PASS ALONE", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:91: row 6: the line "33:6+ so it will pass alone again" holds the phrase "pass alone", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:93: row 6: the line "34:6+ it passes alone" holds the phrase "passes alone", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:94: row 6: the line "34:6+ IT PASSES ALONE" holds the phrase "PASSES ALONE", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:95: row 6: the line "34:6+ so it passes alone again" holds the phrase "passes alone", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:97: row 6: the line "35:6+ it will pass this time" holds the phrase "pass this time", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:98: row 6: the line "35:6+ IT WILL PASS THIS TIME" holds the phrase "PASS THIS TIME", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:99: row 6: the line "35:6+ so it will pass this time again" holds the phrase "pass this time", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:101: row 6: the line "36:6+ it passes this time" holds the phrase "passes this time", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:102: row 6: the line "36:6+ IT PASSES THIS TIME" holds the phrase "PASSES THIS TIME", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:103: row 6: the line "36:6+ so it passes this time again" holds the phrase "passes this time", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:105: row 6: the line "37:6+ it can pass on rerun" holds the phrase "pass on rerun", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:106: row 6: the line "37:6+ IT CAN PASS ON RERUN" holds the phrase "PASS ON RERUN", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:107: row 6: the line "37:6+ so it can pass on rerun again" holds the phrase "pass on rerun", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:109: row 6: the line "38:6+ it can pass on a re-run" holds the phrase "pass on a re-run", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:110: row 6: the line "38:6+ IT CAN PASS ON A RE-RUN" holds the phrase "PASS ON A RE-RUN", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:111: row 6: the line "38:6+ so it can pass on a re-run again" holds the phrase "pass on a re-run", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:113: row 6: the line "39:6+ it passes on rerun" holds the phrase "passes on rerun", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:114: row 6: the line "39:6+ IT PASSES ON RERUN" holds the phrase "PASSES ON RERUN", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:115: row 6: the line "39:6+ so it passes on rerun again" holds the phrase "passes on rerun", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:117: row 6: the line "40:6+ it passes on a re-run" holds the phrase "passes on a re-run", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:118: row 6: the line "40:6+ IT PASSES ON A RE-RUN" holds the phrase "PASSES ON A RE-RUN", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:119: row 6: the line "40:6+ so it passes on a re-run again" holds the phrase "passes on a re-run", which is refused: A red test is root-caused; "it passes again" is not a cause.
+text:121: row 6: the line "41:6+ contention, nothing touches it" holds the phrase "nothing touches it", which is refused: A red test is root-caused; "nothing touches it" is not a cause.
+text:121: row 23: the line "41:6+ contention, nothing touches it" holds the phrase "contention", which is refused: A red test is root-caused or the test is made robust; "contention" is not a cause.
+text:122: row 6: the line "41:6+ CONTENTION, NOTHING TOUCHES IT" holds the phrase "NOTHING TOUCHES IT", which is refused: A red test is root-caused; "nothing touches it" is not a cause.
+text:122: row 23: the line "41:6+ CONTENTION, NOTHING TOUCHES IT" holds the phrase "CONTENTION", which is refused: A red test is root-caused or the test is made robust; "contention" is not a cause.
+text:123: row 6: the line "41:6+ so contention, nothing touches it again" holds the phrase "nothing touches it", which is refused: A red test is root-caused; "nothing touches it" is not a cause.
+text:123: row 23: the line "41:6+ so contention, nothing touches it again" holds the phrase "contention", which is refused: A red test is root-caused or the test is made robust; "contention" is not a cause.
+text:125: row 23: the line "42:23+ failed under contention" holds the phrase "contention", which is refused: A red test is root-caused or the test is made robust; "contention" is not a cause.
+text:126: row 23: the line "42:23+ FAILED UNDER CONTENTION" holds the phrase "CONTENTION", which is refused: A red test is root-caused or the test is made robust; "contention" is not a cause.
+text:127: row 23: the line "42:23+ so failed under contention again" holds the phrase "contention", which is refused: A red test is root-caused or the test is made robust; "contention" is not a cause.
+text:129: row 10: the line "43:10+ honest points" holds the phrase "honest", which is refused: State the fact; the word adds nothing and offers an exit.
+text:130: row 10: the line "43:10+ HONEST POINTS" holds the phrase "HONEST", which is refused: State the fact; the word adds nothing and offers an exit.
+text:131: row 10: the line "43:10+ so honest points again" holds the phrase "honest", which is refused: State the fact; the word adds nothing and offers an exit.
+text:133: row 10: the line "44:10+ to be frank it works" holds the phrase "frank", which is refused: State the fact; the word adds nothing and offers an exit.
+text:134: row 10: the line "44:10+ TO BE FRANK IT WORKS" holds the phrase "FRANK", which is refused: State the fact; the word adds nothing and offers an exit.
+text:135: row 10: the line "44:10+ so to be frank it works again" holds the phrase "frank", which is refused: State the fact; the word adds nothing and offers an exit.
+text:137: row 10: the line "45:10+ frankly it works" holds the phrase "frankly", which is refused: State the fact; the word adds nothing and offers an exit.
+text:138: row 10: the line "45:10+ FRANKLY IT WORKS" holds the phrase "FRANKLY", which is refused: State the fact; the word adds nothing and offers an exit.
+text:139: row 10: the line "45:10+ so frankly it works again" holds the phrase "frankly", which is refused: State the fact; the word adds nothing and offers an exit.
+text:141: row 10: the line "46:10+ not run locally: the e2e" holds the phrase "not run locally", which is refused: Run what the change needs; what CI runs is CI's and is not a caveat.
+text:142: row 10: the line "46:10+ NOT RUN LOCALLY: THE E2E" holds the phrase "NOT RUN LOCALLY", which is refused: Run what the change needs; what CI runs is CI's and is not a caveat.
+text:143: row 10: the line "46:10+ so not run locally: the e2e again" holds the phrase "not run locally", which is refused: Run what the change needs; what CI runs is CI's and is not a caveat.
+text:145: row 10: the line "47:10+ we haven't verified it" holds the phrase "haven't verified", which is refused: Run the check and say what it printed.
+text:146: row 10: the line "47:10+ WE HAVEN'T VERIFIED IT" holds the phrase "HAVEN'T VERIFIED", which is refused: Run the check and say what it printed.
+text:147: row 10: the line "47:10+ so we haven't verified it again" holds the phrase "haven't verified", which is refused: Run the check and say what it printed.
+text:149: row 16: the line "48:16+ do x or say what is true" holds the phrase "or say what is true", which is refused: A brief never offers an alternative to the Done-when.
+text:150: row 16: the line "48:16+ DO X OR SAY WHAT IS TRUE" holds the phrase "OR SAY WHAT IS TRUE", which is refused: A brief never offers an alternative to the Done-when.
+text:151: row 16: the line "48:16+ so do x or say what is true again" holds the phrase "or say what is true", which is refused: A brief never offers an alternative to the Done-when.
+text:153: row 16: the line "49:16+ or remove the claim" holds the phrase "or remove the claim", which is refused: A claim is never weakened: the code is made to match it.
+text:154: row 16: the line "49:16+ OR REMOVE THE CLAIM" holds the phrase "OR REMOVE THE CLAIM", which is refused: A claim is never weakened: the code is made to match it.
+text:155: row 16: the line "49:16+ so or remove the claim again" holds the phrase "or remove the claim", which is refused: A claim is never weakened: the code is made to match it.
+text:157: row 16: the line "50:16+ or remove the sentence" holds the phrase "or remove the sentence", which is refused: A claim is never weakened: the code is made to match it.
+text:158: row 16: the line "50:16+ OR REMOVE THE SENTENCE" holds the phrase "OR REMOVE THE SENTENCE", which is refused: A claim is never weakened: the code is made to match it.
+text:159: row 16: the line "50:16+ so or remove the sentence again" holds the phrase "or remove the sentence", which is refused: A claim is never weakened: the code is made to match it.
+text:161: row 16: the line "51:16+ or remove the line" holds the phrase "or remove the line", which is refused: A claim is never weakened: the code is made to match it.
+text:162: row 16: the line "51:16+ OR REMOVE THE LINE" holds the phrase "OR REMOVE THE LINE", which is refused: A claim is never weakened: the code is made to match it.
+text:163: row 16: the line "51:16+ so or remove the line again" holds the phrase "or remove the line", which is refused: A claim is never weakened: the code is made to match it.
+text:165: row 13: the line "52:13+ after a day of sessions" holds the phrase "after a day", which is refused: A step that waits for time is done now.
+text:166: row 13: the line "52:13+ AFTER A DAY OF SESSIONS" holds the phrase "AFTER A DAY", which is refused: A step that waits for time is done now.
+text:167: row 13: the line "52:13+ so after a day of sessions again" holds the phrase "after a day", which is refused: A step that waits for time is done now.
+text:169: row 13: the line "53:13+ after a week of sessions" holds the phrase "after a week", which is refused: A step that waits for time is done now.
+text:170: row 13: the line "53:13+ AFTER A WEEK OF SESSIONS" holds the phrase "AFTER A WEEK", which is refused: A step that waits for time is done now.
+text:171: row 13: the line "53:13+ so after a week of sessions again" holds the phrase "after a week", which is refused: A step that waits for time is done now.
+text:173: row 13: the line "54:13+ after a month of sessions" holds the phrase "after a month", which is refused: A step that waits for time is done now.
+text:174: row 13: the line "54:13+ AFTER A MONTH OF SESSIONS" holds the phrase "AFTER A MONTH", which is refused: A step that waits for time is done now.
+text:175: row 13: the line "54:13+ so after a month of sessions again" holds the phrase "after a month", which is refused: A step that waits for time is done now.
+text:177: row 13: the line "55:13+ after a session" holds the phrase "after a session", which is refused: A step that waits for time is done now.
+text:178: row 13: the line "55:13+ AFTER A SESSION" holds the phrase "AFTER A SESSION", which is refused: A step that waits for time is done now.
+text:179: row 13: the line "55:13+ so after a session again" holds the phrase "after a session", which is refused: A step that waits for time is done now.
+text:181: row 13: the line "56:13+ after 3 sessions" holds the phrase "after 3 sessions", which is refused: A step that waits for time is done now.
+text:182: row 13: the line "56:13+ AFTER 3 SESSIONS" holds the phrase "AFTER 3 SESSIONS", which is refused: A step that waits for time is done now.
+text:183: row 13: the line "56:13+ so after 3 sessions again" holds the phrase "after 3 sessions", which is refused: A step that waits for time is done now.
+text:185: row 13: the line "57:13+ at the next capture" holds the phrase "the next capture", which is refused: A step that waits for a recurrence is done now: produce what the wait would produce.
+text:186: row 13: the line "57:13+ AT THE NEXT CAPTURE" holds the phrase "THE NEXT CAPTURE", which is refused: A step that waits for a recurrence is done now: produce what the wait would produce.
+text:187: row 13: the line "57:13+ so at the next capture again" holds the phrase "the next capture", which is refused: A step that waits for a recurrence is done now: produce what the wait would produce.
+text:189: row 13: the line "58:13+ at the next run" holds the phrase "the next run", which is refused: A step that waits for a recurrence is done now: produce what the wait would produce.
+text:190: row 13: the line "58:13+ AT THE NEXT RUN" holds the phrase "THE NEXT RUN", which is refused: A step that waits for a recurrence is done now: produce what the wait would produce.
+text:191: row 13: the line "58:13+ so at the next run again" holds the phrase "the next run", which is refused: A step that waits for a recurrence is done now: produce what the wait would produce.
+text:193: row 13: the line "59:13+ at the next occurrence" holds the phrase "the next occurrence", which is refused: A step that waits for a recurrence is done now: produce what the wait would produce.
+text:194: row 13: the line "59:13+ AT THE NEXT OCCURRENCE" holds the phrase "THE NEXT OCCURRENCE", which is refused: A step that waits for a recurrence is done now: produce what the wait would produce.
+text:195: row 13: the line "59:13+ so at the next occurrence again" holds the phrase "the next occurrence", which is refused: A step that waits for a recurrence is done now: produce what the wait would produce.
+text:197: row 13: the line "60:13+ wait and see" holds the phrase "wait and see", which is refused: A ticket whose only content is waiting is closed; the work is done now.
+text:198: row 13: the line "60:13+ WAIT AND SEE" holds the phrase "WAIT AND SEE", which is refused: A ticket whose only content is waiting is closed; the work is done now.
+text:199: row 13: the line "60:13+ so wait and see again" holds the phrase "wait and see", which is refused: A ticket whose only content is waiting is closed; the work is done now.
+text:201: row 14: the line "61:14+ holding the slot" holds the phrase "holding the slot", which is refused: A free slot is filled the same turn, in the owner's order.
+text:202: row 14: the line "61:14+ HOLDING THE SLOT" holds the phrase "HOLDING THE SLOT", which is refused: A free slot is filled the same turn, in the owner's order.
+text:203: row 14: the line "61:14+ so holding the slot again" holds the phrase "holding the slot", which is refused: A free slot is filled the same turn, in the owner's order.
+text:205: row 18: the line "62:18+ blocked on evidence" holds the phrase "blocked on evidence", which is refused: Producing the evidence is the work.
+text:206: row 18: the line "62:18+ BLOCKED ON EVIDENCE" holds the phrase "BLOCKED ON EVIDENCE", which is refused: Producing the evidence is the work.
+text:207: row 18: the line "62:18+ so blocked on evidence again" holds the phrase "blocked on evidence", which is refused: Producing the evidence is the work.
+text:209: row 18: the line "63:18+ waiting for evidence" holds the phrase "waiting for evidence", which is refused: Producing the evidence is the work.
+text:210: row 18: the line "63:18+ WAITING FOR EVIDENCE" holds the phrase "WAITING FOR EVIDENCE", which is refused: Producing the evidence is the work.
+text:211: row 18: the line "63:18+ so waiting for evidence again" holds the phrase "waiting for evidence", which is refused: Producing the evidence is the work.
+text:213: row 20: the line "64:20+ waiting for a go" holds the phrase "waiting for a go", which is refused: An interrupt that killed agents means restart them fresh; nobody waits for a go.
+text:214: row 20: the line "64:20+ WAITING FOR A GO" holds the phrase "WAITING FOR A GO", which is refused: An interrupt that killed agents means restart them fresh; nobody waits for a go.
+text:215: row 20: the line "64:20+ so waiting for a go again" holds the phrase "waiting for a go", which is refused: An interrupt that killed agents means restart them fresh; nobody waits for a go.
+text:217: row 20: the line "65:20+ waiting for the "go"" holds the phrase "waiting for the "go", which is refused: An interrupt that killed agents means restart them fresh; nobody waits for a go.
+text:218: row 20: the line "65:20+ WAITING FOR THE "GO"" holds the phrase "WAITING FOR THE "GO", which is refused: An interrupt that killed agents means restart them fresh; nobody waits for a go.
+text:219: row 20: the line "65:20+ so waiting for the "go" again" holds the phrase "waiting for the "go", which is refused: An interrupt that killed agents means restart them fresh; nobody waits for a go.
+text:221: row 21: the line "66:21+ stop measuring" holds the phrase "stop measuring", which is refused: The Done-when is measured as written.
+text:222: row 21: the line "66:21+ STOP MEASURING" holds the phrase "STOP MEASURING", which is refused: The Done-when is measured as written.
+text:223: row 21: the line "66:21+ so stop measuring again" holds the phrase "stop measuring", which is refused: The Done-when is measured as written.
+text:225: row 21: the line "67:21+ narrow the measurement" holds the phrase "narrow the measurement", which is refused: The Done-when is measured as written.
+text:226: row 21: the line "67:21+ NARROW THE MEASUREMENT" holds the phrase "NARROW THE MEASUREMENT", which is refused: The Done-when is measured as written.
+text:227: row 21: the line "67:21+ so narrow the measurement again" holds the phrase "narrow the measurement", which is refused: The Done-when is measured as written.
+text:229: row 2: the line "12:2+ change Refs instead of Fixes" holds the phrase "instead of Fixes", which is refused: Nobody offers a way to ship less than the ticket says: the verdict is changes needed, and the finding is to do the Done-when as written.
+text:230: row 2: the line "16:2+ Refs unless the owner narrows it" holds the phrase "unless the owner narrow", which is refused: Nobody narrows a ticket in a review or a brief: the Done-when as written is the standard.
+text:231: row 3: the line "26:3+ the ticket is partly done" holds the phrase "partly", which is refused: Partly is not a state: the Done-when is met as written or the work goes on.
+text:232: row 3: the line "27:3+ partially done" holds the phrase "partially", which is refused: Partially is not a state: the Done-when is met as written or the work goes on.
+text:233: row 3: the line "28:3+ a hand-picked six fixtures" holds the phrase "hand-picked", which is refused: A local sample is random, with its seed and size named; the Done-when's own command runs in CI on the whole population.
+text:234: row 10: the line "46:10+ Not run locally: the e2e" holds the phrase "Not run locally", which is refused: Run what the change needs; what CI runs is CI's and is not a caveat.
+text:235: row 16: the line "48:16+ do X or say what is true" holds the phrase "or say what is true", which is refused: A brief never offers an alternative to the Done-when.
+text:236: row 14: the line "61:14+ holding the slot for the next fix" holds the phrase "holding the slot", which is refused: A free slot is filled the same turn, in the owner's order.
+text:237: row 10: the line "47:10+ I haven't verified" holds the phrase "haven't verified", which is refused: Run the check and say what it printed.
+text:238: row 2: the line "19:2+ change Fixes #368 to Refs #368" holds the phrase "Fixes #368 to Refs", which is refused: Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:239: row 2: the line "20:2+ change Fixes #N to Refs #N" holds the phrase "Fixes #N to Refs", which is refused: Nobody offers a way to ship less than the ticket says, with or without a tail: the verdict is changes needed.
+text:240: row 2: the line "22:2+ open it as Refs" holds the phrase "open it as Refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:240: row 2: the line "22:2+ open it as Refs" holds the phrase "as Refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:241: row 2: the line "22:2+ it goes in as Refs" holds the phrase "as Refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:241: row 2: the line "22:2+ it goes in as Refs" holds the phrase "as Refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:242: row 2: the line "23:2+ use Refs" holds the phrase "use Refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:242: row 2: the line "23:2+ use Refs" holds the phrase "use Refs", which is refused: A PR that does not meet its Done-when as written is not opened as Refs: the verdict is changes needed.
+text:243: row 10: the line "68:10+ I haven't checked the PR" holds the phrase "haven't checked", which is refused: Look, and say what was found; "I haven't looked" is never said (owner, 2026-10-21T04:40:58Z).
+text:244: row 10: the line "68:10+ I HAVEN'T CHECKED THE PR" holds the phrase "HAVEN'T CHECKED", which is refused: Look, and say what was found; "I haven't looked" is never said (owner, 2026-10-21T04:40:58Z).
+text:245: row 10: the line "68:10+ so I haven't checked the PR again" holds the phrase "haven't checked", which is refused: Look, and say what was found; "I haven't looked" is never said (owner, 2026-10-21T04:40:58Z).
+text:247: row 10: the line "69:10+ I haven't looked at it" holds the phrase "haven't looked", which is refused: Look, and say what was found; "I haven't looked" is never said (owner, 2026-10-21T04:40:58Z).
+text:248: row 10: the line "69:10+ I HAVEN'T LOOKED AT IT" holds the phrase "HAVEN'T LOOKED", which is refused: Look, and say what was found; "I haven't looked" is never said (owner, 2026-10-21T04:40:58Z).
+text:249: row 10: the line "69:10+ so I haven't looked at it again" holds the phrase "haven't looked", which is refused: Look, and say what was found; "I haven't looked" is never said (owner, 2026-10-21T04:40:58Z).
+text:251: row 10: the line "70:10+ I didn't check the PR" holds the phrase "didn't check", which is refused: Look, and say what was found; "I didn't check" is never said (owner, 2026-10-21T04:40:58Z).
+text:252: row 10: the line "70:10+ I DIDN'T CHECK THE PR" holds the phrase "DIDN'T CHECK", which is refused: Look, and say what was found; "I didn't check" is never said (owner, 2026-10-21T04:40:58Z).
+text:253: row 10: the line "70:10+ so I didn't check the PR again" holds the phrase "didn't check", which is refused: Look, and say what was found; "I didn't check" is never said (owner, 2026-10-21T04:40:58Z).
+text:255: row 10: the line "71:10+ I didn't look at it" holds the phrase "didn't look", which is refused: Look, and say what was found; "I didn't check" is never said (owner, 2026-10-21T04:40:58Z).
+text:256: row 10: the line "71:10+ I DIDN'T LOOK AT IT" holds the phrase "DIDN'T LOOK", which is refused: Look, and say what was found; "I didn't check" is never said (owner, 2026-10-21T04:40:58Z).
+text:257: row 10: the line "71:10+ so I didn't look at it again" holds the phrase "didn't look", which is refused: Look, and say what was found; "I didn't check" is never said (owner, 2026-10-21T04:40:58Z).
+text:259: row 10: the line "72:10+ I didn't verify it" holds the phrase "didn't verify", which is refused: Look, and say what was found; "I didn't check" is never said (owner, 2026-10-21T04:40:58Z).
+text:260: row 10: the line "72:10+ I DIDN'T VERIFY IT" holds the phrase "DIDN'T VERIFY", which is refused: Look, and say what was found; "I didn't check" is never said (owner, 2026-10-21T04:40:58Z).
+text:261: row 10: the line "72:10+ so I didn't verify it again" holds the phrase "didn't verify", which is refused: Look, and say what was found; "I didn't check" is never said (owner, 2026-10-21T04:40:58Z).
+text:263: row 10: the line "73:10+ I've not checked it" holds the phrase "I've not checked", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:264: row 10: the line "73:10+ I'VE NOT CHECKED IT" holds the phrase "I'VE NOT CHECKED", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:265: row 10: the line "73:10+ so I've not checked it again" holds the phrase "I've not checked", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:267: row 10: the line "74:10+ I've not verified it" holds the phrase "I've not verified", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:268: row 10: the line "74:10+ I'VE NOT VERIFIED IT" holds the phrase "I'VE NOT VERIFIED", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:269: row 10: the line "74:10+ so I've not verified it again" holds the phrase "I've not verified", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:271: row 10: the line "75:10+ I've not looked at it" holds the phrase "I've not looked", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:272: row 10: the line "75:10+ I'VE NOT LOOKED AT IT" holds the phrase "I'VE NOT LOOKED", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:273: row 10: the line "75:10+ so I've not looked at it again" holds the phrase "I've not looked", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:275: row 10: the line "76:10+ I have not checked it" holds the phrase "I have not checked", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:276: row 10: the line "76:10+ I HAVE NOT CHECKED IT" holds the phrase "I HAVE NOT CHECKED", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:277: row 10: the line "76:10+ so I have not checked it again" holds the phrase "I have not checked", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:279: row 10: the line "77:10+ I have not verified it" holds the phrase "I have not verified", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:280: row 10: the line "77:10+ I HAVE NOT VERIFIED IT" holds the phrase "I HAVE NOT VERIFIED", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:281: row 10: the line "77:10+ so I have not verified it again" holds the phrase "I have not verified", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:283: row 10: the line "78:10+ I have not looked at it" holds the phrase "I have not looked", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:284: row 10: the line "78:10+ I HAVE NOT LOOKED AT IT" holds the phrase "I HAVE NOT LOOKED", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:285: row 10: the line "78:10+ so I have not looked at it again" holds the phrase "I have not looked", which is refused: Look, and say what was found; "I've not checked" is never said (owner, 2026-10-18T20:37:50Z).
+text:287: row 3: the line "79:3+ done in part" holds the phrase "in part", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:288: row 3: the line "79:3+ DONE IN PART" holds the phrase "IN PART", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:289: row 3: the line "79:3+ so done in part again" holds the phrase "in part", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:291: row 3: the line "80:3+ the part that is left" holds the phrase "the part that", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:292: row 3: the line "80:3+ THE PART THAT IS LEFT" holds the phrase "THE PART THAT", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:293: row 3: the line "80:3+ so the part that is left again" holds the phrase "the part that", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:295: row 3: the line "81:3+ the part of it is left" holds the phrase "the part of", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:296: row 3: the line "81:3+ THE PART OF IT IS LEFT" holds the phrase "THE PART OF", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:297: row 3: the line "81:3+ so the part of it is left again" holds the phrase "the part of", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:299: row 3: the line "82:3+ the part which is left" holds the phrase "the part which", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:300: row 3: the line "82:3+ THE PART WHICH IS LEFT" holds the phrase "THE PART WHICH", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:301: row 3: the line "82:3+ so the part which is left again" holds the phrase "the part which", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:303: row 3: the line "83:3+ one part is done" holds the phrase "part is done", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:304: row 3: the line "83:3+ ONE PART IS DONE" holds the phrase "PART IS DONE", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:305: row 3: the line "83:3+ so one part is done again" holds the phrase "part is done", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:307: row 3: the line "84:3+ a part is left" holds the phrase "part is left", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:308: row 3: the line "84:3+ A PART IS LEFT" holds the phrase "PART IS LEFT", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:309: row 3: the line "84:3+ so a part is left again" holds the phrase "part is left", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:311: row 3: the line "85:3+ a part is owed" holds the phrase "part is owed", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:312: row 3: the line "85:3+ A PART IS OWED" holds the phrase "PART IS OWED", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:313: row 3: the line "85:3+ so a part is owed again" holds the phrase "part is owed", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:315: row 3: the line "86:3+ a part is not done" holds the phrase "part is not done", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:316: row 3: the line "86:3+ A PART IS NOT DONE" holds the phrase "PART IS NOT DONE", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:317: row 3: the line "86:3+ so a part is not done again" holds the phrase "part is not done", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:319: row 3: the line "87:3+ two parts are done" holds the phrase "parts are done", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:320: row 3: the line "87:3+ TWO PARTS ARE DONE" holds the phrase "PARTS ARE DONE", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:321: row 3: the line "87:3+ so two parts are done again" holds the phrase "parts are done", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:323: row 3: the line "88:3+ two parts are left" holds the phrase "parts are left", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:324: row 3: the line "88:3+ TWO PARTS ARE LEFT" holds the phrase "PARTS ARE LEFT", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:325: row 3: the line "88:3+ so two parts are left again" holds the phrase "parts are left", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:327: row 3: the line "89:3+ two parts are owed" holds the phrase "parts are owed", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:328: row 3: the line "89:3+ TWO PARTS ARE OWED" holds the phrase "PARTS ARE OWED", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:329: row 3: the line "89:3+ so two parts are owed again" holds the phrase "parts are owed", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:331: row 3: the line "90:3+ two parts are not done" holds the phrase "parts are not done", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:332: row 3: the line "90:3+ TWO PARTS ARE NOT DONE" holds the phrase "PARTS ARE NOT DONE", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:333: row 3: the line "90:3+ so two parts are not done again" holds the phrase "parts are not done", which is refused: The word part is not used: the Done-when is met as written or the work goes on (owner, 2026-10-25T18:20:21Z).
+text:335: row 24: the line "91:24+ start it with run_in_background and read the log" holds the phrase "run_in_background", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:336: row 24: the line "91:24+ START IT WITH RUN_IN_BACKGROUND AND READ THE LOG" holds the phrase "RUN_IN_BACKGROUND", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:337: row 24: the line "91:24+ so start it with run_in_background and read the log again" holds the phrase "run_in_background", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:339: row 24: the line "92:24+ run the suite in the background" holds the phrase "in the background", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:340: row 24: the line "92:24+ RUN THE SUITE IN THE BACKGROUND" holds the phrase "IN THE BACKGROUND", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:341: row 24: the line "92:24+ so run the suite in the background again" holds the phrase "in the background", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:343: row 24: the line "93:24+ moved into the background" holds the phrase "into the background", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:344: row 24: the line "93:24+ MOVED INTO THE BACKGROUND" holds the phrase "INTO THE BACKGROUND", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:345: row 24: the line "93:24+ so moved into the background again" holds the phrase "into the background", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:347: row 24: the line "94:24+ sent to the background" holds the phrase "to the background", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:348: row 24: the line "94:24+ SENT TO THE BACKGROUND" holds the phrase "TO THE BACKGROUND", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:349: row 24: the line "94:24+ so sent to the background again" holds the phrase "to the background", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:351: row 24: the line "95:24+ nohup bats check &" holds the phrase "nohup", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:352: row 24: the line "95:24+ NOHUP BATS CHECK &" holds the phrase "NOHUP", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:353: row 24: the line "95:24+ so nohup bats check & again" holds the phrase "nohup", which is refused: A command is never run in the background: a check of more than a few minutes is left to CI, which is the evidence (owner, 2026-10-26; worker.md, "Where you work, and how long a run is").
+text:355: row 24: the line "96:24+ poll it with sleep 60" holds the phrase "sleep 60", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:356: row 24: the line "96:24+ POLL IT WITH SLEEP 60" holds the phrase "SLEEP 60", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:357: row 24: the line "96:24+ so poll it with sleep 60 again" holds the phrase "sleep 60", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:359: row 24: the line "97:24+ a sleep loop until it ends" holds the phrase "sleep loop", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:360: row 24: the line "97:24+ A SLEEP LOOP UNTIL IT ENDS" holds the phrase "SLEEP LOOP", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:361: row 24: the line "97:24+ so a sleep loop until it ends again" holds the phrase "sleep loop", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:363: row 24: the line "98:24+ sleep until it ends" holds the phrase "sleep until", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:364: row 24: the line "98:24+ SLEEP UNTIL IT ENDS" holds the phrase "SLEEP UNTIL", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:365: row 24: the line "98:24+ so sleep until it ends again" holds the phrase "sleep until", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:367: row 24: the line "99:24+ a polling loop" holds the phrase "polling loop", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:368: row 24: the line "99:24+ A POLLING LOOP" holds the phrase "POLLING LOOP", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:369: row 24: the line "99:24+ so a polling loop again" holds the phrase "polling loop", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:371: row 24: the line "100:24+ polling until it ends" holds the phrase "polling until", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:372: row 24: the line "100:24+ POLLING UNTIL IT ENDS" holds the phrase "POLLING UNTIL", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:373: row 24: the line "100:24+ so polling until it ends again" holds the phrase "polling until", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:375: row 24: the line "101:24+ loop with sleep until green" holds the phrase "sleep until", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:375: row 24: the line "101:24+ loop with sleep until green" holds the phrase "loop with sleep", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:376: row 24: the line "101:24+ LOOP WITH SLEEP UNTIL GREEN" holds the phrase "SLEEP UNTIL", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:376: row 24: the line "101:24+ LOOP WITH SLEEP UNTIL GREEN" holds the phrase "LOOP WITH SLEEP", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:377: row 24: the line "101:24+ so loop with sleep until green again" holds the phrase "sleep until", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:377: row 24: the line "101:24+ so loop with sleep until green again" holds the phrase "loop with sleep", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:379: row 24: the line "102:24+ loops using sleep" holds the phrase "loops using sleep", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:380: row 24: the line "102:24+ LOOPS USING SLEEP" holds the phrase "LOOPS USING SLEEP", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:381: row 24: the line "102:24+ so loops using sleep again" holds the phrase "loops using sleep", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:383: row 24: the line "103:24+ a loop and sleep" holds the phrase "loop and sleep", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:384: row 24: the line "103:24+ A LOOP AND SLEEP" holds the phrase "LOOP AND SLEEP", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:385: row 24: the line "103:24+ so a loop and sleep again" holds the phrase "loop and sleep", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:387: row 24: the line "104:24+ looping with sleep" holds the phrase "looping with sleep", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:388: row 24: the line "104:24+ LOOPING WITH SLEEP" holds the phrase "LOOPING WITH SLEEP", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:389: row 24: the line "104:24+ so looping with sleep again" holds the phrase "looping with sleep", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:391: row 24: the line "105:24+ looping using sleep" holds the phrase "looping using sleep", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:392: row 24: the line "105:24+ LOOPING USING SLEEP" holds the phrase "LOOPING USING SLEEP", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:393: row 24: the line "105:24+ so looping using sleep again" holds the phrase "looping using sleep", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:395: row 24: the line "106:24+ looping and sleep" holds the phrase "looping and sleep", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:396: row 24: the line "106:24+ LOOPING AND SLEEP" holds the phrase "LOOPING AND SLEEP", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
+text:397: row 24: the line "106:24+ so looping and sleep again" holds the phrase "looping and sleep", which is refused: No agent loops with sleep or polls for a run: it hands back and the orchestrator watches the checks (owner, 2026-10-25 and 2026-10-26; worker.md, "Pushing and the PR body").
