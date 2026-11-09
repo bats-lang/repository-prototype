@@ -99,13 +99,11 @@
 # pull request body, rendered by `repin table`; a pin not moved because of a
 # newer major or a release under 7 days is listed with that status. Without a
 # RELOCK_TOKEN a workflow file cannot be changed, so a move that would be made
-# is listed as `not moved` with the reason, as a workflow pin is. A run where
+# fails the run, as a workflow pin does. A run where
 # no action pin moves is the relock it was. `actions-releases` and
 # `actions-now` replace the two sources (a file of the checkout, a time) for a
-# test; both default to off. The awk programs between the `tag-commit`,
-# `actions-left` and `actions-bullet` markers (a tag's commit, the records
-# split for the no-token case, the list of moves not made) are run on
-# fixtures by relock-pins-test.yml.
+# test; both default to off. The awk program between the `tag-commit` markers
+# (a tag's commit) is run on fixtures by relock-pins-test.yml.
 #
 # A caller whose pins are not `uses:` lines (an Android SDK revision, a ref
 # in a file of its own) gives `repin-command` (#420, piece 2 of 3 of
@@ -241,7 +239,8 @@
 # RELOCK_TOKEN secret (a fine-grained token on the repository with
 # Contents, Pull requests and Workflows read and write) the workflow pins
 # move too, and its pull request starts the checks itself; without one, a
-# workflow pin that would move is listed in the pull request instead.
+# run with a workflow pin to move fails, naming the secret (the markers
+# no-token, run on fixtures by relock-pins-test.yml).
 #
 # Opening the pull request with GITHUB_TOKEN needs the setting "Allow
 # GitHub Actions to create and approve pull requests" (the organization's,
@@ -1140,32 +1139,21 @@ jobs:
           if [ -d "$WORKFLOWS_DIRECTORY" ]; then
             "$repin" actions "$WORKFLOWS_DIRECTORY" "${ACTIONS_NOW:-$(date -u +%s)}" ~/relock/releases > ~/relock/actions-records
           fi
-          cp ~/relock/actions-records ~/relock/actions-shown
-          : > ~/relock/actions-left
 
-          # The workflow pins stay where they are when GITHUB_TOKEN would
-          # have to change workflow files, which it cannot (a run that
-          # publishes nothing has no push to refuse); so do the action pins
-          # that would move, which are listed as not moved
-          : > ~/relock/pins-left
+          # A workflow pin or an action pin to move needs a token that can
+          # change workflow files, which GITHUB_TOKEN cannot (a run that
+          # publishes nothing has no push to refuse): without a RELOCK_TOKEN
+          # the run fails and names the secret (area: relock token,
+          # repository-prototype#593). The text between the no-token markers
+          # is run on fixtures by relock-pins-test.yml.
+          # no-token begin
           if [ "$HAS_RELOCK_TOKEN" != true ] && [ "$PUBLISH" = true ]; then
-            git checkout -- "$WORKFLOWS_DIRECTORY"
-            mv ~/relock/pins ~/relock/pins-left
-            : > ~/relock/pins
-            while read -r pin owner_repo old new; do
-              echo "::warning::$pin is pinned at $old; its newest is $new. GITHUB_TOKEN cannot change workflow files: move it in a pull request, or give this workflow a RELOCK_TOKEN secret."
-            done < ~/relock/pins-left
-            : > ~/relock/actions-shown
-            awk -F'\t' -v shown="$HOME/relock/actions-shown" -v left="$HOME/relock/actions-left" '
-              # actions-left begin
-              $6 == "moved" { print > left; next }
-              { print > shown }
-              # actions-left end
-            ' ~/relock/actions-records
-            while IFS="$(printf '\t')" read -r kind name old new age status; do
-              echo "::warning::$name is pinned at $old; its newest release is $new. GITHUB_TOKEN cannot change workflow files: move it in a pull request, or give this workflow a RELOCK_TOKEN secret."
-            done < ~/relock/actions-left
+            if [ -s ~/relock/pins ] || awk -F'\t' '$6 == "moved" { found = 1 } END { exit !found }' ~/relock/actions-records; then
+              echo "::error::RELOCK_TOKEN is not set, and a pin in a workflow file has a newer version to move: GITHUB_TOKEN cannot change files in .github/workflows. Give this workflow a RELOCK_TOKEN secret (a fine-grained token with Contents, Pull requests and Workflows read and write)."
+              exit 1
+            fi
           fi
+          # no-token end
 
           if [ -z "$(git status --porcelain)" ]; then
             echo "Nothing to relock: every pin is the newest." | tee -a "$GITHUB_STEP_SUMMARY"
@@ -1217,31 +1205,19 @@ jobs:
                 echo "\`${repository_old:-(none)}\` → \`$repository_new\` ([changes](https://github.com/$PACKAGE_REPOSITORY/compare/$repository_old...$repository_new))"
               fi
             fi
-            if [ -s ~/relock/pins ] || [ -s ~/relock/pins-left ]; then
+            if [ -s ~/relock/pins ]; then
               echo
               echo "### Workflows"
               echo
               while read -r pin owner_repo old new; do
                 echo "- \`$pin\`: \`$old\` → \`$new\` ([changes](https://github.com/$owner_repo/compare/$old...$new))"
               done < ~/relock/pins
-              while read -r pin owner_repo old new; do
-                echo "- \`$pin\` **not moved**: its newest is \`$new\` (now \`$old\`, [changes](https://github.com/$owner_repo/compare/$old...$new)). GITHUB_TOKEN cannot change files in \`.github/workflows\`: move it in a pull request, or give this workflow a \`RELOCK_TOKEN\` secret that can."
-              done < ~/relock/pins-left
             fi
-            if [ -s ~/relock/actions-shown ] || [ -s ~/relock/actions-left ]; then
+            if [ -s ~/relock/actions-records ]; then
               echo
               echo "### Actions"
               echo
-              if [ -s ~/relock/actions-shown ]; then "$repin" table ~/relock/actions-shown; fi
-              if [ -s ~/relock/actions-shown ] && [ -s ~/relock/actions-left ]; then echo; fi
-              awk -F'\t' '
-                # actions-bullet begin
-                {
-                  unit = ($5 == 1) ? "day" : "days"
-                  print "- `" $2 "` (" $1 "): `" $3 "` → `" $4 "`, release age " $5 " " unit ", **not moved**: GITHUB_TOKEN cannot change files in `.github/workflows`: move it in a pull request, or give this workflow a `RELOCK_TOKEN` secret that can."
-                }
-                # actions-bullet end
-              ' ~/relock/actions-left
+              "$repin" table ~/relock/actions-records
             fi
             if [ -s ~/relock/npm-records ]; then
               echo
