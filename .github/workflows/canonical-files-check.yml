@@ -1,0 +1,101 @@
+# A pull request that changes a workflow or issue-template file is checked against the audit
+# (bats-lang/repository-prototype#603, keyword: canonical-files). A repository's
+# .github/workflows/canonical-files.yml is only a caller of this workflow, by commit (#269):
+#
+#   name: canonical-files
+#   on:
+#     pull_request:
+#       types: [opened, synchronize, reopened]
+#   permissions:
+#     contents: read
+#   jobs:
+#     canonical-files:
+#       uses: bats-lang/repository-prototype/.github/workflows/canonical-files-check.yml@<commit> # <version>
+#       with:
+#         tools-ref: <the same commit>
+#
+# Why: the audit (tools/pin-audit) runs weekly over the default branches, and the allowlist protocol (a
+# repository that changes a bespoke file first adds the new hash to tools/pin-audit/allowlist.txt as the
+# next hash) was checked by no one, so bats#620 merged with every check green and `pin_audit --repository
+# bats` failed for its check.yml (repository-prototype#602). The check is `pin_audit --check`: each file of
+# the pull request under .github/workflows/ or .github/ISSUE_TEMPLATE/, as it is in the head, must be a
+# template with its holes filled or listed (current or next hash) in the allowlist. A file that is neither
+# fails with its sha256 and the allowlist line to add.
+#
+# The allowlist and the templates are those of the default branch of repository-prototype, not those of
+# tools-ref: the next hash is added there first, by a pull request that merges before this one, and the
+# pinned commit may be older than that merge. The default branch is data here (checked out, read, never
+# run); the program is the one built from tools-ref.
+#
+# Non-bats code of ours, one `run:` step: the list of changed paths. The avenue exhausted: bats has no
+# HTTP client, and this is GitHub's API (`gh api`, a third-party tool used as it is).
+#
+# Safe on pull_request: the pull request's files are checked out as data and read, never run, with a
+# read-only token and no secret; a fork's run has the same rights.
+#
+# Called on: pull_request.
+name: canonical-files-check
+
+on:
+  workflow_call:
+    inputs:
+      tools-ref:
+        description: The full commit SHA of bats-lang/repository-prototype this workflow is called at.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# The tools are checked out at the root of the workspace, as input-overlap-check.yml does: bats's setup
+# action reads .github/bats-version and .github/repository-version there. The head and the default branch
+# of repository-prototype are data in subdirectories.
+jobs:
+  canonical-files:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: bats-lang/repository-prototype
+          ref: ${{ inputs.tools-ref }}
+          persist-credentials: false
+          fetch-depth: 2
+
+      - name: Set up bats
+        uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
+        with:
+          require-lock: 'false'
+          commit: ${{ inputs.tools-ref }}
+
+      - name: Build the audit
+        working-directory: tools/pin-audit
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
+
+      - name: Check out the head as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          persist-credentials: false
+
+      # The allowlist and the templates of the default branch, as data (see the header).
+      - name: Check out the default branch of repository-prototype as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: bats-lang/repository-prototype
+          ref: main
+          path: main
+          persist-credentials: false
+
+      - name: List the paths the pull request changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST/files" --jq '.[].filename' > "$RUNNER_TEMP/changes.txt"
+
+      - name: Refuse a changed file that is not canonical
+        env:
+          REPOSITORY_NAME: ${{ github.event.pull_request.base.repo.name }}
+        run: env -C main "$GITHUB_WORKSPACE/tools/pin-audit/dist/debug/pin_audit" --check "$REPOSITORY_NAME" "$GITHUB_WORKSPACE/head" "$RUNNER_TEMP/changes.txt"
