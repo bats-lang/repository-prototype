@@ -1,0 +1,14 @@
+[package]
+name = "adopt"
+kind = "bin"
+unsafe = false
+
+[dependencies]
+"array" = ""
+"arith" = ""
+"builder" = ""
+"env" = ""
+"file" = ""
+"list" = ""
+"process" = ""
+"result" = ""
