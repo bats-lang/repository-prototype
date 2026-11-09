@@ -12,16 +12,16 @@
 # such comment, a malformed entry or a repeated file fails the audit. A file
 # that is listed and also equals a template fails too: drop its entry.
 #
-bats/.github/workflows/check.yml ee36bb7f494bb3169de50099777f82fee66f703a93dcc24032089ff3ac16f80f 8f22cab9a88a7aa0f167b1e3e24feb21055408c494b8f4c3cfb4a79e924df817 # bats#482
+bats/.github/workflows/check.yml 8f22cab9a88a7aa0f167b1e3e24feb21055408c494b8f4c3cfb4a79e924df817 b5f732af356b8dd5947afda72882564b81a03877860dc5786eea48668c5b0f12 # bats#482
 bats/.github/workflows/relock.yml 0a9694b116fb154564aa7a91c673a5d5b96e941f18413112210e152cf540e4f9 9b014601af94b87f7994cd3be7dbd7dd8c53727321bf4db9f7ee62c746f5bb5a # bats#499
 quire/.github/workflows/check.yml 30e8a6ee99610af4f29d2559eb5c54fcec311e47179ba7ee0448c4a924c74255 # quire#896
-quire/.github/workflows/deploy.yml 62bacb737c2a19ed97f3e64cf27963fd0498eaa62ff7e2ae57a30c86fc119d05 # quire#896
+quire/.github/workflows/deploy.yml 3cadff4734bf52d2c56ac4752f9e3fdca95623f40eb14502e68344dcebbbc907 # quire#1093
 quire/.github/workflows/guidelines-lint.yml bfff683e2c435aeacaf9c9e6ad5670ec282eaae48f67da811e3a68042f5ef238 # quire#815
-quire/.github/workflows/mutation.yml f108786dfc81178806a9283898bfa964e8ba1ccd0f63b8a0c03a053a41df1701 # quire#896
+quire/.github/workflows/mutation.yml b974121ea2ff93309346f1c2333223e0b9d0413e34fa29bd5ed0dc7fbbb68175 # quire#1093
 quire/.github/workflows/supersede.yml 48099ff84eaf66cae1cbe4945ee8576954471bb2acc31e78d3e8e8504ee4f430 # quire#815
 quire/.github/workflows/sync-identity.yml 0e51a5f4ee3381162755e321dcc69abcc90ede52e692ae7f32c79673183e307f # quire#815
 quire/.github/workflows/sync-providers.yml b3b257a65cac9bcfdb7db0f0c453f82f48bee26fd0be6a4aa4b88096d93eadb6 # quire#815
-pwa/.github/workflows/android.yml 40fe34eb6d27de7922fdc4f7a4af7b8b0e36dcc1e0b9552187ed9064c34559bb # pwa#225
+pwa/.github/workflows/android.yml e4f25705a9abae04ecb53418b40eb10f8ad5adf825aae82c2f606ef585afb670 # pwa#307
 pwa/.github/workflows/check.yml 0606b576b5612a36c08730981852b85442cafc4ef0b3731456f43bf020d09acd # pwa#307
 pwa/.github/workflows/play-release.yml 9a72b1428a0b40624307da9249ff7c236fa74109ad5e0d803bb839a81ed1dd4a # repository-prototype#462
 pwa/.github/workflows/relock-android-test.yml 1d01c9fa1d73cce5032ff63ee1c37177dd95a5adde4de3e89d4094789f6dd2fc # pwa#185
@@ -31,9 +31,9 @@ capacitor-plugins/.github/workflows/review-gate.yml c1595e949417989054653e1d2071
 capacitor-plugins/.github/workflows/review-gate-relay.yml 4ff6964784e6a99a80b2e56de8fb8b5d592b39d1537474661b49534ed53bc9dd # capacitor-plugins#32
 repository-prototype/.github/workflows/check-aggregate-test.yml e27174f32c44395d688e5eefa4f56e78523ad82a4265dcbaef75336198d078fd # repository-prototype#397
 repository-prototype/.github/workflows/package-check.yml eeb8e971790c2b9c6673708b8a22941a45d4f1aa4d168a286cd2492a6ca64e63 631e507487c1f4b6673cbf33b5b518ca0d8843ebe112c1d981a29a9035b99b57 # repository-prototype#397
-repository-prototype/.github/workflows/publish.yml 50ebb500e16336a6255d1923c79a9545d844c44e69e331f240e64c0d0eaa8290 # repository-prototype#397
-repository-prototype/.github/workflows/relock-pins.yml 231b83fd898cd3c02fa36804370a8d0e7c11d5343880d619f57d2488254a4df7 953d25b371583e659c4445ba4d4603ccf150a5f603ada33cc7df06bfc5ef5624 # repository-prototype#439
-repository-prototype/.github/workflows/relock-pins-test.yml 91a134bbb8a732ce0d43bfc879c2998ef9f895bb62ac7d34e6001eb67c86c263 ea099a477d1af7e0e32a233fab44d2a684e96803f4372b14e67ecfc95a7191e7 # repository-prototype#397
+repository-prototype/.github/workflows/publish.yml aacd3c39b9e135391512b2353277bd2c6de54424b6b64a4865b0b9d7c2cf5c3d # repository-prototype#397
+repository-prototype/.github/workflows/relock-pins.yml 035372fa915bbee72f2389d13b85666d3cc1a022ff5ee6d26104fcc22a248a22 # repository-prototype#439
+repository-prototype/.github/workflows/relock-pins-test.yml a7b608308acf11ce189be38621ddce7be908cfa26318ba1e7a736ff36e5b6989 # repository-prototype#397
 repository-prototype/.github/workflows/input-overlap.yml 5eca92b3875edd5c7ea3cc810ae5c121fa5f37884c77295450245c495fe9fa4e # repository-prototype#544
 repository-prototype/.github/workflows/input-overlap-check.yml 3f8f157393d63a0660498cad4ec628b15ec589444de546bfeb982e0c7e0761e4 # repository-prototype#544
 repository-prototype/.github/workflows/canonical-files-check.yml 0977c6f3ba6553cde5bd2efb6274c5d5fd5fe31041ce1a7d3d970a8cf57b9e95 # repository-prototype#603
