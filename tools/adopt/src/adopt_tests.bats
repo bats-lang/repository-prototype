@@ -371,7 +371,8 @@ fn test_adopts_a_repository (): bool = let
   val pushed = _checkout(dir, "alpha", "adopt-7")
   val written = _planted_is(dir, "alpha", ".github/workflows/canonical-files.yml", "/expected.yml")
   val called = _file_judge(dir, "gh-calls.txt",
-    "pr create -R bats-lang/alpha --draft --head adopt-7 --title Adopt canonical-files.yml at repository-prototype 0123456789abcdef0123456789abcdef01234567 --body-file adopt-clones/alpha.body.md\n", "")
+    "api repos/bats-lang/alpha/pulls -X POST -f title=Adopt canonical-files.yml at repository-prototype 0123456789abcdef0123456789abcdef01234567 -f head=adopt-7 -f base=main -F draft=true -F body=@adopt-clones/alpha.body.md --jq .html_url\n",
+    "pr create")
 in ran && pushed && written && called end
 
 (* The file the pin audit passes: the audit of the organisation's repositories accepts the branch adopt pushed *)
@@ -444,16 +445,51 @@ fn test_body_passes_the_body_lint (): bool = let
   val () = $A.free<byte>($A.thaw<byte>(head_frozen))
 in ran && clean end
 
-(* A second run: the branch is already pushed, so the repository is left alone and gh is not called again *)
+(* A second run: the branch is already pushed and has an open pull request, so the repository is left alone, said with the pull request;
+   gh is asked for the open pull requests of the branch (a GET with head and state) and no pull request is opened *)
 fn test_second_run_is_a_noop (): bool = let
   val dir = "build/adopt-tests/second"
   val () = _fresh(dir)
   val () = _plant(dir, "alpha")
   val first = _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 0, "alpha: https://example.invalid/pull/1 ", " draft", "", "failed")
   val _ = run_program("rm", args3(arg_text("-f"), arg_text("--"), join_text2(dir, "/gh-calls.txt")))
-  val second = _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 0, "alpha: - - no-op: the branch is already pushed", "", "", "draft")
-  val quiet = _file_judge(dir, "gh-calls.txt", "", "pr create")
-in first && second && quiet end
+  val second = _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 0,
+    "alpha: - - no-op: the branch is already pushed and has the open pull request https://example.invalid/pull/1\n", "", "", "draft")
+  val listed = _file_judge(dir, "gh-calls.txt",
+    "api repos/bats-lang/alpha/pulls -X GET -f head=bats-lang:adopt-7 -f state=open --jq .[] | .html_url\n", "-X POST")
+in first && second && listed end
+
+(* The branch is pushed and has no open pull request (the state a first run that failed at gh leaves): the pull request is opened from the
+   branch's tip, with a body made from that commit, the list asked before the pull request is opened; and a second run is then a no-op *)
+fn test_pushed_branch_without_pull_request_is_opened (): bool = let
+  val dir = "build/adopt-tests/resume"
+  val () = _fresh(dir)
+  val () = _plant(dir, "alpha")
+  val first = _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 0, "alpha: https://example.invalid/pull/1 ", " draft", "", "failed")
+  val _ = run_program("rm", args3(arg_text("-f"), arg_text("--"), join_text2(dir, "/gh-calls.txt")))
+  val _ = run_program("rm", args3(arg_text("-f"), arg_text("--"), join_text2(dir, "/gh-pulls")))
+  val _ = run_program("rm", args3(arg_text("-f"), arg_text("--"), join_text2(dir, "/adopt-clones/alpha.body.md")))
+  val second = _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 0, "alpha: https://example.invalid/pull/1 ", " draft", "", "no-op")
+  val calls = _file_judge(dir, "gh-calls.txt",
+    "gh api repos/bats-lang/alpha/pulls -X GET -f head=bats-lang:adopt-7 -f state=open --jq .[] | .html_url\ngh api repos/bats-lang/alpha/pulls -X POST -f title=Adopt canonical-files.yml at repository-prototype 0123456789abcdef0123456789abcdef01234567 -f head=adopt-7 -f base=main -F draft=true -F body=@adopt-clones/alpha.body.md --jq .html_url\n",
+    "pr create")
+  val head = _body_has_head(dir, "alpha", "adopt-7", "/adopt-clones/alpha.body.md")
+  val first_line = _file_begins(dir, "adopt-clones/alpha.body.md", "Fixes bats-lang/alpha#7\n")
+  val stat = _file_judge(dir, "adopt-clones/alpha.body.md", "$ git show --stat --format= HEAD\n .github/workflows/canonical-files.yml | ", "")
+  val third = _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 0, "alpha: - - no-op: the branch is already pushed and has the open pull request ", "", "", "draft")
+in first && second && calls && head && first_line && third && stat end
+
+(* A gh that fails when the open pull requests are listed is a failure of the repository, said with its step; nothing is opened *)
+fn test_list_failure_is_reported (): bool = let
+  val dir = "build/adopt-tests/list-fails"
+  val () = _fresh(dir)
+  val () = _plant(dir, "alpha")
+  val first = _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 0, "alpha: https://example.invalid/pull/1 ", " draft", "", "failed")
+  val _ = run_program("rm", args3(arg_text("-f"), arg_text("--"), join_text2(dir, "/gh-calls.txt")))
+  val () = _write_text(dir, "gh-fail", "")
+  val second = _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 1, "alpha: - - failed: gh api pulls list (status 1)", "", "", "draft")
+  val calls = _file_judge(dir, "gh-calls.txt", "-X GET ", "-X POST")
+in first && second && calls end
 
 (* A repository that has the file as the template gives it: a no-op that says so, nothing pushed, gh not called *)
 fn test_existing_file_is_a_noop (): bool = let
@@ -463,7 +499,7 @@ fn test_existing_file_is_a_noop (): bool = let
   val () = _plant_file(dir, "alpha", ".github/workflows/", "canonical-files.yml", ~1)
   val ran = _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 0,
     "alpha: - - no-op: .github/workflows/canonical-files.yml is already the template with its holes filled", "", "", "draft")
-  val quiet = _file_judge(dir, "gh-calls.txt", "", "pr create")
+  val quiet = _file_judge(dir, "gh-calls.txt", "", "api")
   val unpushed = ~_has_branch(dir, "alpha", "adopt-7")
 in ran && quiet && unpushed end
 
@@ -480,7 +516,7 @@ fn test_one_byte_difference_is_refused (): bool = let
     "beta: - - refused: .github/workflows/canonical-files.yml differs from the template with its holes filled at byte 1\n",
     "gamma: - - refused: .github/workflows/canonical-files.yml differs from the template with its holes filled at byte 6\n",
     "alpha: https://example.invalid/pull/1 ", "beta: https://")
-  val calls = _file_judge(dir, "gh-calls.txt", "-R bats-lang/alpha ", "bats-lang/beta")
+  val calls = _file_judge(dir, "gh-calls.txt", "api repos/bats-lang/alpha/pulls ", "bats-lang/beta")
   val unpushed = ~_has_branch(dir, "beta", "adopt-8") && ~_has_branch(dir, "gamma", "adopt-9")
 in ran && calls && unpushed end
 
@@ -494,7 +530,7 @@ fn test_only_prints_the_file (): bool = let
     "beta: wrote .github/workflows/canonical-files.yml:\n# A pull request that changes a workflow",
     "    uses: bats-lang/repository-prototype/.github/workflows/canonical-files-check.yml@0123456789abcdef0123456789abcdef01234567 # repository-prototype main 0123456\n",
     "beta: https://example.invalid/pull/1 ", "alpha:")
-  val calls = _file_judge(dir, "gh-calls.txt", "-R bats-lang/beta --draft --head adopt-8 ", "bats-lang/alpha")
+  val calls = _file_judge(dir, "gh-calls.txt", "api repos/bats-lang/beta/pulls -X POST -f title=Adopt canonical-files.yml at repository-prototype 0123456789abcdef0123456789abcdef01234567 -f head=adopt-8 ", "bats-lang/alpha")
   val only = _has_branch(dir, "beta", "adopt-8") && ~_has_branch(dir, "alpha", "adopt-7")
 in ran && calls && only end
 
@@ -517,7 +553,7 @@ fn test_minute_hole_is_refused (): bool = let
   val () = _plant(dir, "alpha")
   val ran = _judge(dir, _standard("relock.yml", args1(arg_text("alpha#7"))), 1,
     "alpha: - - refused: the template has a @@MINUTE@@ hole, which adopt does not fill", "", "", "draft")
-  val quiet = _file_judge(dir, "gh-calls.txt", "", "pr create")
+  val quiet = _file_judge(dir, "gh-calls.txt", "", "api")
   val unpushed = ~_has_branch(dir, "alpha", "adopt-7")
 in ran && quiet && unpushed end
 
@@ -527,7 +563,7 @@ fn test_gh_failure_is_reported (): bool = let
   val () = _fresh(dir)
   val () = _plant(dir, "alpha")
   val () = _write_text(dir, "gh-fail", "")
-in _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 1, "alpha: - - failed: gh pr create (status 1)", "", "", "draft") end
+in _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 1, "alpha: - - failed: gh api pulls (status 1)", "", "", "draft") end
 
 (* A repository that cannot be cloned is a failure of the repository, said with its step *)
 fn test_missing_repository_fails (): bool = let

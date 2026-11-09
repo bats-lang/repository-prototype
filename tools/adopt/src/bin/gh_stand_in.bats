@@ -3,8 +3,12 @@
    there. Every call is appended to the file gh-calls.txt of its current
    directory as one line, its arguments joined by spaces (the last
    argument's zero byte is not one). It exits 1 when the file gh-fail
-   exists; else for `gh pr create` it prints the address of a pull request,
-   https://example.invalid/pull/1, and for any other call nothing. *)
+   exists, and for `gh pr create` (GraphQL, which the real environment
+   refuses, #611). For a call with -X POST (the REST call that opens a pull
+   request) it prints the address of a pull request,
+   https://example.invalid/pull/1, and keeps it in the file gh-pulls; for a
+   call with -X GET it prints the file gh-pulls (nothing when there is
+   none: no open pull request); for any other call nothing. *)
 
 #include "share/atspre_staload.hats"
 
@@ -35,6 +39,34 @@ fn _after_first_from {l:agz}{n:pos}{args_len:nat | args_len <= n}{from:nat | fro
   val stop = find_byte(args, args_len, from, 0)
 in if stop >= args_len then args_len else stop + 1 end
 
+(* The pull request the POST opened, kept in the file gh-pulls so the next list (GET) shows it *)
+fn _remember_pull (): void = let
+  var path : $B.builder(0) = $B.create()
+  val () = $B.bput(path, "gh-pulls")
+  val @(path_array, path_len) = $B.to_arr(path)
+  val @(path_frozen, path_view) = $A.freeze<byte>(path_array)
+  var text : $B.builder(0) = $B.create()
+  val () = $B.bput(text, "https://example.invalid/pull/1\n")
+  val @(text_array, text_len) = $B.to_arr(text)
+  val @(text_frozen, text_view) = $A.freeze<byte>(text_array)
+  val _ = write_file(path_view, path_len, text_view, text_len, false)
+  val () = $A.drop<byte>(text_frozen, text_view)
+  val () = $A.free<byte>($A.thaw<byte>(text_frozen))
+  val () = $A.drop<byte>(path_frozen, path_view)
+  val () = $A.free<byte>($A.thaw<byte>(path_frozen))
+in () end
+
+(* The open pull requests: the file gh-pulls, if there is one *)
+fn _print_pulls (): void = let
+  var text : $B.builder(0) = $B.create()
+  val @(_, _) = read_constant("gh-pulls", text)
+  val @(text_array, text_len) = $B.to_arr(text)
+  val @(text_frozen, text_view) = $A.freeze<byte>(text_array)
+  val () = print_range(text_view, 0, text_len)
+  val () = $A.drop<byte>(text_frozen, text_view)
+  val () = $A.free<byte>($A.thaw<byte>(text_frozen))
+in () end
+
 implement main0 () = let
   val buffer = $A.alloc<byte>(4096)
   val [args_len:int] args_len = (case+ $E.args_read(buffer, 4096) of | ~$R.some(count) => count | ~$R.none() => 0): [count:nat | count <= 4096] int count
@@ -51,6 +83,8 @@ implement main0 () = let
   val _ = write_file(calls_view, calls_len, record_view, record_len, true)
   val () = $A.drop<byte>(calls_frozen, calls_view)
   val () = $A.free<byte>($A.thaw<byte>(calls_frozen))
+  val is_post = output_has(record_view, record_len, " -X POST ")
+  val is_get = output_has(record_view, record_len, " -X GET ")
   val () = $A.drop<byte>(record_frozen, record_view)
   val () = $A.free<byte>($A.thaw<byte>(record_frozen))
   val second_start = _after_first_from(args_view, args_len, 0)
@@ -62,6 +96,10 @@ implement main0 () = let
   val () = $A.free<byte>($A.thaw<byte>(args_frozen))
 in
   if constant_exists("gh-fail") then exit_void(1)
-  else if is_create then println! ("https://example.invalid/pull/1")
+  else if is_create then exit_void(1)
+  else if is_post then let
+    val () = _remember_pull()
+  in println! ("https://example.invalid/pull/1") end
+  else if is_get then _print_pulls()
   else ()
 end
