@@ -106,32 +106,39 @@ in () end
    The text a file must have
    ============================================================ *)
 
-fun _fill_loop {l:agz}{template_len:nat | template_len <= 524288}{template_at:nat | template_at <= template_len}{commit_len,comment_len:nat} .<template_len - template_at>.
+fun _fill_loop {l:agz}{template_len:nat | template_len <= 524288}{template_at:nat | template_at <= template_len}{commit_len,comment_len,minute_len:nat} .<template_len - template_at>.
   (template_text: !$A.borrow(byte, l, 524288), template_len: int template_len, template_at: int template_at, out: !$B.sized_rope,
-   commit: string commit_len, comment: string comment_len, mutate: int): void =
+   commit: string commit_len, comment: string comment_len, minute: string minute_len, mutate: int): void =
   if template_at >= template_len then ()
   else let
     val commit_end = lit_step(template_text, template_len, template_at, "@@COMMIT@@")
   in
     if commit_end >= 0 then let
       val () = $B.sized_rope_bput(out, commit)
-    in _fill_loop(template_text, template_len, commit_end, out, commit, comment, mutate) end
+    in _fill_loop(template_text, template_len, commit_end, out, commit, comment, minute, mutate) end
     else let
       val comment_end = lit_step(template_text, template_len, template_at, "@@COMMENT@@")
     in
       if comment_end >= 0 then let
         val () = $B.sized_rope_bput(out, comment)
-      in _fill_loop(template_text, template_len, comment_end, out, commit, comment, mutate) end
+      in _fill_loop(template_text, template_len, comment_end, out, commit, comment, minute, mutate) end
       else let
-        val byte_value = byte2int0($A.read<byte>(template_text, template_at))
-        val () = $B.sized_rope_put(out, $AR.low_byte(if template_at = mutate then 126 else byte_value))
-      in _fill_loop(template_text, template_len, template_at + 1, out, commit, comment, mutate) end
+        val minute_end = lit_step(template_text, template_len, template_at, "@@MINUTE@@")
+      in
+        if minute_end >= 0 then let
+          val () = $B.sized_rope_bput(out, minute)
+        in _fill_loop(template_text, template_len, minute_end, out, commit, comment, minute, mutate) end
+        else let
+          val byte_value = byte2int0($A.read<byte>(template_text, template_at))
+          val () = $B.sized_rope_put(out, $AR.low_byte(if template_at = mutate then 126 else byte_value))
+        in _fill_loop(template_text, template_len, template_at + 1, out, commit, comment, minute, mutate) end
+      end
     end
   end
 
-(* The template of tools/pin-audit/templates with @@COMMIT@@ and @@COMMENT@@ filled with the case's values (mutate: the place
+(* The template of tools/pin-audit/templates with @@COMMIT@@, @@COMMENT@@ and @@MINUTE@@ filled with the case's values (mutate: the place
    of one byte of the template changed to `~`, or ~1), written to the path *)
-fn _expect_to {name_len:nat | name_len < 100} (path: path_text, template: string name_len, mutate: int): void = let
+fn _expect_to {name_len,minute_len:nat | name_len < 100} (path: path_text, template: string name_len, minute: string minute_len, mutate: int): void = let
   var template_text : $B.builder(0) = $B.create()
   val @(template_array, template_len) = join_path3("../pin-audit/templates/", "", template)
   val @(template_path_frozen, template_path_view) = $A.freeze<byte>(template_array)
@@ -141,19 +148,20 @@ fn _expect_to {name_len:nat | name_len < 100} (path: path_text, template: string
   val @(text_array, text_len) = $B.to_arr(template_text)
   val @(text_frozen, text_view) = $A.freeze<byte>(text_array)
   var text : $B.sized_rope = $B.sized_rope_create()
-  val () = _fill_loop(text_view, text_len, 0, text, "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", mutate)
+  val () = _fill_loop(text_view, text_len, 0, text, "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", minute, mutate)
   val _ = write_rope(path, text)
   val () = $A.drop<byte>(text_frozen, text_view)
   val () = $A.free<byte>($A.thaw<byte>(text_frozen))
 in (case+ ended of | Read_whole() => () | Read_too_long() => () | Read_failed() => println! ("the template ", template, " could not be read")) end
 
-(* The file the case expects of the template, dir/file *)
-fn _expect {dir_len,file_len,name_len:nat | dir_len < 200; file_len < 200; name_len < 100} (dir: string dir_len, file: string file_len, template: string name_len): void =
-  _expect_to(join_path3(dir, "/", file), template, ~1)
+(* The file the case expects of the template, dir/file, with the minute the case expects (17 unless the repository has a cron line) *)
+fn _expect {dir_len,file_len,name_len,minute_len:nat | dir_len < 200; file_len < 200; name_len < 100}
+  (dir: string dir_len, file: string file_len, template: string name_len, minute: string minute_len): void =
+  _expect_to(join_path3(dir, "/", file), template, minute, ~1)
 
-(* The file of the planted repository, made (with its folder) and committed: the template filled, with one byte changed (mutate) *)
-fn _plant_file {dir_len,name_len,folder_len,template_len:nat | dir_len < 200; name_len < 100; folder_len < 100; template_len < 100}
-  (dir: string dir_len, name: string name_len, folder: string folder_len, template: string template_len, mutate: int): void = let
+(* The file of the planted repository, made (with its folder) and committed: the template filled (with the minute), with one byte changed (mutate) *)
+fn _plant_file {dir_len,name_len,folder_len,template_len,minute_len:nat | dir_len < 200; name_len < 100; folder_len < 100; template_len < 100}
+  (dir: string dir_len, name: string name_len, folder: string folder_len, template: string template_len, minute: string minute_len, mutate: int): void = let
   var folder_path : $B.builder(0) = $B.create()
   val () = $B.bput(folder_path, dir)
   val () = $B.bput(folder_path, "/planted/")
@@ -170,7 +178,7 @@ fn _plant_file {dir_len,name_len,folder_len,template_len:nat | dir_len < 200; na
   val () = $B.bput(file_path, folder)
   val () = $B.bput(file_path, template)
   val @(file_array, file_len) = $B.to_arr(file_path)
-  val () = _expect_to(@(file_array, file_len), template, mutate)
+  val () = _expect_to(@(file_array, file_len), template, minute, mutate)
   val _ = _git(dir, name, args2(arg_text("add"), arg_text("-A")))
   val _ = _git(dir, name, $L.list_vt_cons(arg_text("commit"), args4(arg_text("-q"), arg_text("-m"), arg_text("plant file"), arg_text("--allow-empty"))))
 in () end
@@ -366,7 +374,7 @@ fn test_adopts_a_repository (): bool = let
   val dir = "build/adopt-tests/adopt"
   val () = _fresh(dir)
   val () = _plant(dir, "alpha")
-  val () = _expect(dir, "expected.yml", "canonical-files.yml")
+  val () = _expect(dir, "expected.yml", "canonical-files.yml", "17")
   val ran = _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 0, "alpha: https://example.invalid/pull/1 ", " draft", "", "failed")
   val pushed = _checkout(dir, "alpha", "adopt-7")
   val written = _planted_is(dir, "alpha", ".github/workflows/canonical-files.yml", "/expected.yml")
@@ -497,7 +505,7 @@ fn test_existing_file_is_a_noop (): bool = let
   val dir = "build/adopt-tests/existing"
   val () = _fresh(dir)
   val () = _plant(dir, "alpha")
-  val () = _plant_file(dir, "alpha", ".github/workflows/", "canonical-files.yml", ~1)
+  val () = _plant_file(dir, "alpha", ".github/workflows/", "canonical-files.yml", "17", ~1)
   val ran = _judge(dir, _standard("canonical-files.yml", args1(arg_text("alpha#7"))), 0,
     "alpha: - - no-op: .github/workflows/canonical-files.yml is already the template with its holes filled", "", "", "draft")
   val quiet = _file_judge(dir, "gh-calls.txt", "", "api")
@@ -510,9 +518,9 @@ fn test_one_byte_difference_is_refused (): bool = let
   val () = _fresh(dir)
   val () = _plant(dir, "alpha")
   val () = _plant(dir, "beta")
-  val () = _plant_file(dir, "beta", ".github/workflows/", "canonical-files.yml", 0)
+  val () = _plant_file(dir, "beta", ".github/workflows/", "canonical-files.yml", "17", 0)
   val () = _plant(dir, "gamma")
-  val () = _plant_file(dir, "gamma", ".github/workflows/", "canonical-files.yml", 5)
+  val () = _plant_file(dir, "gamma", ".github/workflows/", "canonical-files.yml", "17", 5)
   val ran = _judge(dir, _standard("canonical-files.yml", args3(arg_text("alpha#7"), arg_text("beta#8"), arg_text("gamma#9"))), 1,
     "beta: - - refused: .github/workflows/canonical-files.yml differs from the template with its holes filled at byte 1\n",
     "gamma: - - refused: .github/workflows/canonical-files.yml differs from the template with its holes filled at byte 6\n",
@@ -540,20 +548,86 @@ fn test_issue_template (): bool = let
   val dir = "build/adopt-tests/issue"
   val () = _fresh(dir)
   val () = _plant(dir, "alpha")
-  val () = _expect(dir, "expected-ticket.md", "ISSUE_TEMPLATE/ticket.md")
+  val () = _expect(dir, "expected-ticket.md", "ISSUE_TEMPLATE/ticket.md", "17")
   val ran = _judge(dir, _standard("ISSUE_TEMPLATE/ticket.md", args1(arg_text("alpha#7"))), 0, "alpha: https://example.invalid/pull/1 ", " draft", "", "failed")
   val pushed = _checkout(dir, "alpha", "adopt-7")
   val written = _planted_is(dir, "alpha", ".github/ISSUE_TEMPLATE/ticket.md", "/expected-ticket.md")
   val body = _file_judge(dir, "adopt-clones/alpha.body.md", "Done when: the file `.github/ISSUE_TEMPLATE/ticket.md` is `tools/pin-audit/templates/ISSUE_TEMPLATE/ticket.md`", "")
 in ran && pushed && written && body end
 
-(* A template with a @@MINUTE@@ hole is refused: the minute is not adopt's to choose *)
-fn test_minute_hole_is_refused (): bool = let
-  val dir = "build/adopt-tests/minute"
+(* A @@MINUTE@@ hole of a repository with no such file is 17, said, and the file written has it (bats-lang/repository-prototype#619) *)
+fn test_minute_defaults_to_seventeen (): bool = let
+  val dir = "build/adopt-tests/minute-default"
   val () = _fresh(dir)
   val () = _plant(dir, "alpha")
+  val () = _expect(dir, "expected.yml", "relock.yml", "17")
+  val ran = _judge(dir, _standard("relock.yml", args1(arg_text("alpha#7"))), 0,
+    "alpha: minute 17, the default: the repository has no such cron line\n", "alpha: https://example.invalid/pull/1 ", " draft", "failed")
+  val pushed = _checkout(dir, "alpha", "adopt-7")
+  val written = _planted_is(dir, "alpha", ".github/workflows/relock.yml", "/expected.yml")
+in ran && pushed && written end
+
+(* A @@MINUTE@@ hole is the minute of the cron line of the file the repository has, for each repository; the file differs from the
+   template elsewhere (its first byte), so it is replaced, with the pull request opened; the minute is two digits in one, one digit in the other *)
+fn test_minute_is_taken_from_the_existing_file (): bool = let
+  val dir = "build/adopt-tests/minute-existing"
+  val () = _fresh(dir)
+  val () = _plant(dir, "alpha")
+  val () = _plant_file(dir, "alpha", ".github/workflows/", "relock.yml", "41", 0)
+  val () = _plant(dir, "beta")
+  val () = _plant_file(dir, "beta", ".github/workflows/", "relock.yml", "7", 0)
+  val () = _expect(dir, "expected-41.yml", "relock.yml", "41")
+  val () = _expect(dir, "expected-7.yml", "relock.yml", "7")
+  val ran = _judge(dir, _standard("relock.yml", args2(arg_text("alpha#7"), arg_text("beta#8"))), 0,
+    "alpha: minute 41, the minute of the cron line of the file it replaces\n", "beta: minute 7, the minute of the cron line of the file it replaces\n",
+    "beta: https://example.invalid/pull/1 ", "the default")
+  val alpha_pushed = _checkout(dir, "alpha", "adopt-7")
+  val alpha_written = _planted_is(dir, "alpha", ".github/workflows/relock.yml", "/expected-41.yml")
+  val beta_pushed = _checkout(dir, "beta", "adopt-8")
+  val beta_written = _planted_is(dir, "beta", ".github/workflows/relock.yml", "/expected-7.yml")
+in ran && alpha_pushed && alpha_written && beta_pushed && beta_written end
+
+(* A repository whose file is already the template with its minute is a no-op that says so, nothing pushed (the minute is read from that file) *)
+fn test_minute_file_equal_to_the_template_is_a_noop (): bool = let
+  val dir = "build/adopt-tests/minute-noop"
+  val () = _fresh(dir)
+  val () = _plant(dir, "alpha")
+  val () = _plant_file(dir, "alpha", ".github/workflows/", "relock.yml", "41", ~1)
+  val ran = _judge(dir, _standard("relock.yml", args1(arg_text("alpha#7"))), 0,
+    "alpha: - - no-op: .github/workflows/relock.yml is already the template with its holes filled", "", "", "draft")
+  val quiet = _file_judge(dir, "gh-calls.txt", "", "api")
+  val unpushed = ~_has_branch(dir, "alpha", "adopt-7")
+in ran && quiet && unpushed end
+
+(* --as FILE writes the template under another name (relock-regenerate.yml as relock.yml, bats-lang/repository-prototype#619): the minute is
+   read from that file, the file is replaced there and no file of the template's name is made; the body and the line name the file written *)
+fn test_as_writes_the_template_under_another_name (): bool = let
+  val dir = "build/adopt-tests/as"
+  val () = _fresh(dir)
+  val () = _plant(dir, "alpha")
+  val () = _plant_file(dir, "alpha", ".github/workflows/", "relock.yml", "41", 0)
+  val () = _expect(dir, "expected.yml", "relock-regenerate.yml", "41")
+  val ran = _judge(dir, $L.list_vt_cons(arg_text("--as"), $L.list_vt_cons(arg_text("relock.yml"), _standard("relock-regenerate.yml", args1(arg_text("alpha#7"))))), 0,
+    "alpha: minute 41, the minute of the cron line of the file it replaces\n", "alpha: https://example.invalid/pull/1 ", " draft", "failed")
+  val pushed = _checkout(dir, "alpha", "adopt-7")
+  val written = _planted_is(dir, "alpha", ".github/workflows/relock.yml", "/expected.yml")
+  val body = _file_judge(dir, "adopt-clones/alpha.body.md", "Done when: the file `.github/workflows/relock.yml` is `tools/pin-audit/templates/relock-regenerate.yml` of bats-lang/repository-prototype", "relock-regenerate.yml` is `tools")
+  val title = _file_judge(dir, "gh-calls.txt", "-f title=Adopt relock-regenerate.yml at repository-prototype ", "")
+  val only_one = _file_judge(dir, "adopt-clones/alpha.body.md", " .github/workflows/relock.yml | ", "relock-regenerate.yml | ")
+in ran && pushed && written && body && title && only_one end
+
+(* The nearest input the loosened refusal must still reject: a file that differs from a template with a @@MINUTE@@ hole and has no
+   cron line of the template is the repository's own, refused with its first differing byte, and nothing is pushed *)
+fn test_minute_file_without_the_cron_line_is_refused (): bool = let
+  val dir = "build/adopt-tests/minute-refused"
+  val () = _fresh(dir)
+  val () = _plant(dir, "alpha")
+  val _ = run_program("mkdir", args3(arg_text("-p"), arg_text("--"), join_text2(dir, "/planted/alpha.git/.github/workflows")))
+  val () = _write_text(dir, "planted/alpha.git/.github/workflows/relock.yml", "name: relock\non:\n  schedule:\n    - cron: 'every day'\n")
+  val _ = _git(dir, "alpha", args2(arg_text("add"), arg_text("-A")))
+  val _ = _git(dir, "alpha", $L.list_vt_cons(arg_text("commit"), args3(arg_text("-q"), arg_text("-m"), arg_text("plant file"))))
   val ran = _judge(dir, _standard("relock.yml", args1(arg_text("alpha#7"))), 1,
-    "alpha: - - refused: the template has a @@MINUTE@@ hole, which adopt does not fill", "", "", "draft")
+    "alpha: - - refused: .github/workflows/relock.yml differs from the template with its holes filled at byte 1\n", "", "", "minute")
   val quiet = _file_judge(dir, "gh-calls.txt", "", "api")
   val unpushed = ~_has_branch(dir, "alpha", "adopt-7")
 in ran && quiet && unpushed end
@@ -576,7 +650,9 @@ in _judge(dir, _standard("canonical-files.yml", args1(arg_text("absent#7"))), 1,
 fn test_arguments_are_refused (): bool = let
   val dir = "build/adopt-tests/arguments"
   val () = _fresh(dir)
-  val none = _judge(dir, _standard("canonical-files.yml", no_arguments()), 2, "usage: adopt [--only NAME] TEMPLATE COMMIT COMMENT NAME#TICKET...", "", "", "failed")
+  val none = _judge(dir, _standard("canonical-files.yml", no_arguments()), 2, "usage: adopt [--only NAME] [--as FILE] TEMPLATE COMMIT COMMENT NAME#TICKET...", "", "", "failed")
+  val as_alone = _judge(dir, args1(arg_text("--as")), 2, "usage: adopt", "", "", "failed")
+  val as_path = _judge(dir, $L.list_vt_cons(arg_text("--as"), $L.list_vt_cons(arg_text("../x.yml"), _standard("canonical-files.yml", args1(arg_text("alpha#7"))))), 2, "usage: adopt", "", "", "failed")
   val short_commit = _judge(dir, $L.list_vt_cons(arg_text("canonical-files.yml"), $L.list_vt_cons(arg_text("0123456789abcdef0123456789abcdef0123456"),
     $L.list_vt_cons(arg_text("repository-prototype main 0123456"), args1(arg_text("alpha#7"))))), 2, "usage: adopt", "", "", "failed")
   val upper_commit = _judge(dir, $L.list_vt_cons(arg_text("canonical-files.yml"), $L.list_vt_cons(arg_text("0123456789ABCDEF0123456789abcdef01234567"),
@@ -590,6 +666,6 @@ fn test_arguments_are_refused (): bool = let
   val path_template = _judge(dir, _standard("../x.yml", args1(arg_text("alpha#7"))), 2, "usage: adopt", "", "", "failed")
   val unlisted = _judge(dir, $L.list_vt_cons(arg_text("--only"), $L.list_vt_cons(arg_text("zeta"), _standard("canonical-files.yml", args1(arg_text("alpha#7"))))), 2, "usage: adopt", "", "", "failed")
   val only_alone = _judge(dir, args1(arg_text("--only")), 2, "usage: adopt", "", "", "failed")
-in none && short_commit && upper_commit && empty_comment && no_ticket && empty_ticket && letter_ticket && slash_name && path_template && unlisted && only_alone end
+in none && as_alone && as_path && short_commit && upper_commit && empty_comment && no_ticket && empty_ticket && letter_ticket && slash_name && path_template && unlisted && only_alone end
 
 end
