@@ -619,6 +619,29 @@ fn test_quire_check_one_byte_changed_fails (): bool = let
   val () = _names(dir, "changed\n")
 in _judge(dir, 1, "::error title=pin audit::changed: .github/workflows/check.yml: not canonical", "1 not canonical", "", "pass, equal") end
 
+(* The new form of quire's check.yml (repository-prototype#653: the step that puts the smoke probes beside the Android project) and the old form kept beside it for one cycle both pass, each by its own template's name *)
+fn test_quire_check_both_forms_pass (): bool = let
+  val dir = "build/pin-audit-tests/quire-check-forms"
+  val () = _fresh(dir)
+  val () = _plant(dir, "new-form")
+  val () = _fill(dir, "new-form", "check.yml", "templates/check-quire.yml", "89abcdef0123456789abcdef0123456789abcdef", "pwa main 89abcde", "7", ~1)
+  val () = _plant(dir, "old-form")
+  val () = _fill(dir, "old-form", "check.yml", "templates/check-quire-before-android-probes.yml", "89abcdef0123456789abcdef0123456789abcdef", "pwa main 89abcde", "7", ~1)
+  val () = _commit(dir, "new-form")
+  val () = _commit(dir, "old-form")
+  val () = _names(dir, "new-form\nold-form\n")
+in _judge(dir, 0, ".github/workflows/check.yml: pass, equal to the template check-quire.yml", ".github/workflows/check.yml: pass, equal to the template check-quire-before-android-probes.yml", "0 not canonical", "::error") end
+
+(* The nearest refused input for the old form: one byte changed inside `check` is not canonical *)
+fn test_quire_check_old_form_one_byte_changed_fails (): bool = let
+  val dir = "build/pin-audit-tests/quire-check-old-changed"
+  val () = _fresh(dir)
+  val () = _plant(dir, "changed")
+  val () = _fill(dir, "changed", "check.yml", "templates/check-quire-before-android-probes.yml", "89abcdef0123456789abcdef0123456789abcdef", "pwa main 89abcde", "7", 5)
+  val () = _commit(dir, "changed")
+  val () = _names(dir, "changed\n")
+in _judge(dir, 1, "::error title=pin audit::changed: .github/workflows/check.yml: not canonical", "1 not canonical", "", "pass, equal") end
+
 (* The old forms of the library and the compiler's relock callers (repository-prototype#605: before the canonical-files-check.yml pin and its tools-ref copy) stay beside the new ones for one cycle, each by its own template's name *)
 fn test_library_and_regenerating_relock_before_canonical_files_pass (): bool = let
   val dir = "build/pin-audit-tests/before-canonical-files-a"
@@ -1203,7 +1226,7 @@ fn test_issue_template_equal_passes (): bool = let
   val () = _fresh(dir)
   val () = _plant_with_issue_template(dir, "tidy", ~1)
   val () = _names(dir, "tidy\n")
-in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 24 read, 0 failing", "::error") end
+in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 25 read, 0 failing", "::error") end
 
 (* ... and the same file with one byte changed fails, named *)
 fn test_issue_template_one_byte_changed_fails (): bool = let
