@@ -14,10 +14,7 @@
 #
 bats/.github/workflows/check.yml 8f22cab9a88a7aa0f167b1e3e24feb21055408c494b8f4c3cfb4a79e924df817 b5f732af356b8dd5947afda72882564b81a03877860dc5786eea48668c5b0f12 # bats#482
 bats/.github/workflows/relock.yml 0a9694b116fb154564aa7a91c673a5d5b96e941f18413112210e152cf540e4f9 9b014601af94b87f7994cd3be7dbd7dd8c53727321bf4db9f7ee62c746f5bb5a # bats#499
-quire/.github/workflows/check.yml a7ed59da9d00fcde1deb787e5bb33c51483d46fb70615a61a73ac35db58755b8 # quire#1093
-quire/.github/workflows/deploy.yml 3cadff4734bf52d2c56ac4752f9e3fdca95623f40eb14502e68344dcebbbc907 # quire#1093
 quire/.github/workflows/guidelines-lint.yml bfff683e2c435aeacaf9c9e6ad5670ec282eaae48f67da811e3a68042f5ef238 # quire#815
-quire/.github/workflows/mutation.yml b974121ea2ff93309346f1c2333223e0b9d0413e34fa29bd5ed0dc7fbbb68175 # quire#1093
 quire/.github/workflows/supersede.yml 48099ff84eaf66cae1cbe4945ee8576954471bb2acc31e78d3e8e8504ee4f430 # quire#815
 quire/.github/workflows/sync-identity.yml 0e51a5f4ee3381162755e321dcc69abcc90ede52e692ae7f32c79673183e307f # quire#815
 quire/.github/workflows/sync-providers.yml b3b257a65cac9bcfdb7db0f0c453f82f48bee26fd0be6a4aa4b88096d93eadb6 # quire#815

@@ -1,0 +1,68 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      # The whole history: gen-pwa counts the commits for the Android version
+      # code and refuses a shallow clone (#989)
+      - uses: actions/checkout@@@COMMIT@@ # @@COMMENT@@
+        with:
+          fetch-depth: 0
+
+      - name: Set up bats
+        uses: bats-lang/bats/.github/actions/setup@@@COMMIT@@ # @@COMMENT@@
+
+      # The version is the date and short SHA of the commit deployed
+      # (#219): HEAD's, which bats writes as the commit's facts
+      # (src/version.bats words them)
+      - name: Build the app and the PWA generator
+        run: bats build
+
+      - name: Generate PWA
+        run: ./dist/debug/gen-pwa
+
+      # The OAuth clients it signs in with: public IDs, committed in
+      # scripts/sync-clients.env
+      - name: Sync clients
+        run: scripts/sync-clients.sh dist/pwa
+
+      # The home page, privacy policy and terms (#216), published beside
+      # the app at homepage/. They are not the app's: gen-pwa does not
+      # read them, the Android project does not hold them, and the
+      # service worker leaves them to the network
+      - name: Add the home page
+        run: cp -R homepage dist/pwa/homepage
+
+      - name: Setup Pages
+        uses: actions/configure-pages@@@COMMIT@@ # @@COMMENT@@
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@@@COMMIT@@ # @@COMMENT@@
+        with:
+          path: dist/pwa
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@@@COMMIT@@ # @@COMMENT@@
