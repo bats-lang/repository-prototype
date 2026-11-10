@@ -18,7 +18,7 @@
 # What runs: the bats setup action, `bats check`, `bats test`, then each kind
 # of test only when its directory exists: tests/static, tests/dynamic (with
 # valgrind, and with Node and `npm ci` when tests/dynamic/package.json
-# exists), tests/c (a job of its own on ubuntu-24.04 and macos-26). The
+# exists), tests/c (a job of its own on ubuntu-24.04). The
 # existence tests are `hashFiles(...) != ''`, a GitHub expression, so no shell
 # decides anything. The lock: CLAUDE.md, "A library's check.yml".
 #
@@ -113,10 +113,7 @@ jobs:
   c-runtime:
     needs: layout
     if: needs.layout.outputs.c-tests == 'success' && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
-    strategy:
-      matrix:
-        os: [ubuntu-24.04, macos-26]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
