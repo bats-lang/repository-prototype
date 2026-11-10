@@ -28,7 +28,7 @@ pwa/.github/workflows/relock-android-test.yml 1d01c9fa1d73cce5032ff63ee1c37177dd
 capacitor-plugins/.github/workflows/check.yml 60668ba436e27723d8543a14e24119c8e9e87af040acb955dd333191b4a416d5 # capacitor-plugins#47
 capacitor-plugins/.github/workflows/demo-apk.yml b896e7f4e7c74b3de790aec235a448285886defbc1ef63f390c949461f748615 # capacitor-plugins#47
 repository-prototype/.github/workflows/check-aggregate-test.yml e27174f32c44395d688e5eefa4f56e78523ad82a4265dcbaef75336198d078fd # repository-prototype#397
-repository-prototype/.github/workflows/package-check.yml eeb8e971790c2b9c6673708b8a22941a45d4f1aa4d168a286cd2492a6ca64e63 631e507487c1f4b6673cbf33b5b518ca0d8843ebe112c1d981a29a9035b99b57 # repository-prototype#397
+repository-prototype/.github/workflows/package-check.yml 631e507487c1f4b6673cbf33b5b518ca0d8843ebe112c1d981a29a9035b99b57 b4a573d71a1b86609718b5ceb46c9bf8271eb5998763d4485950630f7219dd3d # repository-prototype#397
 repository-prototype/.github/workflows/publish.yml aacd3c39b9e135391512b2353277bd2c6de54424b6b64a4865b0b9d7c2cf5c3d # repository-prototype#397
 repository-prototype/.github/workflows/relock-pins.yml 035372fa915bbee72f2389d13b85666d3cc1a022ff5ee6d26104fcc22a248a22 # repository-prototype#439
 repository-prototype/.github/workflows/relock-pins-test.yml a7b608308acf11ce189be38621ddce7be908cfa26318ba1e7a736ff36e5b6989 # repository-prototype#397
