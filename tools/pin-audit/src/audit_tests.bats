@@ -592,6 +592,33 @@ fn test_quire_relock_both_forms_pass (): bool = let
   val () = _names(dir, "new-form\nold-form\n")
 in _judge(dir, 0, ".github/workflows/relock.yml: pass, equal to the template relock-quire.yml", ".github/workflows/relock.yml: pass, equal to the template relock-quire-before-text-lint.yml", "0 not canonical", "::error") end
 
+(* Quire's check.yml, deploy.yml and mutation.yml (repository-prototype#651) are templates, not allowlisted hashes: the daily relock and Dependabot move their pins, so their bytes change at every move. Each passes with two different sets of pins, by its own template's name *)
+fn test_quire_pinned_workflows_pass_with_any_pins (): bool = let
+  val dir = "build/pin-audit-tests/quire-pinned"
+  val () = _fresh(dir)
+  val () = _plant(dir, "before")
+  val () = _fill(dir, "before", "check.yml", "templates/check-quire.yml", "89abcdef0123456789abcdef0123456789abcdef", "pwa main 89abcde", "7", ~1)
+  val () = _fill(dir, "before", "deploy.yml", "templates/deploy-quire.yml", "89abcdef0123456789abcdef0123456789abcdef", "v1.0.0", "7", ~1)
+  val () = _fill(dir, "before", "mutation.yml", "templates/mutation-quire.yml", "89abcdef0123456789abcdef0123456789abcdef", "v1.0.0", "7", ~1)
+  val () = _plant(dir, "after")
+  val () = _fill(dir, "after", "check.yml", "templates/check-quire.yml", "0123456789abcdef0123456789abcdef01234567", "repository-prototype main 0123456", "7", ~1)
+  val () = _fill(dir, "after", "deploy.yml", "templates/deploy-quire.yml", "0123456789abcdef0123456789abcdef01234567", "v2.3.4", "7", ~1)
+  val () = _fill(dir, "after", "mutation.yml", "templates/mutation-quire.yml", "0123456789abcdef0123456789abcdef01234567", "v2.3.4", "7", ~1)
+  val () = _commit(dir, "before")
+  val () = _commit(dir, "after")
+  val () = _names(dir, "after\nbefore\n")
+in _judge(dir, 0, ".github/workflows/check.yml: pass, equal to the template check-quire.yml", ".github/workflows/deploy.yml: pass, equal to the template deploy-quire.yml", ".github/workflows/mutation.yml: pass, equal to the template mutation-quire.yml", "::error") end
+
+(* The nearest refused input: quire's check.yml with one byte of a non-pin line changed (offset 5 of the template, inside `check`) is not canonical *)
+fn test_quire_check_one_byte_changed_fails (): bool = let
+  val dir = "build/pin-audit-tests/quire-check-changed"
+  val () = _fresh(dir)
+  val () = _plant(dir, "changed")
+  val () = _fill(dir, "changed", "check.yml", "templates/check-quire.yml", "89abcdef0123456789abcdef0123456789abcdef", "pwa main 89abcde", "7", 5)
+  val () = _commit(dir, "changed")
+  val () = _names(dir, "changed\n")
+in _judge(dir, 1, "::error title=pin audit::changed: .github/workflows/check.yml: not canonical", "1 not canonical", "", "pass, equal") end
+
 (* The old forms of the library and the compiler's relock callers (repository-prototype#605: before the canonical-files-check.yml pin and its tools-ref copy) stay beside the new ones for one cycle, each by its own template's name *)
 fn test_library_and_regenerating_relock_before_canonical_files_pass (): bool = let
   val dir = "build/pin-audit-tests/before-canonical-files-a"
@@ -1176,7 +1203,7 @@ fn test_issue_template_equal_passes (): bool = let
   val () = _fresh(dir)
   val () = _plant_with_issue_template(dir, "tidy", ~1)
   val () = _names(dir, "tidy\n")
-in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 21 read, 0 failing", "::error") end
+in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 24 read, 0 failing", "::error") end
 
 (* ... and the same file with one byte changed fails, named *)
 fn test_issue_template_one_byte_changed_fails (): bool = let
