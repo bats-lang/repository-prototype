@@ -48,8 +48,13 @@ on:
         description: The full commit SHA of bats-lang/repository-prototype this workflow is called at.
         required: true
         type: string
+      data-repository:
+        description: The repository (owner/name) whose allowlist and templates are read (bats-lang/repository-prototype when empty; a fixture names itself).
+        required: false
+        type: string
+        default: ''
       data-ref:
-        description: The ref of bats-lang/repository-prototype whose allowlist and templates are read (the default branch when empty).
+        description: The ref of the data repository whose allowlist and templates are read (the default branch when empty).
         required: false
         type: string
         default: ''
@@ -148,7 +153,7 @@ jobs:
         if: steps.red.outputs.failed != '0'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: bats-lang/repository-prototype
+          repository: ${{ inputs.data-repository || 'bats-lang/repository-prototype' }}
           ref: ${{ inputs.data-ref || 'main' }}
           path: main
           persist-credentials: false
