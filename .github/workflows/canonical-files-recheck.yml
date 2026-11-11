@@ -79,6 +79,7 @@ jobs:
           SCOPE: ${{ inputs.repository && format('repo:{0}', inputs.repository) || 'org:bats-lang' }}
         run: |
           echo "pulls=$(gh api -X GET search/issues -f "q=$SCOPE is:pr is:open archived:false" -F per_page=100 --jq 'if .total_count > 100 then error("more than 100 open pull requests") else [.items[] | (.repository_url | sub("^.*/repos/"; "")) as $r | {repository: $r, name: ($r | sub("^.*/"; "")), number: .number}] end')" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
 
   recheck:
     needs: list
