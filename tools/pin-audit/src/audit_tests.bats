@@ -642,6 +642,29 @@ fn test_quire_check_old_form_one_byte_changed_fails (): bool = let
   val () = _names(dir, "changed\n")
 in _judge(dir, 1, "::error title=pin audit::changed: .github/workflows/check.yml: not canonical", "1 not canonical", "", "pass, equal") end
 
+(* Bats's check.yml (repository-prototype#667) is a template, not an allowlisted hash: the relock moves its check-aggregate pin, so its bytes change at every move. It passes with two different sets of pins *)
+fn test_bats_check_passes_with_any_pins (): bool = let
+  val dir = "build/pin-audit-tests/bats-check"
+  val () = _fresh(dir)
+  val () = _plant(dir, "before")
+  val () = _fill(dir, "before", "check.yml", "templates/check-bats.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "7", ~1)
+  val () = _plant(dir, "after")
+  val () = _fill(dir, "after", "check.yml", "templates/check-bats.yml", "0123456789abcdef0123456789abcdef01234567", "v2.3.4", "7", ~1)
+  val () = _commit(dir, "before")
+  val () = _commit(dir, "after")
+  val () = _names(dir, "after\nbefore\n")
+in _judge(dir, 0, ".github/workflows/check.yml: pass, equal to the template check-bats.yml", "0 not canonical", "", "::error") end
+
+(* The nearest refused input: bats's check.yml with one byte of a non-pin line changed (offset 5 of the template, inside `check`) is not canonical *)
+fn test_bats_check_one_byte_changed_fails (): bool = let
+  val dir = "build/pin-audit-tests/bats-check-changed"
+  val () = _fresh(dir)
+  val () = _plant(dir, "changed")
+  val () = _fill(dir, "changed", "check.yml", "templates/check-bats.yml", "89abcdef0123456789abcdef0123456789abcdef", "repository-prototype main 89abcde", "7", 5)
+  val () = _commit(dir, "changed")
+  val () = _names(dir, "changed\n")
+in _judge(dir, 1, "::error title=pin audit::changed: .github/workflows/check.yml: not canonical", "1 not canonical", "", "pass, equal") end
+
 (* The old forms of the library and the compiler's relock callers (repository-prototype#605: before the canonical-files-check.yml pin and its tools-ref copy) stay beside the new ones for one cycle, each by its own template's name *)
 fn test_library_and_regenerating_relock_before_canonical_files_pass (): bool = let
   val dir = "build/pin-audit-tests/before-canonical-files-a"
@@ -1226,7 +1249,7 @@ fn test_issue_template_equal_passes (): bool = let
   val () = _fresh(dir)
   val () = _plant_with_issue_template(dir, "tidy", ~1)
   val () = _names(dir, "tidy\n")
-in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 25 read, 0 failing", "::error") end
+in _judge(dir, 0, ".github/ISSUE_TEMPLATE/ticket.md: pass, equal to the template ticket.md with its holes filled", "1 repositories, 2 workflow files: 0 passed by an allowlisted hash, 2 passed by a template, 0 not canonical", "templates: 26 read, 0 failing", "::error") end
 
 (* ... and the same file with one byte changed fails, named *)
 fn test_issue_template_one_byte_changed_fails (): bool = let
