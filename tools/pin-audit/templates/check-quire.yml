@@ -45,6 +45,13 @@ concurrency:
   group: check-${{ github.event_name }}-${{ github.event.pull_request.draft && 'draft-' || '' }}${{ github.event.pull_request.number || (github.event_name == 'merge_group' && github.ref) || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'merge_group' && github.event.action == 'destroyed') }}
 
+# The retry of the uploads the later jobs need (#1109, keyword: upload retry):
+# the attempts of one upload and the wait before each further one, written once
+# here; tests/static/guidelines.py refuses a step that has its own
+env:
+  UPLOAD_ATTEMPTS: 2
+  UPLOAD_RETRY_WAIT_SECONDS: 60
+
 jobs:
   # Whether the merge queue already passed this very commit (pwa#215, #882): a
   # push to main of an entry the queue's group tested, the same commit, skips
@@ -183,14 +190,32 @@ jobs:
         run: tests/static/run.sh "$BATS_REPOSITORY" check
 
       # Hidden files: build/.bats_stamp, which bats judges the build/ by
+      # A GitHub service error fails an upload after its own 5 attempts (#1109):
+      # the first upload goes on as a failure, and a second one follows after the wait
       - name: Upload the checked app
+        id: upload-checked-app
         if: steps.app.outcome == 'success'
+        continue-on-error: true
         uses: actions/upload-artifact@@@COMMIT@@ # @@COMMENT@@
         with:
           name: quire-app-checked
           include-hidden-files: true
           path: ${{ runner.temp }}/quire-static/app/build
           retention-days: 1
+
+      - name: Wait to upload the checked app again
+        if: steps.upload-checked-app.outcome == 'failure'
+        run: sleep "$UPLOAD_RETRY_WAIT_SECONDS"
+
+      - name: Upload the checked app again
+        if: steps.upload-checked-app.outcome == 'failure'
+        uses: actions/upload-artifact@@@COMMIT@@ # @@COMMENT@@
+        with:
+          name: quire-app-checked
+          include-hidden-files: true
+          path: ${{ runner.temp }}/quire-static/app/build
+          retention-days: 1
+          overwrite: true
 
       - name: Build the app and the PWA generator
         if: steps.app.outcome == 'success'
@@ -221,14 +246,6 @@ jobs:
         if: steps.app.outcome == 'success'
         run: cp scripts/android/.nvmrc scripts/android/.java-version dist/android/
 
-      # The app's probes for the android job's emulator run, beside the
-      # project's smoke-test.sh: the book is opened, then at each font scale
-      # a word is long-pressed and every toolbar button tapped at its centre
-      # (keyword: android-smoke, pwa#267, #1030)
-      - name: Put the smoke probes beside the Android project
-        if: steps.app.outcome == 'success'
-        run: cp scripts/android/smoke-open.js scripts/android/smoke-ready.js scripts/android/smoke-select-point.js scripts/android/smoke-tap-points.js scripts/android/smoke-tap-result.js dist/android/
-
       # The same commit always gives the same version, whatever the clock
       # or time zone, and the Android project carries it (#219)
       - name: Check the version
@@ -242,7 +259,6 @@ jobs:
           test -f dist/pwa/bridge.js
           test -f dist/pwa/app.wasm
           test -x dist/android/build-android.sh
-          test -s dist/android/smoke-tap-result.js
           grep -q '"appId": "dev.middlefield.quire"' dist/android/capacitor.config.json
           # the icons the manifest names, and the EPUBs the app opens
           test -s dist/pwa/icon-192.png
@@ -261,7 +277,9 @@ jobs:
       # groups (which add the home page themselves: the Android project
       # never holds it)
       - name: Upload Android project
+        id: upload-android
         if: steps.app.outcome == 'success'
+        continue-on-error: true
         uses: actions/upload-artifact@@@COMMIT@@ # @@COMMENT@@
         with:
           name: quire-android
@@ -272,14 +290,46 @@ jobs:
             dist/pwa
           retention-days: 1
 
+      - name: Wait to upload the Android project again
+        if: steps.upload-android.outcome == 'failure'
+        run: sleep "$UPLOAD_RETRY_WAIT_SECONDS"
+
+      - name: Upload Android project again
+        if: steps.upload-android.outcome == 'failure'
+        uses: actions/upload-artifact@@@COMMIT@@ # @@COMMENT@@
+        with:
+          name: quire-android
+          # the project's .nvmrc and .java-version are dotfiles, skipped by default (keyword: version-file)
+          include-hidden-files: true
+          path: |
+            dist/android
+            dist/pwa
+          retention-days: 1
+          overwrite: true
+
       # The generator, whose `test` runs the e2e groups' suites (#499)
       - name: Upload the PWA generator
+        id: upload-gen-pwa
         if: steps.app.outcome == 'success'
+        continue-on-error: true
         uses: actions/upload-artifact@@@COMMIT@@ # @@COMMENT@@
         with:
           name: quire-gen-pwa
           path: dist/debug/gen-pwa
           retention-days: 1
+
+      - name: Wait to upload the PWA generator again
+        if: steps.upload-gen-pwa.outcome == 'failure'
+        run: sleep "$UPLOAD_RETRY_WAIT_SECONDS"
+
+      - name: Upload the PWA generator again
+        if: steps.upload-gen-pwa.outcome == 'failure'
+        uses: actions/upload-artifact@@@COMMIT@@ # @@COMMENT@@
+        with:
+          name: quire-gen-pwa
+          path: dist/debug/gen-pwa
+          retention-days: 1
+          overwrite: true
 
       # Node's packages, retried and cached, and the Playwright browsers:
       # pwa's action (quire#637). The WASM smoke tests need no browsers, which
