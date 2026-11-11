@@ -31,6 +31,7 @@ repository-prototype/.github/workflows/relock-pins-test.yml a7b608308acf11ce189b
 repository-prototype/.github/workflows/input-overlap.yml 5eca92b3875edd5c7ea3cc810ae5c121fa5f37884c77295450245c495fe9fa4e # repository-prototype#544
 repository-prototype/.github/workflows/input-overlap-check.yml 3f8f157393d63a0660498cad4ec628b15ec589444de546bfeb982e0c7e0761e4 # repository-prototype#544
 repository-prototype/.github/workflows/canonical-files-check.yml 0977c6f3ba6553cde5bd2efb6274c5d5fd5fe31041ce1a7d3d970a8cf57b9e95 # repository-prototype#603
+repository-prototype/.github/workflows/canonical-files-recheck.yml 58b65c4db24d49ad9cf0a75b6f4f181509bd2390df2b3772ec8381a63077cb61 # repository-prototype#669
 repository-prototype/.github/workflows/text-lint.yml cb47a27cf8f74008df92451d2e291a1a3cf3947aa6ac2a025ef21ca0e1068843 # repository-prototype#487
 repository-prototype/.github/workflows/text-lint-check.yml 6e7a1bb6d843f7d9e52b50570e81c61e304cb63a2c1c8984b26f58190de778c5 87afabdf48601282a3464a237ba4e29d38aa940f05d317968d4fc1fa890f960c # repository-prototype#509
 repository-prototype/.github/workflows/tools-test.yml 620fe9a416cd32c61f05bb733c95cf3a29bd1187e9a528ac3cd83b5940a93266 d3fac5840900f8677fb178b2654af0c3164f9aaacaae626ab2d2f6ae659455a2 # repository-prototype#397
