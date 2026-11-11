@@ -88,9 +88,6 @@ jobs:
       fail-fast: false
       matrix:
         pull: ${{ fromJSON(needs.list.outputs.pulls) }}
-    concurrency:
-      group: canonical-files-recheck-${{ matrix.pull.repository }}-${{ matrix.pull.number }}
-      cancel-in-progress: true
     env:
       GH_TOKEN: ${{ secrets.token || secrets.AUDIT_TOKEN }}
       TOOLS_REF: ${{ inputs.tools-ref || github.sha }}
