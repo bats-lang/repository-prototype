@@ -1,0 +1,175 @@
+# A pull request that is red on canonical-files is checked again when the allowlist or a template changes
+# (bats-lang/repository-prototype#669, keyword: canonical-files recheck). The check
+# (canonical-files-check.yml) reads the allowlist and the templates of the default branch of this repository
+# when it runs, but a caller runs it only on a pull request's opened, synchronize and reopened, so a pull
+# request that was red for a hash the allowlist did not list yet stayed red after the line was merged
+# (bats's relock pull request of 2026-11-10: red at 13:53Z, the line merged 2026-11-11 01:54Z, no run after it).
+#
+# What it does: on a push to the default branch that changes tools/pin-audit/allowlist.txt or a template, it
+# lists the open pull requests of the organisation (the search API, one call), and for each whose head has the
+# check run `canonical-files / canonical-files` concluded as failure it runs `pin_audit --check` again on that
+# same head (the head and the files of the pull request as data, never run, with the allowlist and the
+# templates of the default branch) and posts the commit status `canonical-files / canonical-files` on the head,
+# with this run as its target. No job of the old run is re-run (a re-run is not allowed) and no push to the
+# pull request is needed. A pull request whose check is not red gets no status.
+#
+# Why a commit status and not a check run: a check run can be created only by the app that owns it (GITHUB_TOKEN
+# of the repository the run is in), so a run here cannot post one on a head in another repository; a commit
+# status takes the token AUDIT_TOKEN (statuses: write and pull requests: read in every repository), as
+# text-lint's does with GITHUB_TOKEN. The status has the check run's own name, so the pull request shows it
+# beside the old red run, and its state is the one of the newest result.
+#
+# Non-bats code of ours: three `gh api` calls with a `--jq` filter (the pull requests, the failed check runs of
+# a head, the status) and the list of changed paths. The avenue exhausted: bats has no HTTP client, and these
+# are GitHub's API (`gh api`, a third-party tool used as it is).
+#
+# The pull requests are the open ones of the first search page (100): more than that fails the step (the jq
+# `error`), never a silent cut. A matrix has at most 256 entries, so that is the bound too.
+#
+# Safe: the pull request's files are checked out as data and read, never run; the token holds no right to
+# write code. Fork pull requests are checked as the check does, by the head commit in the base repository.
+#
+# Another repository calls it (the fixture bats-lang/relock-scratch does, for the test of #669) by commit with
+# the inputs below; `repository` limits the search to one repository and `token` replaces AUDIT_TOKEN.
+#
+# Called on: workflow_call, push.
+name: canonical-files-recheck
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/pin-audit/allowlist.txt
+      - tools/pin-audit/templates/**
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tools-ref:
+        description: The full commit SHA of bats-lang/repository-prototype this workflow is called at.
+        required: true
+        type: string
+      data-ref:
+        description: The ref of bats-lang/repository-prototype whose allowlist and templates are read (the default branch when empty).
+        required: false
+        type: string
+        default: ''
+      repository:
+        description: Limit the search to this repository (owner/name); every repository of bats-lang when empty.
+        required: false
+        type: string
+        default: ''
+    secrets:
+      token:
+        description: A token with statuses write and pull requests read on the repositories searched (AUDIT_TOKEN when absent).
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  list:
+    runs-on: ubuntu-24.04
+    outputs:
+      pulls: ${{ steps.list.outputs.pulls }}
+    steps:
+      - name: List the open pull requests
+        id: list
+        env:
+          GH_TOKEN: ${{ secrets.token || secrets.AUDIT_TOKEN }}
+          SCOPE: ${{ inputs.repository && format('repo:{0}', inputs.repository) || 'org:bats-lang' }}
+        run: echo "pulls=$(gh api -X GET search/issues -f "q=$SCOPE is:pr is:open archived:false" -F per_page=100 --jq 'if .total_count > 100 then error("more than 100 open pull requests") else [.items[] | (.repository_url | sub("^.*/repos/"; "")) as $r | {repository: $r, name: ($r | sub("^.*/"; "")), number: .number}] end')" >> "$GITHUB_OUTPUT"
+
+  recheck:
+    needs: list
+    if: needs.list.outputs.pulls != '[]'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        pull: ${{ fromJSON(needs.list.outputs.pulls) }}
+    concurrency:
+      group: canonical-files-recheck-${{ matrix.pull.repository }}-${{ matrix.pull.number }}
+      cancel-in-progress: true
+    env:
+      GH_TOKEN: ${{ secrets.token || secrets.AUDIT_TOKEN }}
+      TOOLS_REF: ${{ inputs.tools-ref || github.sha }}
+    steps:
+      - name: Find the head of the pull request
+        id: head
+        env:
+          REPOSITORY: ${{ matrix.pull.repository }}
+          PULL_REQUEST: ${{ matrix.pull.number }}
+        run: echo "sha=$(gh api "repos/$REPOSITORY/pulls/$PULL_REQUEST" --jq .head.sha)" >> "$GITHUB_OUTPUT"
+
+      # `check_name` is the caller's job and the called job, as the pull request shows the check.
+      - name: Count the failed runs of canonical-files on the head
+        id: red
+        env:
+          REPOSITORY: ${{ matrix.pull.repository }}
+          HEAD_SHA: ${{ steps.head.outputs.sha }}
+        run: echo "failed=$(gh api "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?check_name=canonical-files%20%2F%20canonical-files&per_page=100" --jq '[.check_runs[] | select(.conclusion == "failure")] | length')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.red.outputs.failed != '0'
+        with:
+          repository: bats-lang/repository-prototype
+          ref: ${{ env.TOOLS_REF }}
+          persist-credentials: false
+          fetch-depth: 2
+
+      - name: Set up bats
+        if: steps.red.outputs.failed != '0'
+        uses: bats-lang/bats/.github/actions/setup@8e978dfe7fac83726730361329c91b0e829beaad # bats main, PR #287 (bats has no version tags)
+        with:
+          require-lock: 'false'
+          commit: ${{ env.TOOLS_REF }}
+
+      - name: Build the audit
+        if: steps.red.outputs.failed != '0'
+        working-directory: tools/pin-audit
+        env:
+          REPOSITORY: ${{ github.workspace }}
+        run: bats build --repository "$REPOSITORY"
+
+      - name: Check out the head as data
+        if: steps.red.outputs.failed != '0'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ matrix.pull.repository }}
+          ref: ${{ steps.head.outputs.sha }}
+          path: head
+          persist-credentials: false
+
+      # The allowlist and the templates, as data (canonical-files-check.yml has the reason).
+      - name: Check out the allowlist and the templates as data
+        if: steps.red.outputs.failed != '0'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: bats-lang/repository-prototype
+          ref: ${{ inputs.data-ref || 'main' }}
+          path: main
+          persist-credentials: false
+
+      - name: List the paths the pull request changes
+        if: steps.red.outputs.failed != '0'
+        env:
+          REPOSITORY: ${{ matrix.pull.repository }}
+          PULL_REQUEST: ${{ matrix.pull.number }}
+        run: gh api --paginate "repos/$REPOSITORY/pulls/$PULL_REQUEST/files" --jq '.[].filename' > "$RUNNER_TEMP/changes.txt"
+
+      - name: Check the changed files again
+        if: steps.red.outputs.failed != '0'
+        id: check
+        continue-on-error: true
+        env:
+          REPOSITORY_NAME: ${{ matrix.pull.name }}
+        run: env -C main "$GITHUB_WORKSPACE/tools/pin-audit/dist/debug/pin_audit" --check "$REPOSITORY_NAME" "$GITHUB_WORKSPACE/head" "$RUNNER_TEMP/changes.txt"
+
+      - name: Post the result on the head
+        if: steps.red.outputs.failed != '0'
+        env:
+          REPOSITORY: ${{ matrix.pull.repository }}
+          HEAD_SHA: ${{ steps.head.outputs.sha }}
+          STATE: ${{ steps.check.outcome == 'success' && 'success' || 'failure' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh api -X POST "repos/$REPOSITORY/statuses/$HEAD_SHA" -f state="$STATE" -f context='canonical-files / canonical-files' -f target_url="$RUN_URL" -f description='Checked again after the allowlist or a template changed (repository-prototype#669)'
