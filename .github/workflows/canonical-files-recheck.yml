@@ -63,8 +63,13 @@ on:
         description: A token with statuses write and pull requests read on the repositories searched (AUDIT_TOKEN when absent).
         required: false
 
+# A called workflow's token cannot exceed these, so a caller that passes its own GITHUB_TOKEN as `token`
+# (the fixture does) is given what the status and the lookups need.
 permissions:
   contents: read
+  statuses: write
+  pull-requests: read
+  checks: read
 
 jobs:
   list:
