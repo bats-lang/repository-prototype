@@ -78,8 +78,7 @@ jobs:
           GH_TOKEN: ${{ secrets.token || secrets.AUDIT_TOKEN }}
           SCOPE: ${{ inputs.repository && format('repo:{0}', inputs.repository) || 'org:bats-lang' }}
         run: |
-          echo "pulls=$(gh api -X GET search/issues -f "q=$SCOPE is:pr is:open archived:false" -F per_page=100 --jq 'if .total_count > 100 then error("more than 100 open pull requests") else [.items[] | (.repository_url | sub("^.*/repos/"; "")) as $r | {repository: $r, name: ($r | sub("^.*/"; "")), number: .number}] end')" >> "$GITHUB_OUTPUT"
-          cat "$GITHUB_OUTPUT"
+          gh api -X GET search/issues -f "q=$SCOPE is:pr is:open archived:false" -F per_page=100 --jq 'if .total_count > 100 then error("more than 100 open pull requests") else "pulls=" + ([.items[] | (.repository_url | sub("^.*/repos/"; "")) as $r | {repository: $r, name: ($r | sub("^.*/"; "")), number: .number}] | tojson) end' >> "$GITHUB_OUTPUT"
 
   recheck:
     needs: list
@@ -98,7 +97,7 @@ jobs:
         env:
           REPOSITORY: ${{ matrix.pull.repository }}
           PULL_REQUEST: ${{ matrix.pull.number }}
-        run: echo "sha=$(gh api "repos/$REPOSITORY/pulls/$PULL_REQUEST" --jq .head.sha)" >> "$GITHUB_OUTPUT"
+        run: gh api "repos/$REPOSITORY/pulls/$PULL_REQUEST" --jq '"sha=" + .head.sha' >> "$GITHUB_OUTPUT"
 
       # `check_name` is the caller's job and the called job, as the pull request shows the check.
       - name: Count the failed runs of canonical-files on the head
@@ -106,7 +105,7 @@ jobs:
         env:
           REPOSITORY: ${{ matrix.pull.repository }}
           HEAD_SHA: ${{ steps.head.outputs.sha }}
-        run: echo "failed=$(gh api "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?check_name=canonical-files%20%2F%20canonical-files&per_page=100" --jq '[.check_runs[] | select(.conclusion == "failure")] | length')" >> "$GITHUB_OUTPUT"
+        run: gh api "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?check_name=canonical-files%20%2F%20canonical-files&per_page=100" --jq '"failed=" + ([.check_runs[] | select(.conclusion == "failure")] | length | tostring)' >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.red.outputs.failed != '0'
