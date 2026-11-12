@@ -688,6 +688,29 @@ fn test_quire_check_before_review_churn_one_byte_changed_fails (): bool = let
   val () = _names(dir, "changed\n")
 in _judge(dir, 1, "::error title=pin audit::changed: .github/workflows/check.yml: not canonical", "1 not canonical", "", "pass, equal") end
 
+(* The new form of quire's check.yml (quire#1113: the job checked, the memo transfer) and the old form kept beside it for one cycle both pass, each by its own template's name *)
+fn test_quire_check_memo_transfer_both_forms_pass (): bool = let
+  val dir = "build/pin-audit-tests/quire-check-memo-forms"
+  val () = _fresh(dir)
+  val () = _plant(dir, "new-form")
+  val () = _fill(dir, "new-form", "check.yml", "templates/check-quire.yml", "89abcdef0123456789abcdef0123456789abcdef", "pwa main 89abcde", "7", ~1)
+  val () = _plant(dir, "old-form")
+  val () = _fill(dir, "old-form", "check.yml", "templates/check-quire-before-memo-transfer.yml", "89abcdef0123456789abcdef0123456789abcdef", "pwa main 89abcde", "7", ~1)
+  val () = _commit(dir, "new-form")
+  val () = _commit(dir, "old-form")
+  val () = _names(dir, "new-form\nold-form\n")
+in _judge(dir, 0, ".github/workflows/check.yml: pass, equal to the template check-quire.yml", ".github/workflows/check.yml: pass, equal to the template check-quire-before-memo-transfer.yml", "0 not canonical", "::error") end
+
+(* The nearest refused input for the form before the memo transfer: one byte changed inside `check` is not canonical *)
+fn test_quire_check_before_memo_transfer_one_byte_changed_fails (): bool = let
+  val dir = "build/pin-audit-tests/quire-check-memo-old-changed"
+  val () = _fresh(dir)
+  val () = _plant(dir, "changed")
+  val () = _fill(dir, "changed", "check.yml", "templates/check-quire-before-memo-transfer.yml", "89abcdef0123456789abcdef0123456789abcdef", "pwa main 89abcde", "7", 5)
+  val () = _commit(dir, "changed")
+  val () = _names(dir, "changed\n")
+in _judge(dir, 1, "::error title=pin audit::changed: .github/workflows/check.yml: not canonical", "1 not canonical", "", "pass, equal") end
+
 (* Bats's check.yml (repository-prototype#667) is a template, not an allowlisted hash: the relock moves its check-aggregate pin, so its bytes change at every move. It passes with two different sets of pins *)
 fn test_bats_check_passes_with_any_pins (): bool = let
   val dir = "build/pin-audit-tests/bats-check"
