@@ -20,7 +20,7 @@
    tag (version.bats); a line that holds a pin in any other spelling is refused, and a text
    with a refused line is not rewritten. The lines between the markers `pin-rewrite begin`
    and `pin-rewrite end` are copied as they are. A pin of bats-lang is left alone (its
-   pins move by the workflow pins and the setup action's rule: CLAUDE.md, "CI is pinned").
+   pins move by the workflow pins and the setup action's rule: CLAUDE.md, "CI Pattern").
 
    What becomes of a pin is decided by the version tags of its repository's releases:
    the target is the highest version of the pin's major version that is a candidate
