@@ -1,0 +1,26 @@
+{
+  "action": "edited",
+  "number": 7,
+  "repository": {
+    "full_name": "bats-lang/example"
+  },
+  "pull_request": {
+    "number": 7,
+    "body": "Published by CI from bats-lang/pwa@0123456789abcdef0123456789abcdef01234567.",
+    "title": "t",
+    "head": {
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "ref": "publishing/pwa_2026.11.23.80649",
+      "repo": {
+        "name": "x"
+      }
+    },
+    "user": {
+      "login": "moshez",
+      "type": "User"
+    }
+  },
+  "sender": {
+    "login": "x"
+  }
+}

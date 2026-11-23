@@ -6,7 +6,7 @@
    pull_request.user.login; a missing or null body is an empty one. The status is the commit
    status the workflow posts: state, context text-lint, a description of ASCII with no quote
    or backslash and cut short (the first finding), and the run's URL. A pull request of a
-   relock branch (relock/<date>) or of a bot (a login that ends with [bot]) is exempt: its
+   relock or publish branch (relock/<date>, publish/<archive>) or of a bot (a login that ends with [bot]) is exempt: its
    status is success and says so. The event and the body are bounded by the types (an event or
    a body that does not fit is refused, and the status is not written). *)
 
@@ -209,7 +209,7 @@ in
               val () = prerrln! ("text-lint: the event has no pull_request.head.sha, head.ref or user.login")
             in 1 end
             else if is_exempt(ref_view, ref_len, login_view, login_len) then let
-              val () = _put_status("success", "exempt: a bot or a relock branch", _empty_rope(),
+              val () = _put_status("success", "exempt: a bot, a relock branch or a publish branch", _empty_rope(),
                 url, ulen, status)
             in 0 end
             else let

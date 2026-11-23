@@ -107,6 +107,7 @@ jobs:
           git -c user.name="bats-lang publish" -c user.email="publish@users.noreply.github.com" \
             commit -m "Publish $name" -m "From $SOURCE"
           git push origin "$branch"
+          # The branch publish/ is exempt from text-lint (#703, keyword: text-lint event): a publish closes no ticket.
           gh pr create --repo "$R" --head "$branch" --base main \
             --title "Publish $name" --body "Published by CI from $SOURCE."
           # main requires verify, so auto-merge merges the pull request only
