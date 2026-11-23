@@ -93,7 +93,9 @@ jobs:
         run: echo "BATS_KEPT_DIR=$RUNNER_TEMP/kept" >> "$GITHUB_ENV"
 
       - name: Install libgmp-dev and wasm-ld (wasm fixtures)
-        run: sudo apt-get install -y -q libgmp-dev lld
+        uses: ./.github/actions/setup
+        with:
+          install-only: 'true'
 
       # The seed is built from bootstrap/c alone: the C carries the runtime
       # header it is compiled with, so there is no ATS2 yet (bats#283)
@@ -256,7 +258,9 @@ jobs:
         run: echo "BATS_KEPT_DIR=$RUNNER_TEMP/kept" >> "$GITHUB_ENV"
 
       - name: Install libgmp-dev and wasm-ld (wasm fixtures)
-        run: sudo apt-get install -y -q libgmp-dev lld
+        uses: ./.github/actions/setup
+        with:
+          install-only: 'true'
 
       - name: Build seed compiler from bootstrap/c
         run: |

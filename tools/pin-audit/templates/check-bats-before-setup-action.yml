@@ -1,0 +1,410 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  # ready_for_review starts the check on the head when a draft is marked ready
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  # The daily relock dispatches it on its relock/<date> branch: a pull
+  # request opened with GITHUB_TOKEN starts no workflow by itself
+  workflow_dispatch:
+
+# A draft pull request runs no job (draft-ci, bats#552, repository-prototype#525): every
+# job carries "github.event_name != 'pull_request' || !github.event.pull_request.draft",
+# so push, workflow_dispatch and any other event run unchanged, and the required `check`
+# is reported as skipped (counted as passed by the branch rules), never missing.
+# `check` and `setup-action` use always(), which would run them after a skipped
+# `affected`, so they repeat the condition themselves.
+jobs:
+  # The cheap job: what every change runs. It asks `bats affected` whether the
+  # change touches nothing the later jobs build or test (only *.md files outside
+  # tests/ and bootstrap/), and runs `bats check-pins`; the later jobs need it and
+  # are skipped on its answer, a skipped job counting as passed where the branch
+  # rules require `check` (bats#481, .claude/rules/affected.md)
+  affected:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-24.04
+    outputs:
+      inert: ${{ steps.rule.outputs.inert }}
+    steps:
+      # two commits deep: a pull request's checkout is a merge, and HEAD^1 is the
+      # base it is merged into
+      - uses: actions/checkout@@@COMMIT@@ # @@COMMENT@@
+        with:
+          fetch-depth: 2
+
+      # a push is judged from the commit it replaced
+      - name: Fetch the commit the push replaced
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: git fetch -q --depth 1 origin "$BEFORE" || true
+
+      # The seed binary of this exact bootstrap/c, found by the content hash of its
+      # files; a miss builds it (in seconds) and the job saves it. Only `affected` and
+      # `check-pins` run on it here; the check job builds its own seed, and the
+      # fixpoint step judges the compiler, never this key (.claude/rules/affected.md)
+      - name: Seed compiler of this bootstrap/c, if one was kept
+        id: seed
+        uses: actions/cache@@@COMMIT@@ # @@COMMENT@@
+        with:
+          path: ~/bats-bin
+          key: seed-${{ hashFiles('bootstrap/c/**') }}
+
+      - name: Build seed compiler from bootstrap/c
+        if: steps.seed.outputs.cache-hit != 'true'
+        run: |
+          cp -R bootstrap/c ~/seed
+          make -j$(nproc) -C ~/seed debug/bats
+          mkdir -p ~/bats-bin
+          cp ~/seed/debug/bats ~/bats-bin/bats
+
+      # Every input of CI is pinned, never a name that moves
+      # (bats-lang/repository-prototype#269, bats-lang/bats#390)
+      - name: Every CI input is pinned
+        run: ~/bats-bin/bats check-pins .github/workflows/*.yml .github/actions/*/action.yml src/ats2.bats
+
+      # a pull request: the change the merge brings (HEAD^1 to HEAD); a push: the
+      # commits it brought; a dispatch: nothing changed, so everything runs
+      - name: Which jobs this change needs
+        id: rule
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || github.event.before || github.sha }}
+        run: |
+          ~/bats-bin/bats affected "$BASE" HEAD >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+  # The groups of fixture tests (tests/<group>/check.sh) run in the `fixtures` jobs below, one
+  # job for each shard `plan` lists (bats#619, keyword: fixture-shards); this job builds the
+  # compiler, runs the tests written in bats and verifies bootstrap/c. The required `check`
+  # is the aggregate at the end, which passes only when every job passed
+  build:
+    needs: affected
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (needs.affected.result != 'success' || needs.affected.outputs.inert != 'true') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@@@COMMIT@@ # @@COMMENT@@
+
+      # A failing test script keeps its temp directory there (tests/keep-on-fail.sh,
+      # bats#478) and the last step uploads it
+      - name: Directory for the evidence of failed test scripts
+        run: echo "BATS_KEPT_DIR=$RUNNER_TEMP/kept" >> "$GITHUB_ENV"
+
+      - name: Install libgmp-dev and wasm-ld (wasm fixtures)
+        run: sudo apt-get install -y -q libgmp-dev lld
+
+      # The seed is built from bootstrap/c alone: the C carries the runtime
+      # header it is compiled with, so there is no ATS2 yet (bats#283)
+      - name: Build seed compiler from bootstrap/c
+        run: |
+          cp -R bootstrap/c ~/seed
+          make -j$(nproc) -C ~/seed debug/bats
+          mkdir -p ~/bats-bin
+          cp ~/seed/debug/bats ~/bats-bin/bats
+
+      # The GMP build of ATS2: its constraint solver does infinite-precision
+      # arithmetic (the -int build computes in C int and accepts false
+      # statements, bats-lang/quire#594); the seed installs the build it pins
+      - name: Install ATS2
+        run: ~/bats-bin/bats ats2 install
+
+      - name: Fetch deps from lock
+        run: |
+          # The package repository at the commit .github/repository-version
+          # pins (bats-lang/repository-prototype#269): the lock's packages,
+          # and what the fixture tests lock, never the newest
+          git init -q ~/repository
+          git -C ~/repository fetch -q --depth 1 https://github.com/bats-lang/repository-prototype.git "$(tr -d '[:space:]' < .github/repository-version)"
+          git -C ~/repository checkout -q FETCH_HEAD
+          mkdir -p bats_modules
+          awk '!seen[$1]++ { print $1, $2 }' bats.lock | while read name version; do
+            dir="bats_modules/$name"
+            mkdir -p "$dir"
+            unzip -o ~/repository/"$name"/"${name}_${version}.bats" -d "$dir"
+          done
+
+      - name: bats check
+        run: |
+          export PATH=~/bats-bin:$PATH
+          bats check --repository ~/repository
+
+      - name: bats build
+        run: |
+          export PATH=~/bats-bin:$PATH
+          bats build --repository ~/repository
+
+      - name: bats test
+        run: |
+          export PATH=~/bats-bin:$PATH
+          bats test --repository ~/repository
+
+      # The manifest test is written in bats (bats#446): built, then run on the compiler under test
+      - name: Build the toml-fields test
+        working-directory: tests/toml-fields
+        run: ~/bats-bin/bats build --repository ~/repository
+
+      - name: Fixture test toml-fields
+        working-directory: tests/toml-fields
+        run: dist/debug/toml_fields ${{ github.workspace }}/dist/debug/bats
+
+      # The --jobs test is written in bats (bats#554): built, then run on the compiler under test
+      - name: Build the build-jobs test
+        working-directory: tests/build-jobs
+        run: ~/bats-bin/bats build --repository ~/repository
+
+      - name: Fixture test build-jobs
+        working-directory: tests/build-jobs
+        run: dist/debug/build_jobs ${{ github.workspace }}/dist/debug/bats
+
+      # The digest test is written in bats (bats#502): built, then run on the compiler under test
+      - name: Build the proved-sha256 test
+        working-directory: tests/proved-sha256
+        run: ~/bats-bin/bats build --repository ~/repository
+
+      - name: Fixture test proved-sha256
+        working-directory: tests/proved-sha256
+        run: dist/debug/proved_sha256 ${{ github.workspace }}/dist/debug/bats
+
+      - name: Verify bootstrap/c matches sources
+        id: verify-bootstrap
+        run: |
+          scripts/bootstrap-c.sh dist/debug/bats ~/repository /tmp/regen
+          if ! diff -r bootstrap/c /tmp/regen > /tmp/bootstrap.diff; then
+            head -50 /tmp/bootstrap.diff
+            echo "::error::bootstrap/c is stale. Run: scripts/bootstrap-c.sh dist/debug/bats <repository> and commit bootstrap/c"
+            exit 1
+          fi
+
+      # bootstrap-c-artifact: a stale tree is handed back to the worker (runtime-header.md)
+      - name: Upload the regenerated bootstrap/c
+        if: ${{ always() && steps.verify-bootstrap.outcome == 'failure' }}
+        uses: actions/upload-artifact@@@COMMIT@@ # @@COMMENT@@
+        with:
+          name: bootstrap-c-regenerated-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/regen
+          include-hidden-files: true
+          # bootstrap-c-artifact: kept until a worker commits the tree; a stale tree is useless after the next push (runtime-header.md)
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Verify fixpoint (compiler built by itself emits the same C)
+        run: |
+          mkdir -p ~/stage2
+          cp dist/debug/bats ~/stage2/bats
+          rm -rf build dist
+          ~/stage2/bats build --repository ~/repository
+          scripts/bootstrap-c.sh dist/debug/bats ~/repository /tmp/regen2
+          diff -r bootstrap/c /tmp/regen2
+
+      - name: Upload the temp directories of failed test scripts
+        if: failure()
+        uses: actions/upload-artifact@@@COMMIT@@ # @@COMMENT@@
+        with:
+          name: kept-check
+          path: |
+            ${{ runner.temp }}/kept
+            tests/toml-fields/work
+            tests/build-jobs/work
+            tests/proved-sha256/work
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  # The shards of the fixture groups (bats#619, keyword: fixture-shards): the tool is the
+  # subcommand `bats fixture-shards` (src/fixture_shards.bats, bats#621) of the seed, which
+  # checks src/fixture_shards.txt against the groups there are, prints the groups of every
+  # shard and writes the matrix of the `fixtures` jobs
+  plan:
+    needs: affected
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (needs.affected.result != 'success' || needs.affected.outputs.inert != 'true') }}
+    runs-on: ubuntu-24.04
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - uses: actions/checkout@@@COMMIT@@ # @@COMMENT@@
+
+      - name: Build seed compiler from bootstrap/c
+        run: |
+          cp -R bootstrap/c ~/seed
+          make -j$(nproc) -C ~/seed debug/bats
+          mkdir -p ~/bats-bin
+          cp ~/seed/debug/bats ~/bats-bin/bats
+
+      - name: The shards, and every group in exactly one
+        id: plan
+        run: ~/bats-bin/bats fixture-shards plan src/fixture_shards.txt tests "$GITHUB_OUTPUT"
+
+  # One job for each shard (a matrix over the shards `plan` listed), each on its own runner:
+  # it builds the compiler and runs its groups with tests/run-fixtures.sh, whose first line
+  # of output is the list of the groups of the shard and which names the group that failed
+  fixtures:
+    name: fixtures (shard ${{ matrix.shard }})
+    needs: [affected, plan]
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (needs.affected.result != 'success' || needs.affected.outputs.inert != 'true') }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@@@COMMIT@@ # @@COMMENT@@
+
+      # A failing test script keeps its temp directory there (tests/keep-on-fail.sh,
+      # bats#478) and the last step uploads it
+      - name: Directory for the evidence of failed test scripts
+        run: echo "BATS_KEPT_DIR=$RUNNER_TEMP/kept" >> "$GITHUB_ENV"
+
+      - name: Install libgmp-dev and wasm-ld (wasm fixtures)
+        run: sudo apt-get install -y -q libgmp-dev lld
+
+      - name: Build seed compiler from bootstrap/c
+        run: |
+          cp -R bootstrap/c ~/seed
+          make -j$(nproc) -C ~/seed debug/bats
+          mkdir -p ~/bats-bin
+          cp ~/seed/debug/bats ~/bats-bin/bats
+
+      - name: Install ATS2
+        run: ~/bats-bin/bats ats2 install
+
+      - name: Fetch deps from lock
+        run: |
+          git init -q ~/repository
+          git -C ~/repository fetch -q --depth 1 https://github.com/bats-lang/repository-prototype.git "$(tr -d '[:space:]' < .github/repository-version)"
+          git -C ~/repository checkout -q FETCH_HEAD
+          mkdir -p bats_modules
+          awk '!seen[$1]++ { print $1, $2 }' bats.lock | while read name version; do
+            dir="bats_modules/$name"
+            mkdir -p "$dir"
+            unzip -o ~/repository/"$name"/"${name}_${version}.bats" -d "$dir"
+          done
+
+      - name: bats build
+        run: |
+          export PATH=~/bats-bin:$PATH
+          bats build --repository ~/repository
+
+      - name: Fixture tests of shard ${{ matrix.shard }}
+        # fixture-times: each group and each ok case prints its seconds as it ends, and the ten slowest groups are summarised (bats-lang/bats#595)
+        run: dist/debug/bats fixture-shards run src/fixture_shards.txt tests ${{ matrix.shard }} dist/debug/bats ~/repository
+
+      - name: Upload the temp directories of failed test scripts
+        if: failure()
+        uses: actions/upload-artifact@@@COMMIT@@ # @@COMMENT@@
+        with:
+          name: kept-fixtures-${{ matrix.shard }}
+          path: ${{ runner.temp }}/kept
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  # The one check the branch rules require: green only when every job above is green
+  # (repository-prototype's check-aggregate, #328, called by commit, as quire calls it; a
+  # composite action runs inside this job, so the check keeps the name `check`). Skipped
+  # when the change is inert or the pull request is a draft, as before
+  check:
+    needs: [affected, plan, build, fixtures]
+    if: ${{ always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (needs.affected.result != 'success' || needs.affected.outputs.inert != 'true') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Every job passed
+        uses: bats-lang/repository-prototype/.github/actions/check-aggregate@@@COMMIT@@ # @@COMMENT@@
+        with:
+          jobs: affected plan build fixtures
+          results: ${{ toJSON(needs) }}
+
+  # The setup action other bats repositories call by commit
+  # (bats-lang/bats#274), run on a tiny project from the commit under test
+  setup-action:
+    needs: affected
+    if: ${{ always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (needs.affected.result != 'success' || needs.affected.outputs.inert != 'true') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: The cheap job passed
+        run: test "${{ needs.affected.result }}" = success
+
+      # two commits deep: a pull request's head is the merge's second parent
+      - uses: actions/checkout@@@COMMIT@@ # @@COMMENT@@
+        with:
+          fetch-depth: 2
+
+      - name: Read the pins
+        id: pins
+        run: |
+          echo "repository=$(tr -d '[:space:]' < .github/repository-version)" >> "$GITHUB_OUTPUT"
+          echo "head=${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_OUTPUT"
+
+      # a project with no bats.lock is refused before anything is installed
+      - name: A missing bats.lock is refused
+        id: no-lock
+        continue-on-error: true
+        uses: ./.github/actions/setup
+        with:
+          working-directory: tests/setup-action/project
+          bats-version: ${{ steps.pins.outputs.head }}
+          repository-version: ${{ steps.pins.outputs.repository }}
+
+      # so is a pin that is not a full commit
+      - name: A compiler pin that is a branch is refused
+        id: branch-pin
+        continue-on-error: true
+        uses: ./.github/actions/setup
+        with:
+          working-directory: tests/setup-action/project
+          require-lock: 'false'
+          bats-version: main
+          repository-version: ${{ steps.pins.outputs.repository }}
+
+      - name: A commit that is not in the checkout is refused
+        id: absent-commit
+        continue-on-error: true
+        uses: ./.github/actions/setup
+        with:
+          working-directory: tests/setup-action/project
+          require-lock: 'false'
+          bats-version: ${{ steps.pins.outputs.head }}
+          repository-version: ${{ steps.pins.outputs.repository }}
+          commit: 0000000000000000000000000000000000000001
+
+      - name: The refusals were refusals
+        run: |
+          test "${{ steps.no-lock.outcome }}" = failure
+          test "${{ steps.branch-pin.outcome }}" = failure
+          test "${{ steps.absent-commit.outcome }}" = failure
+
+      # A floating input in the calling repository fails the action's pin
+      # check (bats#391). The fixture is copied in untracked (the check reads
+      # the untracked files that are not ignored) and removed before the clean
+      # run below, which must pass on this repository's own files. It is
+      # tracked outside .github, where no check reads it. Shell: see "Shell
+      # that remains" in .claude/rules/setup-action.md.
+      - name: Plant a workflow with a floating input
+        run: cp tests/setup-action/planted/floating.yml .github/workflows/planted-floating.yml
+
+      - name: A floating input in the calling repository fails the action
+        id: floating
+        continue-on-error: true
+        uses: ./.github/actions/setup
+        with:
+          working-directory: tests/setup-action/project
+          require-lock: 'false'
+          bats-version: ${{ steps.pins.outputs.head }}
+          repository-version: ${{ steps.pins.outputs.repository }}
+
+      - name: Remove the planted workflow, and the floating input was refused
+        if: always()
+        run: |
+          rm -f .github/workflows/planted-floating.yml
+          test "${{ steps.floating.outcome }}" = failure
+
+      # the compiler built here is the commit under test: its bootstrap C
+      - name: Set up bats
+        uses: ./.github/actions/setup
+        with:
+          working-directory: tests/setup-action/project
+          require-lock: 'false'
+          bats-version: ${{ steps.pins.outputs.head }}
+          repository-version: ${{ steps.pins.outputs.repository }}
+
+      - name: What the action left behind
+        run: tests/setup-action/verify.sh "${{ steps.pins.outputs.head }}" "${{ steps.pins.outputs.repository }}" "${{ steps.pins.outputs.head }}" tests/setup-action/project
