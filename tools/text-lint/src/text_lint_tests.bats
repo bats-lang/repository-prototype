@@ -749,9 +749,14 @@ fn test_events (): bool =
     "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\n",
     "{\"state\":\"failure\",\"context\":\"text-lint\",\"description\":\"PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
   && _event_is("tests/events/exempt-relock.json", 0, "",
-    "{\"state\":\"success\",\"context\":\"text-lint\",\"description\":\"exempt: a bot or a relock branch\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
+    "{\"state\":\"success\",\"context\":\"text-lint\",\"description\":\"exempt: a bot, a relock branch or a publish branch\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
   && _event_is("tests/events/exempt-bot.json", 0, "",
-    "{\"state\":\"success\",\"context\":\"text-lint\",\"description\":\"exempt: a bot or a relock branch\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
+    "{\"state\":\"success\",\"context\":\"text-lint\",\"description\":\"exempt: a bot, a relock branch or a publish branch\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
+  && _event_is("tests/events/exempt-publish.json", 0, "",
+    "{\"state\":\"success\",\"context\":\"text-lint\",\"description\":\"exempt: a bot, a relock branch or a publish branch\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
+  && _event_is("tests/events/fail-publish-lookalike.json", 0,
+    "PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\nPR body: no line Head: <the commit SHA>; the body names the head it describes (head)\nPR body: no Evidence heading; every claim has its command and raw output (evidence)\n",
+    "{\"state\":\"failure\",\"context\":\"text-lint\",\"description\":\"PR body: the first line is Fixes #N for the ticket, and the pull request meets the Done-when as written (first-line)\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
   && _event_is("tests/events/fail-head-moved.json", 0,
     "PR body: it describes head 0123456789abcdef0123456789abcdef01234567 but the head is ffffffffffffffffffffffffffffffffffffffff; rewrite the body for the head (head)\n",
     "{\"state\":\"failure\",\"context\":\"text-lint\",\"description\":\"PR body: it describes head 0123456789abcdef0123456789abcdef01234567 but the head is ffffffffffffffffffffffffffffffffffffffff; rewrite the bo\",\"target_url\":\"https://github.com/o/r/actions/runs/1\"}\n")
@@ -807,6 +812,11 @@ fn test_refused_events (): bool =
 fn test_exemption_is_a_relock_branch_or_a_bot (): bool =
   _exempt_is("relock/2026-10-26", "moshez")
   && _exempt_is("work", "dependabot[bot]")
+  && _exempt_is("publish/pwa_2026.11.23.80649", "moshez")
+  && ~_exempt_is("publish", "moshez")
+  && ~_exempt_is("publishing/x", "moshez")
+  && ~_exempt_is("not-publish/x", "moshez")
+  && ~_exempt_is("Publish/x", "moshez")
   && ~_exempt_is("work", "moshez")
   && ~_exempt_is("relock", "moshez")
   && ~_exempt_is("not-relock/x", "bot")

@@ -457,14 +457,16 @@ implement lint_body (body, len, head, head_len, phrases, phrases_len, out) = let
   val () = $A.free<byte>($A.thaw<byte>(frozen))
 in count end
 
-(* Whether the pull request is exempt: the branch ref[0, ref_len) starts with relock/ or the
-   login login[0, login_len) ends with [bot] *)
+(* Whether the pull request is exempt: the branch ref[0, ref_len) starts with relock/ or publish/
+   (a pull request made by a workflow of ours, which closes no ticket: publish.yml opens publish/<archive>,
+   bats-lang/repository-prototype#703) or the login login[0, login_len) ends with [bot] *)
 #pub fn is_exempt {rl,ll:agz}{rn,ln:pos}{ref_len:nat | ref_len <= rn}{login_len:nat | login_len <= ln}
   (ref: !$A.borrow(byte, rl, rn), ref_len: int ref_len,
    login: !$A.borrow(byte, ll, ln), login_len: int login_len): bool
 
 implement is_exempt (ref, ref_len, login, login_len) =
   if _starts(ref, ref_len, 0, "relock/", false) then true
+  else if _starts(ref, ref_len, 0, "publish/", false) then true
   else if login_len >= 5 then span_is(login, login_len - 5, login_len, "[bot]")
   else false
 
